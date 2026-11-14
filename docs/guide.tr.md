@@ -10,7 +10,7 @@ Alt Seçim (A) ile bir yolu seçtiğinizde noktaları ve tutamaçları görünü
 
 Serbest Biçim, Bıçak ve Yol paneli düz parçalar üzerinde çalışır; bu yüzden eğriyi çok sayıda kısa parçaya dönüştürürler.
 
-Arayüz dili masaüstünüzün diline göre seçilir. Değiştirmek için Düzen > Dil menüsünü kullanın.
+Arayüz dili masaüstünüzün diline göre seçilir. Değiştirmek için Düzenle > Dil menüsünü kullanın.
 
 ## Görüntüleri düzenleme
 
@@ -24,30 +24,30 @@ Kaydet, açılan görüntünün üzerine hiçbir zaman yazmaz. Nesnelerinizi kor
 
 Seçim Çerçevesi (M), Kement (L) ve Sihirli Değnek (W) bir bitmap üzerinde piksel seçer. Seçime eklemek için Shift'i, seçimden çıkarmak için Alt'ı basılı tutun. Boyama, doldurma ve filtreler seçimin içinde kalır. Kes, Kopyala ve Sil seçili piksellere uygulanır; Yapıştır bunları yeni bir bitmap olarak ekler. Ctrl+D veya Esc seçimi kaldırır.
 
-Klonlama Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından oradan klonlamak için sürükleyin.
+Lastik Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından oradan klonlamak için sürükleyin.
 
 ## Vektörleri yeniden biçimlendirme
 
-Ölçekle (Q), seçili her şeyi tutamaçlarından yeniden boyutlandırır. Shift'i basılı tutmadığınız sürece köşeler oranları korur.
+Ölçek (Q) aracı, seçili her şeyi tutamaçlarından yeniden boyutlandırır. Shift'i basılı tutmadığınız sürece köşeler oranları korur.
 
-Eğ ve Çarpıt, Ölçekle düğmesini paylaşır: listelemek için düğmeye basılı tutun veya üçü arasında sırayla geçmek için Q'ya yeniden basın. Üçünde de döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun. Döndürme, kutunun ortasındaki küçük dairenin çevresinde yapılır; bu daireyi önce başka bir yere sürükleyebilirsiniz.
+Eğriltme ve Deformasyon araçları, Ölçek düğmesini paylaşır: listelemek için düğmeye basılı tutun veya üçü arasında sırayla geçmek için Q'ya yeniden basın. Üçünde de döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun. Döndürme, kutunun ortasındaki küçük dairenin çevresinde yapılır; bu daireyi önce başka bir yere sürükleyebilirsiniz.
 
-- **Eğ**: seçimi yatırmak için bir kenar tutamacını, perspektif için bir köşe tutamacını sürükleyin; perspektifte köşe ile komşusu birbirinden uzaklaşır veya birbirine yaklaşır.
-- **Çarpıt**: yalnızca bir köşeyi oynatmak için köşe tutamacını, bütün bir kenarı taşımak için kenar tutamacını sürükleyin.
+- **Eğriltme**: seçimi yatırmak için bir kenar tutamacını, perspektif için bir köşe tutamacını sürükleyin; perspektifte köşe ile komşusu birbirinden uzaklaşır veya birbirine yaklaşır.
+- **Deformasyon**: yalnızca bir köşeyi oynatmak için köşe tutamacını, bütün bir kenarı taşımak için kenar tutamacını sürükleyin.
 
 Sürüklerken çizim dönüşümü yalnızca önizler; başka bir tutamaçla veya üç araçtan bir diğeriyle devam edebilirsiniz. Uygulamak için Enter'a basın veya kutunun içine çift tıklayın, her şeyi eski haline getirmek için Esc'ye basın. Kutunun içini sürüklemek seçimi taşır.
 
-Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Sayısal Dönüştürme (Ctrl+Shift+T), seçimin ortasını sabit tutarak yüzdeyle ölçekler, piksel cinsinden boyut verir veya bir açıyla döndürür.
+Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Nümerik Dönüştürme (Ctrl+Shift+T), seçimin ortasını sabit tutarak yüzdeyle ölçekler, piksel cinsinden boyut verir veya bir açıyla döndürür.
 
-Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol de kitaplığa bağlı kalır. Değiştir > Dönüştür > Dönüşümleri Kaldır ikisini de yeniden dik hale getirir. Dikdörtgenler ve elipsler yola çevrilir, bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
+Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol de kitaplığa bağlı kalır. Değiştir > Dönüştür > Dönüştürmeleri Kaldır ikisini de yeniden dik hale getirir. Dikdörtgenler ve elipsler yola çevrilir, bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
 
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 
 ## Web alanları
 
-Etkin Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; etkin noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.
+Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.
 
-Bu alanlar düzleştirilmiş görüntüde hiçbir zaman görünmez. `ad.png` dışa aktarılırken dilimler için `ad_slice1.png`, `ad_slice2.png` ve devamı, etkin noktalar için de görüntü haritası içeren `ad_map.html` yazılır.
+Bu alanlar düzleştirilmiş görüntüde hiçbir zaman görünmez. `ad.png` dışa aktarılırken dilimler için `ad_slice1.png`, `ad_slice2.png` ve devamı, sıcak noktalar için de görüntü haritası içeren `ad_map.html` yazılır.
 
 ## Paneller
 
@@ -56,7 +56,7 @@ Pencere menüsü her paneli açıp kapatır; F4 hepsini gizler veya geri getirir
 - **Durumlar**: her durumun kendi nesneleri vardır. Animasyonu oynatın, soğan zarını açın ve Katmanlar panelinden bir katmanı durumlar arasında paylaşın. Yeniden adlandırmak için bir sayfaya, duruma, katmana veya nesneye çift tıklayın.
 - **En İyileştir**: GIF, Animasyonlu GIF, JPEG, PNG 8, PNG 24 veya PNG 32 seçin. Panel dosya boyutunu tahmin eder; dışa aktarma bu ayarları kullanır.
 - **Stiller**: uygulamak veya sonraki şeklin renklerini ayarlamak için bir stile tıklayın. Stiller dolgu, kontur ve opaklık bilgisini tutar.
-- **Yol**: Birleşim, Kesişim, Del, Kırp, Birleştir, Böl, Basitleştir, Konturu Genişlet, İçe Kaydır ve Dışa Kaydır.
+- **Yol**: Topla, Kesiştir, Zımbala, Kırp, Birleştir, Böl, Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet.
 - **Otomatik Şekiller**: eklemek için bir kutucuğa tıklayın, ardından Otomatik Şekil Özellikleri panelinde ayarlayın.
 - **Belge Kitaplığı**: Yeni, seçimden bir sembol oluşturur. Ekle sembolü yerleştirir, Güncelle onu seçimden yeniden tanımlar, Sil kaldırır.
 - **Ortak Kitaplık**: bir öğeyi belgeye sembol olarak eklemek için tıklayın.
@@ -64,8 +64,8 @@ Pencere menüsü her paneli açıp kapatır; F4 hepsini gizler veya geri getirir
 - **Renk Paleti**: bir renkle doldurmak için tıklayın, kontur için Shift+tıklayın. Geçerli dolgu için tamamlayıcı, benzeşik ve üçlü renkler de önerir.
 - **Sembol Özellikleri**: seçili sembolü yeniden adlandırın, kaç kopyası olduğunu görün ve sembolü ayırın.
 
-Her sekme satırının sağındaki panel menüsü o grubu daraltır veya kapatır. Üst çubuktaki Genişletilmiş Kip, açık paneller ile yalnızca sekmeler arasında geçiş yapar.
+Her sekme satırının sağındaki panel menüsü o grubu daraltır veya kapatır. Üst çubuktaki Genişletilmiş Mod, açık paneller ile yalnızca sekmeler arasında geçiş yapar.
 
 ## Dışa aktarmaları karşılaştırma
 
-Önizleme, sayfayı dışa aktarılacağı haliyle gösterir. 2'li görünüm özgün sayfayı yanına koyar; 4'lü görünüm özgün sayfayı üç dışa aktarma ayarı ve dosya boyutlarıyla karşılaştırır. Bu görünümlerde kaydırmak için sürükleyin.
+Önizleme, sayfayı dışa aktarılacağı haliyle gösterir. 2 Yukarı görünümü orijinal sayfayı yanına koyar; 4 Yukarı görünümü orijinal sayfayı üç dışa aktarma ayarı ve dosya boyutlarıyla karşılaştırır. Bu görünümlerde kaydırmak için sürükleyin.
