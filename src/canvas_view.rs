@@ -142,6 +142,8 @@ pub struct Scene {
     draft: Vec<Vec2>,
     /// Curve handles to show, each as its vertex and the handle's own position.
     handle_guides: Vec<(Vec2, Vec2)>,
+    /// With Subselection or the Pen, every vertex of a selected path is shown, and these are the picked ones.
+    picked_points: Option<Vec<(u64, usize)>>,
     draft_closed: bool,
     /// Stroke width of the draft in document units; `None` draws a hairline.
     draft_width: Option<f32>,
@@ -230,14 +232,11 @@ impl Scene {
                     guide(*anchor, *handles);
                 }
             }
-            Tool::Subselect => {
-                for object in w.ed.selected() {
-                    for (index, anchor) in object.points.iter().enumerate() {
-                        guide(*anchor, object.handles_at(index));
-                    }
-                }
-            }
             _ => {}
+        }
+        // Subselection shows the handles of the picked vertices only, as the Pen does after adding one.
+        if matches!(w.tool, Tool::Subselect | Tool::Pen) {
+            handle_guides.extend(w.visible_handles().into_iter().map(|(_, _, _, anchor, handle)| (anchor, handle)));
         }
         let caret = w.text_edit.and_then(|id| w.ed.object(id)).and_then(|o| match &o.shape {
             Shape::Text { content, size } => {
@@ -269,6 +268,7 @@ impl Scene {
             marquee,
             draft,
             handle_guides,
+            picked_points: matches!(w.tool, Tool::Subselect | Tool::Pen).then(|| w.picked_points()),
             draft_closed,
             draft_width,
             draft_color,
@@ -449,12 +449,26 @@ impl Scene {
                     }
                 }
             }
-            if matches!(object.shape, Shape::Line | Shape::Path { .. }) {
-                let step = (object.points.len() / 40).max(1);
-                for p in object.points.iter().step_by(step) {
-                    let c = map.to_screen(*p);
-                    let dot = Bounds { origin: point(c.x - px(2.), c.y - px(2.)), size: size(px(4.), px(4.)) };
-                    window.paint_quad(fill(dot, accent));
+            if matches!(object.shape, Shape::Line | Shape::Path { .. }) || self.picked_points.is_some() {
+                match &self.picked_points {
+                    // Every vertex, hollow until it is picked. Shapes show the ones they would have as paths.
+                    Some(picked) => {
+                        for (index, p) in object.path_points().iter().enumerate() {
+                            let c = map.to_screen(*p);
+                            let dot = Bounds { origin: point(c.x - px(2.5), c.y - px(2.5)), size: size(px(5.), px(5.)) };
+                            let solid = picked.contains(&(object.id, index));
+                            window.paint_quad(fill(dot, if solid { accent } else { rgb(0xffffff) }));
+                            window.paint_quad(outline(dot, accent, BorderStyle::Solid));
+                        }
+                    }
+                    None => {
+                        let step = (object.points.len() / 40).max(1);
+                        for p in object.points.iter().step_by(step) {
+                            let c = map.to_screen(*p);
+                            let dot = Bounds { origin: point(c.x - px(2.), c.y - px(2.)), size: size(px(4.), px(4.)) };
+                            window.paint_quad(fill(dot, accent));
+                        }
+                    }
                 }
             }
         }

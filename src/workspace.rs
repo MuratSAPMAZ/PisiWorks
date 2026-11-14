@@ -138,6 +138,9 @@ pub struct NumericDialog {
     pub mode: NumericMode,
     /// The selection box the numbers apply to.
     pub bounds: Rect,
+    /// The point that stays where it is: the center point of the transform box if
+    /// it was dragged somewhere, otherwise the middle of the selection.
+    pub center: Vec2,
     /// Percentages for Scale.
     pub percent: (f32, f32),
     /// Pixels for Resize.
@@ -282,6 +285,11 @@ fn upright(quad: [Vec2; 4]) -> Option<Rect> {
         .then(|| Rect { x: a.x, y: a.y, w: b.x - a.x, h: d.y - a.y })
 }
 
+/// `bounds` scaled by `sx` and `sy` so that `center` stays where it is.
+fn scaled_about(bounds: Rect, center: Vec2, sx: f32, sy: f32) -> Rect {
+    Rect { x: center.x - (center.x - bounds.x) * sx, y: center.y - (center.y - bounds.y) * sy, w: bounds.w * sx, h: bounds.h * sy }
+}
+
 fn is_transform_tool(tool: Tool) -> bool {
     matches!(tool, Tool::Scale | Tool::Skew | Tool::Distort)
 }
@@ -312,7 +320,8 @@ pub enum Drag {
     PenHandle,
     /// Dragging one curve handle of a vertex with Subselection. `fresh` pulls a new
     /// pair out of a corner, and leaves a corner behind if the pointer never moves.
-    Handle { id: u64, index: usize, after: bool, fresh: bool, moved: bool },
+    /// `pen` marks a press of the Pen on a vertex, which acts as a click if nothing is pulled.
+    Handle { id: u64, index: usize, after: bool, fresh: bool, moved: bool, pen: bool },
     Pan { last: Point<Pixels> },
 }
 
@@ -356,6 +365,13 @@ pub struct Workspace {
     pub pen: Vec<Vec2>,
     /// Curve handles of the vertices in `pen`, one each.
     pub pen_handles: Vec<Handles>,
+    /// The vertices picked with Subselection, each as its path and its index.
+    pub point_selection: Vec<(u64, usize)>,
+    /// The open path the Pen is carrying on, which `pen` then holds a copy of.
+    pen_resume: Option<u64>,
+    /// A question is on screen. Its buttons sit over the canvas, and a click on one
+    /// must not also act on the artwork behind it.
+    awaiting_answer: bool,
     pub transform: Option<TransformSession>,
     /// Which of Scale, Skew and Distort the shared tool button shows.
     pub transform_tool: Tool,
@@ -553,6 +569,9 @@ impl Workspace {
             drag: None,
             pen: Vec::new(),
             pen_handles: Vec::new(),
+            point_selection: Vec::new(),
+            pen_resume: None,
+            awaiting_answer: false,
             transform: None,
             transform_tool: Tool::Scale,
             tool_hold: 0,
@@ -693,6 +712,7 @@ impl Workspace {
         self.transform = session;
         self.crop_area = None;
         self.tool = tool;
+        self.point_selection.clear();
         if is_transform_tool(tool) {
             self.transform_tool = tool;
         }
@@ -965,11 +985,12 @@ impl Workspace {
         self.size_dialog = Some(SizeDialog { kind, width: page.width, height: page.height, constrain: kind == SizeDialogKind::Image });
     }
 
-    fn open_numeric_dialog(&mut self) {
+    fn open_numeric_dialog(&mut self, center_point: Option<Vec2>) {
         let Some(bounds) = self.ed.selection_bounds() else { return };
         self.numeric_dialog = Some(NumericDialog {
             mode: NumericMode::Scale,
             bounds,
+            center: center_point.unwrap_or_else(|| bounds.center()),
             percent: (100.0, 100.0),
             size: (bounds.w, bounds.h),
             angle: 0.0,
@@ -978,11 +999,11 @@ impl Workspace {
         });
     }
 
-    /// Applies the Numeric Transform dialog around the middle of the selection and closes it.
+    /// Applies the Numeric Transform dialog around its center point and closes it.
     pub fn apply_numeric_dialog(&mut self) {
         self.commit_field();
         let Some(dialog) = self.numeric_dialog.take() else { return };
-        let (bounds, center) = (dialog.bounds, dialog.bounds.center());
+        let (bounds, center) = (dialog.bounds, dialog.center);
         let mut skipped = 0;
         if dialog.mode == NumericMode::Rotate {
             let warp = Warp::rotation(center, dialog.angle.to_radians());
@@ -996,8 +1017,8 @@ impl Workspace {
                 NumericMode::Scale => (bounds.w * dialog.percent.0 / 100.0, bounds.h * dialog.percent.1 / 100.0),
                 _ => dialog.size,
             };
-            let target = Rect { x: center.x - w / 2.0, y: center.y - h / 2.0, w, h };
             let factor = |from: f32, to: f32| if from > 0.0 { to / from } else { 1.0 };
+            let target = scaled_about(bounds, center, factor(bounds.w, w), factor(bounds.h, h));
             let growth = (factor(bounds.w, w) + factor(bounds.h, h)) / 2.0;
             self.ed.for_selected(|o| {
                 *o = scale_object(o, bounds, target);
@@ -1327,6 +1348,8 @@ impl Workspace {
 
     pub fn run(&mut self, cmd: Cmd, window: &mut Window, cx: &mut Context<Self>) {
         self.close_overlays();
+        // Finishing the pending transform forgets its center point, which Numeric Transform turns around.
+        let center_point = self.transform.as_ref().and_then(|session| session.pivot);
         self.finish_pending();
         if !self.is_enabled(cmd) {
             return;
@@ -1459,7 +1482,7 @@ impl Workspace {
                 self.ed.commit(t("Remove Transformations"));
             }
             Cmd::FreeTransform => self.set_tool(Tool::Scale),
-            Cmd::NumericTransform => self.open_numeric_dialog(),
+            Cmd::NumericTransform => self.open_numeric_dialog(center_point),
             Cmd::SelectTool(tool) => self.set_tool(tool),
             Cmd::TextToPaths => {
                 self.ed.for_selected(|o| {
@@ -1759,6 +1782,9 @@ impl Workspace {
     // ---- Canvas input ---------------------------------------------------------------
 
     pub fn canvas_down(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.awaiting_answer {
+            return;
+        }
         self.commit_field();
         window.focus(&self.focus);
         self.stop_playing();
@@ -1780,7 +1806,7 @@ impl Workspace {
         match tool {
             Tool::Pointer => self.pointer_down(ev, p),
             Tool::Scale | Tool::Skew | Tool::Distort => self.transform_down(ev, p),
-            Tool::Subselect => self.subselect_down(p, ev.modifiers.alt),
+            Tool::Subselect => self.subselect_down(p, ev.modifiers.alt, ev.modifiers.shift, window, cx),
             Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
                     self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: selection_mode(ev.modifiers) });
@@ -1798,7 +1824,7 @@ impl Workspace {
                 let start = snap(p);
                 self.drag = Some(Drag::Create { start, current: start });
             }
-            Tool::Pen => self.pen_click(p, ev.click_count),
+            Tool::Pen => self.pen_down(p, ev.click_count, window, cx),
             Tool::Pencil | Tool::Brush => {
                 let target = self.ed.doc.page().bitmap_at(p, &self.ed.selection);
                 self.drag = Some(Drag::Freehand { points: vec![p], target });
@@ -2005,35 +2031,260 @@ impl Workspace {
         self.drag = Some(Drag::Freeform { id, start: p, base, radius });
     }
 
-    /// Starts dragging a curve handle or a vertex of a selected path. Alt on a vertex
-    /// pulls a new pair of handles out of it.
-    fn subselect_down(&mut self, p: Vec2, alt: bool) {
-        let reach = 5.0 / self.zoom;
+    /// The picked vertices that still exist, on paths that are still selected.
+    pub fn picked_points(&self) -> Vec<(u64, usize)> {
+        self.point_selection
+            .iter()
+            .copied()
+            .filter(|(id, index)| self.ed.is_selected(*id) && self.ed.object(*id).is_some_and(|o| *index < o.points.len()))
+            .collect()
+    }
+
+    /// The curve handles on show: those of each picked vertex, and the one handle on
+    /// either neighbour that shapes a segment it shares. Each is its path, its vertex,
+    /// whether it is the outgoing handle, the vertex and the handle's own position.
+    pub fn visible_handles(&self) -> Vec<(u64, usize, bool, Vec2, Vec2)> {
+        let mut out: Vec<(u64, usize, bool, Vec2, Vec2)> = Vec::new();
+        let mut add = |object: &Object, index: usize, after: bool| {
+            let handles = object.handles_at(index);
+            let offset = if after { handles.after } else { handles.before };
+            if offset != Vec2::default() && !out.iter().any(|h| (h.0, h.1, h.2) == (object.id, index, after)) {
+                let anchor = object.points[index];
+                out.push((object.id, index, after, anchor, v2(anchor.x + offset.x, anchor.y + offset.y)));
+            }
+        };
+        for (id, index) in self.picked_points() {
+            let Some(object) = self.ed.object(id) else { continue };
+            let count = object.points.len();
+            add(object, index, false);
+            add(object, index, true);
+            if index > 0 || object.is_closed() {
+                add(object, (index + count - 1) % count, true);
+            }
+            if index + 1 < count || object.is_closed() {
+                add(object, (index + 1) % count, false);
+            }
+        }
+        out
+    }
+
+    /// The vertex of a selected path under `p`. An ellipse or an auto shape shows the
+    /// vertices it would have as a path, and taking one makes it that path. A rectangle
+    /// shows them too but is left as it is, and `None` is returned after asking the
+    /// user whether to ungroup it, as Fireworks does.
+    fn path_point_at(&mut self, p: Vec2, window: &mut Window, cx: &mut Context<Self>) -> Option<(u64, usize)> {
+        let reach = TRANSFORM_REACH / self.zoom;
+        let (id, index, rectangle) = self.ed.selected().into_iter().find_map(|object| {
+            let index = object.path_points().iter().position(|v| (v.x - p.x).abs() <= reach && (v.y - p.y).abs() <= reach)?;
+            Some((object.id, index, matches!(object.shape, Shape::Rect { .. })))
+        })?;
+        if rectangle {
+            self.confirm_rectangle_to_path(id, window, cx);
+            return None;
+        }
+        if let Some(object) = self.ed.object_mut(id) {
+            object.to_path();
+        }
+        Some((id, index))
+    }
+
+    /// Asks before a rectangle gives up its roundness setting to have its vertices edited.
+    fn confirm_rectangle_to_path(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
+        // One text, because the prompt wraps its message but cuts a long detail line short.
+        let question = format!("{} {}", t("To edit a rectangle's points, it must be ungrouped."), t("OK to ungroup and turn into a vector?"));
+        let answer = window.prompt(PromptLevel::Warning, &question, None, &[t("OK"), t("Cancel")], cx);
+        self.awaiting_answer = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let agreed = answer.await == Ok(0);
+            this.update_in(cx, |this, _, cx| {
+                this.awaiting_answer = false;
+                if let Some(object) = this.ed.object_mut(id).filter(|_| agreed) {
+                    object.to_path();
+                    this.ed.commit(t("Convert to Path"));
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Whether a rectangle's vertex is under `p`, which stops a press from doing anything else while the user is asked.
+    fn rectangle_point_at(&self, p: Vec2) -> bool {
+        let reach = TRANSFORM_REACH / self.zoom;
+        self.ed.selected().into_iter().any(|object| {
+            matches!(object.shape, Shape::Rect { .. }) && object.path_points().iter().any(|v| (v.x - p.x).abs() <= reach && (v.y - p.y).abs() <= reach)
+        })
+    }
+
+    /// A press with Subselection: on a curve handle or a vertex of a selected path it
+    /// starts dragging it, and anywhere else it selects what is there. Shift adds a
+    /// vertex to those picked, and Alt pulls a new pair of handles out of one.
+    fn subselect_down(&mut self, p: Vec2, alt: bool, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let reach = TRANSFORM_REACH / self.zoom;
         let near = |v: Vec2| ((v.x - p.x).powi(2) + (v.y - p.y).powi(2)).sqrt() <= reach;
-        let paths = || self.ed.selected().into_iter().filter(|o| matches!(o.shape, Shape::Line | Shape::Path { .. }));
         // Handles first: a short one sits almost on top of its vertex.
-        for object in paths() {
-            for (index, anchor) in object.points.iter().enumerate() {
-                let handles = object.handles_at(index);
-                for (after, offset) in [(false, handles.before), (true, handles.after)] {
-                    if offset != Vec2::default() && near(v2(anchor.x + offset.x, anchor.y + offset.y)) {
-                        self.drag = Some(Drag::Handle { id: object.id, index, after, fresh: false, moved: false });
-                        return;
-                    }
+        if let Some((id, index, after, ..)) = self.visible_handles().into_iter().find(|h| near(h.4)) {
+            self.drag = Some(Drag::Handle { id, index, after, fresh: false, moved: false, pen: false });
+            return;
+        }
+        let on_rectangle = self.rectangle_point_at(p);
+        if let Some((id, index)) = self.path_point_at(p, window, cx) {
+            let picked = self.picked_points().contains(&(id, index));
+            if shift && picked {
+                self.point_selection.retain(|point| *point != (id, index));
+                return;
+            }
+            if shift {
+                self.point_selection.push((id, index));
+            } else if !picked {
+                self.point_selection = vec![(id, index)];
+            }
+            self.drag = Some(if alt {
+                Drag::Handle { id, index, after: true, fresh: true, moved: false, pen: false }
+            } else {
+                Drag::Vertex { id, index }
+            });
+            return;
+        }
+        if on_rectangle {
+            return;
+        }
+        self.point_selection.clear();
+        match self.ed.doc.page().hit_test(p, self.tolerance()) {
+            Some(id) => self.ed.selection = vec![id],
+            // On nothing, a box is dragged out to pick the vertices inside it.
+            None => self.drag = Some(Drag::Marquee { start: p, current: p }),
+        }
+    }
+
+    /// Ends a box dragged out with Subselection: it picks the vertices of the selected
+    /// paths that lie inside, or selects the objects inside when there are none.
+    fn finish_point_marquee(&mut self, area: Rect) {
+        let picked: Vec<(u64, usize)> = self
+            .ed
+            .selected()
+            .into_iter()
+            .filter(|o| matches!(o.shape, Shape::Line | Shape::Path { .. }))
+            .flat_map(|o| o.points.iter().enumerate().filter(|(_, p)| area.contains(**p)).map(|(index, _)| (o.id, index)).collect::<Vec<_>>())
+            .collect();
+        if picked.is_empty() {
+            self.ed.select_in_rect(area);
+        }
+        self.point_selection = picked;
+    }
+
+    /// Removes the picked vertices, as Delete does with Subselection. A path left
+    /// with fewer than two vertices goes with them.
+    fn delete_picked_points(&mut self) -> bool {
+        let mut picked = self.picked_points();
+        if picked.is_empty() {
+            return false;
+        }
+        // From the far end, so earlier indices stay good.
+        picked.sort_by(|a, b| b.cmp(a));
+        let mut emptied = Vec::new();
+        for (id, index) in picked {
+            if let Some(object) = self.ed.object_mut(id) {
+                object.to_path();
+                if !object.remove_point(index) && !emptied.contains(&id) {
+                    emptied.push(id);
                 }
             }
         }
-        for object in paths() {
-            if let Some(index) = object.points.iter().position(|v| near(*v)) {
-                self.drag = Some(if alt {
-                    Drag::Handle { id: object.id, index, after: true, fresh: true, moved: false }
-                } else {
-                    Drag::Vertex { id: object.id, index }
-                });
+        if !emptied.is_empty() {
+            self.ed.selection = emptied;
+            self.ed.delete_selected();
+        }
+        self.point_selection.clear();
+        self.ed.commit(t("Edit Path"));
+        true
+    }
+
+    /// A press with the Pen. On a selected path it edits the path: on a vertex it
+    /// waits to see whether handles are pulled out, and on a segment it adds a vertex.
+    /// Anywhere else it places the next vertex of the path being drawn.
+    fn pen_down(&mut self, p: Vec2, clicks: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let reach = TRANSFORM_REACH / self.zoom;
+        if self.pen.is_empty() {
+            if self.rectangle_point_at(p) {
+                self.path_point_at(p, window, cx);
+                return;
+            }
+            if let Some((id, index)) = self.path_point_at(p, window, cx) {
+                self.drag = Some(Drag::Handle { id, index, after: true, fresh: true, moved: false, pen: true });
+                return;
+            }
+            let on_segment = self.ed.selected().into_iter().filter(|o| matches!(o.shape, Shape::Line | Shape::Path { .. })).find_map(|object| {
+                object.nearest_segment(p, reach).map(|(segment, along)| (object.id, segment, along))
+            });
+            if let Some((id, segment, along)) = on_segment {
+                if let Some(object) = self.ed.object_mut(id) {
+                    object.to_path();
+                    let index = object.insert_point(segment, along);
+                    self.point_selection = vec![(id, index)];
+                    self.ed.commit(t("Edit Path"));
+                }
+                return;
+            }
+        } else {
+            // Ending on the loose end of another open path joins the two.
+            let near = |v: &Vec2| (v.x - p.x).abs() <= reach && (v.y - p.y).abs() <= reach;
+            let end = self
+                .ed
+                .selected()
+                .into_iter()
+                .filter(|o| Some(o.id) != self.pen_resume && matches!(o.shape, Shape::Line | Shape::Path { closed: false }))
+                .find_map(|o| [0, o.points.len().saturating_sub(1)].into_iter().find(|i| o.points.get(*i).is_some_and(near)).map(|i| (o.clone(), i)));
+            if let Some((other, index)) = end {
+                let id = other.id;
+                let (mut points, mut handles) = (other.points.clone(), other.handles.clone());
+                handles.resize(points.len(), Handles::default());
+                if index != 0 {
+                    points.reverse();
+                    handles.reverse();
+                    handles.iter_mut().for_each(|h| *h = Handles { before: h.after, after: h.before });
+                }
+                self.pen.extend(points);
+                self.pen_handles.extend(handles);
+                self.ed.selection = vec![id];
+                self.ed.delete_selected();
+                self.finish_pen(false);
                 return;
             }
         }
-        self.ed.selection = self.ed.doc.page().hit_test(p, self.tolerance()).into_iter().collect();
+        self.pen_click(p, clicks);
+    }
+
+    /// A click of the Pen on a vertex of a selected path, with nothing pulled out of it.
+    /// The loose end of an open path is picked up to draw on from; a curve point
+    /// becomes a corner; a corner is removed.
+    fn pen_point_click(&mut self, id: u64, index: usize) {
+        let Some(object) = self.ed.object(id) else { return };
+        let count = object.points.len();
+        if !object.is_closed() && (index == 0 || index + 1 == count) {
+            let (mut points, mut handles) = (object.points.clone(), object.handles.clone());
+            handles.resize(count, Handles::default());
+            // The Pen adds to the end of its list, so the picked end has to be last.
+            if index == 0 {
+                points.reverse();
+                handles.reverse();
+                handles.iter_mut().for_each(|h| *h = Handles { before: h.after, after: h.before });
+            }
+            (self.pen, self.pen_handles, self.pen_resume) = (points, handles, Some(id));
+            return;
+        }
+        let curved = !object.handles_at(index).is_corner();
+        let Some(object) = self.ed.object_mut(id) else { return };
+        object.to_path();
+        if curved {
+            object.set_handles(index, Handles::default());
+            object.refit_to_points();
+        } else {
+            object.remove_point(index);
+            self.point_selection.clear();
+        }
+        self.ed.commit(t("Edit Path"));
     }
 
     fn pick_color(&mut self, p: Vec2) {
@@ -2129,6 +2380,18 @@ impl Workspace {
         let points = std::mem::take(&mut self.pen);
         let handles = std::mem::take(&mut self.pen_handles);
         if points.len() < 2 {
+            self.pen_resume = None;
+            return;
+        }
+        // A path that was picked up by its loose end is carried on, not drawn again.
+        if let Some(object) = self.pen_resume.take().and_then(|id| self.ed.object_mut(id)) {
+            object.shape = Shape::Path { closed };
+            (object.points, object.handles) = (points, handles);
+            if !object.is_curved() {
+                object.handles.clear();
+            }
+            object.refit_to_points();
+            self.ed.commit(t("Pen"));
             return;
         }
         let bounds = Rect::of_points(&flatten_curve(&points, &handles, closed));
@@ -2304,8 +2567,18 @@ impl Workspace {
             }
             Drag::Vertex { id, index } => {
                 let (id, index) = (*id, *index);
+                // Every picked vertex of the path moves with the one under the pointer.
+                let others: Vec<usize> = self.point_selection.iter().filter(|(path, other)| *path == id && *other != index).map(|(_, other)| *other).collect();
                 if let Some(object) = self.ed.object_mut(id) {
-                    object.points[index] = snap(p);
+                    object.to_path();
+                    let Some(from) = object.points.get(index).copied() else { return };
+                    let to = snap(p);
+                    object.points[index] = to;
+                    for other in others {
+                        if let Some(point) = object.points.get_mut(other) {
+                            *point = v2(point.x + to.x - from.x, point.y + to.y - from.y);
+                        }
+                    }
                     object.refit_to_points();
                 }
             }
@@ -2317,7 +2590,7 @@ impl Workspace {
                     *handles = if dragged { Handles::smooth(pull) } else { Handles::default() };
                 }
             }
-            Drag::Handle { id, index, after, fresh, moved } => {
+            Drag::Handle { id, index, after, fresh, moved, .. } => {
                 let (id, index, after) = (*id, *index, *after);
                 let Some(object) = self.ed.object_mut(id) else { return };
                 let Some(anchor) = object.points.get(index).copied() else { return };
@@ -2365,6 +2638,7 @@ impl Workspace {
             Drag::Resize { .. } => self.ed.commit(t("Scale")),
             Drag::Vertex { .. } => self.ed.commit(t("Edit Path")),
             Drag::PenHandle => {}
+            Drag::Handle { id, index, moved: false, pen: true, .. } => self.pen_point_click(id, index),
             Drag::Handle { id, index, fresh, moved, .. } => {
                 // Alt+click without a drag turns the vertex back into a corner.
                 if fresh && !moved {
@@ -2375,6 +2649,7 @@ impl Workspace {
                 }
                 self.ed.commit(t("Edit Path"));
             }
+            Drag::Marquee { start, current } if self.tool == Tool::Subselect => self.finish_point_marquee(Rect::from_corners(start, current)),
             Drag::Marquee { start, current } => self.ed.select_in_rect(Rect::from_corners(start, current)),
             Drag::Create { start, current } => self.finish_create(start, current),
             Drag::Freehand { points, target } => self.finish_freehand(points, target),
@@ -2385,7 +2660,15 @@ impl Workspace {
                     self.status = t("Press Enter or double-click to apply, Esc to cancel").into();
                 }
             }
-            Drag::Freeform { .. } => self.ed.commit(t("Freeform")),
+            Drag::Freeform { id, .. } => {
+                // Pulling works on many short pieces, and the result is a curved path again.
+                if let Some(object) = self.ed.object_mut(id) {
+                    let closed = object.is_closed();
+                    (object.points, object.handles) = crate::fit::fit_curves(&object.points, closed, crate::fit::TOLERANCE);
+                    object.refit_to_points();
+                }
+                self.ed.commit(t("Freeform"));
+            }
             Drag::Pan { .. } => {}
         }
         cx.notify();
@@ -2617,6 +2900,7 @@ impl Workspace {
                 let visible = self.ed.web_visible();
                 self.run(Cmd::ShowWeb(!visible), window, cx);
             }
+            "delete" | "backspace" if self.tool == Tool::Subselect && self.delete_picked_points() => {}
             "delete" | "backspace" => self.run(Cmd::Clear, window, cx),
             "enter" if self.crop_area.is_some() => self.apply_crop(),
             "enter" if self.transform.is_some() => self.apply_transform(),
@@ -2624,6 +2908,7 @@ impl Workspace {
             "escape" => {
                 self.pen.clear();
                 self.pen_handles.clear();
+                self.pen_resume = None;
                 self.crop_area = None;
                 self.pixel_sel = None;
                 if self.drag.take().is_some() | self.cancel_transform() {
@@ -2802,6 +3087,7 @@ impl Workspace {
                         *radius = v;
                     }
                 });
+                self.ed.for_selected(Object::refit_placed);
                 self.ed.commit(t("Roundness"));
             }
             FieldId::TextSize => {
@@ -2901,6 +3187,7 @@ impl Workspace {
                         1 => *b = value,
                         _ => *count = value.round() as u32,
                     }
+                    o.refit_placed();
                 });
                 self.ed.commit(t("Auto Shape"));
             }
@@ -3121,6 +3408,17 @@ mod tests {
         assert_eq!(upright(rect_corners(origin).map(|c| slanted.apply(c))), None);
         let half_turn = Warp::rotation(origin.center(), std::f32::consts::PI);
         assert_eq!(upright(rect_corners(origin).map(|c| half_turn.apply(c))), None);
+    }
+
+    #[test]
+    fn numeric_scaling_keeps_the_center_point_still() {
+        let bounds = Rect { x: 100.0, y: 100.0, w: 200.0, h: 100.0 };
+        // Around the middle, the box shrinks toward the middle.
+        assert_eq!(scaled_about(bounds, bounds.center(), 0.5, 0.5), Rect { x: 150.0, y: 125.0, w: 100.0, h: 50.0 });
+        // Around its top-left corner, that corner does not move.
+        assert_eq!(scaled_about(bounds, v2(100.0, 100.0), 0.5, 2.0), Rect { x: 100.0, y: 100.0, w: 100.0, h: 200.0 });
+        // Around a point outside the box, the box moves toward the point as it shrinks.
+        assert_eq!(scaled_about(bounds, v2(0.0, 0.0), 0.5, 0.5), Rect { x: 50.0, y: 50.0, w: 100.0, h: 50.0 });
     }
 
     #[test]

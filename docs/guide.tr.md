@@ -6,9 +6,11 @@
 
 Kalem (P) ile köşe noktası koymak için tıklayın. Yumuşak nokta koymak için basıp sürükleyin: çektiğiniz iki tutamaç, yolu noktanın iki yanında büker.
 
-Alt Seçim (A) ile bir yolu seçtiğinizde noktaları ve tutamaçları görünür. Noktayı taşımak için noktayı, eğriyi yeniden biçimlendirmek için tutamacı sürükleyin. Karşı tutamaç da onunla birlikte döner ve nokta yumuşak kalır; tutamaçlardan yalnızca birini oynatıp sivri bir köşe yapmak için Alt'ı basılı tutun. Bir köşeden tutamaç çekmek için Alt+sürükleyin, bir noktayı yeniden köşeye çevirmek için Alt+tıklayın.
+Alt Seçim (A) ile bir yolu seçtiğinizde noktaları görünür. Bir noktayı seçmek için tıklayın; tutamaçları görünür. Shift+tıklama seçime nokta ekler; boş tuvalde kutu çizmek içindeki bütün noktaları seçer. Seçili noktayı, seçtiğiniz diğer noktalarla birlikte taşımak için sürükleyin; eğriyi yeniden biçimlendirmek için tutamacı sürükleyin. Karşı tutamaç da onunla birlikte döner ve nokta yumuşak kalır; tutamaçlardan yalnızca birini oynatıp sivri bir köşe yapmak için Alt'ı basılı tutun. Bir köşeden tutamaç çekmek için Alt+sürükleyin, bir noktayı yeniden köşeye çevirmek için Alt+tıklayın. Delete, seçili noktaları siler.
 
-Serbest Biçim, Bıçak ve Yol paneli düz parçalar üzerinde çalışır; bu yüzden eğriyi çok sayıda kısa parçaya dönüştürürler.
+Kalem de seçili bir yolu düzenler. Nokta eklemek için yolun bir parçasına tıklayın. Eğri noktasını köşeye çevirmek için ona, köşe noktasını silmek için köşeye tıklayın. Bir noktadan tutamaç çekmek için noktadan sürükleyin. Açık bir yolun serbest ucuna tıklayarak çizmeye oradan devam edin; başka bir açık yolun serbest ucunda bitirerek ikisini birleştirin.
+
+Elipsler, noktaları düzenlendiğinde birkaç eğri noktasından oluşan yollara dönüşür. Dikdörtgen önce onay ister, çünkü yola dönüşünce yuvarlaklık ayarı kalmaz. Serbest Biçim, Bıçak ve yol işlemleri sonucu yine eğri yol olarak verir: başka bir daireyle birleştirilen daire yine eğrilerden oluşur.
 
 Arayüz dili masaüstünüzün diline göre seçilir. Değiştirmek için Düzenle > Dil menüsünü kullanın.
 
@@ -37,9 +39,9 @@ Eğriltme ve Deformasyon araçları, Ölçek düğmesini paylaşır: listelemek 
 
 Sürüklerken çizim dönüşümü yalnızca önizler; başka bir tutamaçla veya üç araçtan bir diğeriyle devam edebilirsiniz. Uygulamak için Enter'a basın veya kutunun içine çift tıklayın, her şeyi eski haline getirmek için Esc'ye basın. Kutunun içini sürüklemek seçimi taşır.
 
-Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Nümerik Dönüştürme (Ctrl+Shift+T), seçimin ortasını sabit tutarak yüzdeyle ölçekler, piksel cinsinden boyut verir veya bir açıyla döndürür.
+Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Nümerik Dönüştürme (Ctrl+Shift+T) yüzdeyle ölçekler, piksel cinsinden boyut verir veya bir açıyla döndürür. Merkez noktasını sürüklediyseniz o noktayı, sürüklemediyseniz seçimin ortasını sabit tutar.
 
-Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol de kitaplığa bağlı kalır. Değiştir > Dönüştür > Dönüştürmeleri Kaldır ikisini de yeniden dik hale getirir. Dikdörtgenler ve elipsler yola çevrilir, bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
+Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol kitaplığa bağlı kalır; dikdörtgen yuvarlaklığını, otomatik şekil ayarlarını korur. Değiştir > Dönüştür > Dönüştürmeleri Kaldır bunları yeniden dik hale getirir. Yatay Çevir ve Dikey Çevir metni, sembolleri ve grupları da aynalar. Bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
 
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 

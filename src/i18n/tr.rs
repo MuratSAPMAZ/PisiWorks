@@ -550,6 +550,12 @@ pub const ENTRIES: &[(&str, &str)] = &[
         "Kırpmak için Enter'a basın veya çift tıklayın, iptal için Esc",
     ),
     ("Width and height apply to a single object", "Genişlik ve yükseklik tek bir nesneye uygulanır"),
+    // The words Fireworks asks this in.
+    (
+        "To edit a rectangle's points, it must be ungrouped.",
+        "Bir dikdörtgenin noktalarının düzenlenebilmesi için önce çözülmesi gerekir.",
+    ),
+    ("OK to ungroup and turn into a vector?", "Dikdörtgen çözülüp vektöre dönüştürülsün mü?"),
     // Path operations
     ("Select one or more vector shapes first", "Önce bir veya daha fazla vektör şekli seçin"),
     (
@@ -565,6 +571,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ),
     ("Expand Stroke needs objects that have a stroke", "Konturu Genişlet için konturu olan nesneler gerekir"),
     ("Inset and Outset work on closed shapes", "Yolu Daralt ve Yolu Genişlet kapalı şekillerde çalışır"),
+    // Start-up
+    (
+        "PisiWorks needs a Vulkan graphics driver, and none was found. Install the mesa-vulkan-drivers package, then start PisiWorks again.",
+        "PisiWorks bir Vulkan grafik sürücüsüne ihtiyaç duyar ve sistemde bulunamadı. mesa-vulkan-drivers paketini kurup PisiWorks'ü yeniden başlatın.",
+    ),
     // Files
     ("not an Emberframe document", "bu bir PisiWorks (.ember) belgesi değil"),
     ("file was saved by a newer version", "dosya daha yeni bir sürümle kaydedilmiş"),

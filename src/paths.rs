@@ -93,9 +93,11 @@ fn result_object(id: u64, template: &Object, points: Vec<Vec2>, closed: bool) ->
     object.id = id;
     object.name = t("Path").into();
     object.shape = Shape::Path { closed };
+    // The operations work on straight pieces. Curves are fitted to what they return,
+    // so a curved shape comes back as a curved path with a few vertices.
+    (object.points, object.handles) = crate::fit::fit_curves(&points, closed, crate::fit::TOLERANCE);
+    object.placement = None;
     object.bounds = Rect::of_points(&points);
-    object.points = points;
-    object.handles.clear();
     object
 }
 
@@ -318,6 +320,42 @@ mod tests {
         let b = only(&ed).bounds;
         assert!(near(b.x, 0.0) && near(b.right(), 150.0) && near(b.bottom(), 150.0), "{b:?}");
         assert_eq!(ed.selection.len(), 1);
+    }
+
+    #[test]
+    fn joining_two_circles_gives_a_curved_path_with_few_vertices() {
+        let mut left = rect(1, 0.0, 0.0, 100.0, 100.0);
+        left.shape = Shape::Ellipse;
+        let mut right = rect(2, 60.0, 0.0, 100.0, 100.0);
+        right.shape = Shape::Ellipse;
+        let mut ed = editor(vec![left, right]);
+        assert_eq!(ed.path_op(PathOp::Union, 0.0), Ok(1));
+        let joined = only(&ed);
+        assert!(joined.is_curved(), "the result is curves, not a polygon");
+        assert!(joined.points.len() <= 12, "{} vertices", joined.points.len());
+        let b = joined.bounds;
+        assert!(near(b.x, 0.0) && near(b.right(), 160.0) && near(b.y, 0.0) && near(b.bottom(), 100.0), "{b:?}");
+        // The two points where the circles cross stay sharp, and the rest of the outline is on a circle.
+        let corners = (0..joined.points.len()).filter(|i| {
+            let h = joined.handles_at(*i);
+            let cross = h.before.x * h.after.y - h.before.y * h.after.x;
+            cross.abs() > 0.2 * (h.before.x.hypot(h.before.y) * h.after.x.hypot(h.after.y)).max(1e-3)
+        });
+        assert_eq!(corners.count(), 2);
+        for p in joined.outline() {
+            let to_left = ((p.x - 50.0).powi(2) + (p.y - 50.0).powi(2)).sqrt();
+            let to_right = ((p.x - 110.0).powi(2) + (p.y - 50.0).powi(2)).sqrt();
+            assert!((to_left - 50.0).abs() < 0.8 || (to_right - 50.0).abs() < 0.8, "{p:?} is on neither circle");
+        }
+    }
+
+    #[test]
+    fn straight_shapes_come_back_as_plain_corners() {
+        let mut ed = editor(vec![rect(1, 0.0, 0.0, 100.0, 100.0), rect(2, 50.0, 50.0, 100.0, 100.0)]);
+        ed.path_op(PathOp::Union, 0.0).unwrap();
+        let joined = only(&ed);
+        assert!(!joined.is_curved());
+        assert_eq!(joined.points.len(), 8);
     }
 
     #[test]

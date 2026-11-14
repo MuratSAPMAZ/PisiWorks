@@ -135,6 +135,15 @@ impl Warp {
         }
     }
 
+    /// Mirrors left to right, or top to bottom, through `center`.
+    pub fn mirror(center: Vec2, horizontal: bool) -> Self {
+        if horizontal {
+            Self { m: [-1.0, 0.0, 2.0 * center.x, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] }
+        } else {
+            Self { m: [1.0, 0.0, 0.0, 0.0, -1.0, 2.0 * center.y, 0.0, 0.0, 1.0] }
+        }
+    }
+
     /// This map followed by `next`.
     pub fn then(&self, next: &Warp) -> Self {
         let (a, b) = (&next.m, &self.m);
@@ -237,6 +246,14 @@ const CURVE_STEP: f32 = 3.0;
 const CURVE_MIN_STEPS: usize = 8;
 const CURVE_MAX_STEPS: usize = 64;
 
+/// The point `t` of the way along a cubic Bezier curve.
+fn cubic(controls: [Vec2; 4], t: f32) -> Vec2 {
+    let u = 1.0 - t;
+    let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+    let [p0, p1, p2, p3] = controls;
+    v2(a * p0.x + b * p1.x + c * p2.x + d * p3.x, a * p0.y + b * p1.y + c * p2.y + d * p3.y)
+}
+
 fn distance(a: Vec2, b: Vec2) -> f32 {
     ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
 }
@@ -264,10 +281,7 @@ pub fn flatten_curve(points: &[Vec2], handles: &[Handles], closed: bool) -> Vec<
         let length = distance(p0, p1) + distance(p1, p2) + distance(p2, p3);
         let steps = ((length / CURVE_STEP).ceil() as usize).clamp(CURVE_MIN_STEPS, CURVE_MAX_STEPS);
         for step in 1..steps {
-            let t = step as f32 / steps as f32;
-            let u = 1.0 - t;
-            let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
-            out.push(v2(a * p0.x + b * p1.x + c * p2.x + d * p3.x, a * p0.y + b * p1.y + c * p2.y + d * p3.y));
+            out.push(cubic([p0, p1, p2, p3], step as f32 / steps as f32));
         }
     }
     if !closed {
@@ -542,6 +556,8 @@ impl Object {
     }
 
     /// Turns a shape into an editable path. Returns false for text, bitmaps and web areas.
+    /// A rectangle or an ellipse becomes the few curve points that draw it, and a
+    /// shape that was rotated, skewed or distorted keeps the look it had.
     pub fn to_path(&mut self) -> bool {
         if !self.reshapable() {
             return false;
@@ -549,15 +565,65 @@ impl Object {
         if matches!(self.shape, Shape::Path { .. }) {
             return true;
         }
-        let closed = self.is_closed();
-        self.points = self.outline();
-        self.handles.clear();
-        self.shape = Shape::Path { closed };
+        // The path is built upright in the shape's frame, then carried to where the shape shows.
+        let placement = self.placement.take();
+        if let Some(placement) = &placement {
+            self.bounds = placement.frame;
+        }
+        if !self.to_bezier_path() {
+            let closed = self.is_closed();
+            self.points = self.outline();
+            self.handles.clear();
+            self.shape = Shape::Path { closed };
+        }
+        if let Some(placement) = &placement {
+            self.map_points(&placement.warp);
+        }
+        self.refit_to_points();
         true
     }
 
-    /// Rewrites a rectangle or an ellipse as the Bezier path that draws it, and any
-    /// other vector shape as a plain path.
+    /// The vertices Subselection and the Pen show for this object: its own if it is a
+    /// path, and those it would have as one if it is a shape that can become a path.
+    pub fn path_points(&self) -> Vec<Vec2> {
+        if matches!(self.shape, Shape::Line | Shape::Path { .. }) {
+            return self.points.clone();
+        }
+        let mut path = self.clone();
+        if path.reshapable() && path.to_path() { path.points } else { Vec::new() }
+    }
+
+    /// Moves every vertex, and the handles on it, through `warp`.
+    fn map_points(&mut self, warp: &Warp) {
+        for index in 0..self.points.len() {
+            let from = self.points[index];
+            let to = warp.apply(from);
+            if let Some(handles) = self.handles.get_mut(index) {
+                // A handle moves with the point of the plane it sits on.
+                *handles = handles.map(|offset| {
+                    if offset == Vec2::default() {
+                        return offset;
+                    }
+                    let end = warp.apply(v2(from.x + offset.x, from.y + offset.y));
+                    v2(end.x - to.x, end.y - to.y)
+                });
+            }
+            self.points[index] = to;
+        }
+    }
+
+    /// Sizes `bounds` to what a transformed object shows: the box around a shape's
+    /// outline, or around the frame of text and symbols.
+    pub fn refit_placed(&mut self) {
+        let Some(placement) = self.placement else { return };
+        self.bounds = match self.shape {
+            Shape::Text { .. } | Shape::Instance { .. } => placement.bounds(),
+            _ => Rect::of_points(&self.outline()),
+        };
+    }
+
+    /// Rewrites an upright rectangle or ellipse as the Bezier path that draws it.
+    /// Returns false for every other shape.
     fn to_bezier_path(&mut self) -> bool {
         let b = self.bounds;
         let (points, handles) = match self.shape {
@@ -602,7 +668,7 @@ impl Object {
                     ],
                 )
             }
-            _ => return self.to_path(),
+            _ => return false,
         };
         self.points = points;
         self.handles = handles;
@@ -690,20 +756,22 @@ impl Object {
         }
     }
 
-    /// Applies a free transform: a rotation, a skew or a distortion. Shapes become
-    /// paths and bitmaps are redrawn. Text and symbols only record the transform, so
-    /// text can still be edited and a symbol still follows its library entry. Returns
-    /// false, leaving the object as it was, when it cannot be transformed.
+    /// Applies a free transform: a rotation, a skew or a distortion. Paths are
+    /// reshaped and bitmaps are redrawn. Shapes, text and symbols only record the
+    /// transform and stay what they are. Returns false, leaving the object as it
+    /// was, when it cannot be transformed.
     pub fn warp(&mut self, warp: &Warp) -> bool {
         if !self.warpable() {
             return false;
         }
         match &self.shape {
-            Shape::Text { .. } | Shape::Instance { .. } => {
+            // These only record the transform, so a rectangle keeps its roundness,
+            // an auto shape its settings, text its words and a symbol its link.
+            Shape::Text { .. } | Shape::Instance { .. } | Shape::Rect { .. } | Shape::Ellipse | Shape::Auto { .. } => {
                 let mut placement = self.placement.unwrap_or(Placement { frame: self.bounds, warp: Warp::identity() });
                 placement.warp = placement.warp.then(warp);
-                self.bounds = placement.bounds();
                 self.placement = Some(placement);
+                self.refit_placed();
                 return true;
             }
             Shape::Group { .. } => {
@@ -724,24 +792,10 @@ impl Object {
             }
             _ => {}
         }
-        if !self.to_bezier_path() {
+        if !self.to_path() {
             return false;
         }
-        for index in 0..self.points.len() {
-            let from = self.points[index];
-            let to = warp.apply(from);
-            if let Some(handles) = self.handles.get_mut(index) {
-                // A handle moves with the point of the plane it sits on.
-                *handles = handles.map(|offset| {
-                    if offset == Vec2::default() {
-                        return offset;
-                    }
-                    let end = warp.apply(v2(from.x + offset.x, from.y + offset.y));
-                    v2(end.x - to.x, end.y - to.y)
-                });
-            }
-            self.points[index] = to;
-        }
+        self.map_points(warp);
         self.refit_to_points();
         true
     }
@@ -765,6 +819,95 @@ impl Object {
         if !self.is_curved() {
             self.handles.clear();
         }
+    }
+
+    /// How many segments the path has: one more than its gaps when it is closed.
+    fn segment_count(&self) -> usize {
+        match self.points.len() {
+            0 | 1 => 0,
+            count if self.is_closed() => count,
+            count => count - 1,
+        }
+    }
+
+    /// The four Bezier control points of the segment that leaves vertex `index`.
+    fn segment(&self, index: usize) -> [Vec2; 4] {
+        let next = (index + 1) % self.points.len();
+        let (from, to) = (self.points[index], self.points[next]);
+        let (out_handle, in_handle) = (self.handles_at(index).after, self.handles_at(next).before);
+        [from, v2(from.x + out_handle.x, from.y + out_handle.y), v2(to.x + in_handle.x, to.y + in_handle.y), to]
+    }
+
+    /// The segment of a path that passes within `reach` of `p`, and how far along it.
+    pub fn nearest_segment(&self, p: Vec2, reach: f32) -> Option<(usize, f32)> {
+        const STEPS: usize = 24;
+        let mut best: Option<(f32, usize, f32)> = None;
+        for index in 0..self.segment_count() {
+            let controls = self.segment(index);
+            // A straight segment is measured evenly along its length, as insert_point splits it.
+            let straight = controls[0] == controls[1] && controls[2] == controls[3];
+            let mut from = controls[0];
+            for step in 1..=STEPS {
+                let t = step as f32 / STEPS as f32;
+                let to = if straight {
+                    v2(controls[0].x + (controls[3].x - controls[0].x) * t, controls[0].y + (controls[3].y - controls[0].y) * t)
+                } else {
+                    cubic(controls, t)
+                };
+                // Nearest point of this short piece, so a long straight segment is not missed between samples.
+                let (dx, dy) = (to.x - from.x, to.y - from.y);
+                let length = dx * dx + dy * dy;
+                let along = if length > 0.0 { (((p.x - from.x) * dx + (p.y - from.y) * dy) / length).clamp(0.0, 1.0) } else { 0.0 };
+                let gap = distance(p, v2(from.x + dx * along, from.y + dy * along));
+                if best.is_none_or(|(least, ..)| gap < least) {
+                    best = Some((gap, index, (step as f32 - 1.0 + along) / STEPS as f32));
+                }
+                from = to;
+            }
+        }
+        best.filter(|(gap, ..)| *gap <= reach).map(|(_, index, t)| (index, t.clamp(0.02, 0.98)))
+    }
+
+    /// Adds a vertex on segment `index`, `t` of the way along, without changing how
+    /// the path looks. Returns the new vertex's index.
+    pub fn insert_point(&mut self, index: usize, t: f32) -> usize {
+        let count = self.points.len();
+        let next = (index + 1) % count;
+        let controls = self.segment(index);
+        let lerp = |a: Vec2, b: Vec2| v2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+        let straight = self.handles_at(index).after == Vec2::default() && self.handles_at(next).before == Vec2::default();
+        // De Casteljau: the two halves of the curve are curves with these control points.
+        let (a, b, c) = (lerp(controls[0], controls[1]), lerp(controls[1], controls[2]), lerp(controls[2], controls[3]));
+        let (d, e) = (lerp(a, b), lerp(b, c));
+        let at = if straight { lerp(controls[0], controls[3]) } else { lerp(d, e) };
+        let mut handles = Handles::default();
+        if !straight {
+            self.handles.resize(count, Handles::default());
+            self.handles[index].after = v2(a.x - controls[0].x, a.y - controls[0].y);
+            self.handles[next].before = v2(c.x - controls[3].x, c.y - controls[3].y);
+            handles = Handles { before: v2(d.x - at.x, d.y - at.y), after: v2(e.x - at.x, e.y - at.y) };
+        }
+        self.points.insert(index + 1, at);
+        if !self.handles.is_empty() {
+            self.handles.insert(index + 1, handles);
+        }
+        index + 1
+    }
+
+    /// Removes a vertex. Returns false when that would leave less than a line.
+    pub fn remove_point(&mut self, index: usize) -> bool {
+        if index >= self.points.len() || self.points.len() <= 2 {
+            return false;
+        }
+        self.points.remove(index);
+        if index < self.handles.len() {
+            self.handles.remove(index);
+        }
+        if !self.is_curved() {
+            self.handles.clear();
+        }
+        self.refit_to_points();
+        true
     }
 
     /// Replaces curves with the straight pieces they are drawn as, for tools that
@@ -853,7 +996,16 @@ impl Object {
 
     /// Flattened outline used by canvas drawing, PNG export and hit testing.
     pub fn outline(&self) -> Vec<Vec2> {
-        let b = self.bounds;
+        let upright = self.upright_outline();
+        match &self.placement {
+            Some(placement) => upright.into_iter().map(|p| placement.warp.apply(p)).collect(),
+            None => upright,
+        }
+    }
+
+    /// The outline in the object's own frame, before any transform it carries.
+    fn upright_outline(&self) -> Vec<Vec2> {
+        let b = self.placement.map_or(self.bounds, |p| p.frame);
         match &self.shape {
             Shape::Rect { radius } => {
                 let r = radius.min(b.w / 2.0).min(b.h / 2.0).max(0.0);
@@ -933,8 +1085,34 @@ impl Object {
     }
 
     pub fn flip(&mut self, horizontal: bool) {
-        if matches!(self.shape, Shape::Auto { .. }) {
-            self.to_path();
+        let b = self.bounds;
+        match &self.shape {
+            // Mirrored through their placement, so they stay editable.
+            Shape::Text { .. } | Shape::Instance { .. } | Shape::Auto { .. } => {
+                self.warp(&Warp::mirror(b.center(), horizontal));
+                return;
+            }
+            Shape::Rect { .. } | Shape::Ellipse if self.placement.is_some() => {
+                self.warp(&Warp::mirror(b.center(), horizontal));
+                return;
+            }
+            // Each part swaps sides within the group and is mirrored itself.
+            Shape::Group { .. } => {
+                let mut parts = self.instance_parts();
+                for part in &mut parts {
+                    let p = part.bounds;
+                    if horizontal {
+                        part.translate(b.x + b.right() - p.right() - p.x, 0.0);
+                    } else {
+                        part.translate(0.0, b.y + b.bottom() - p.bottom() - p.y);
+                    }
+                    part.flip(horizontal);
+                }
+                self.opacity = 1.0;
+                self.shape = Shape::Group { objects: Arc::new(parts) };
+                return;
+            }
+            _ => {}
         }
         if let Some(bitmap) = self.bitmap_mut() {
             bitmap.flip(horizontal);
@@ -958,6 +1136,9 @@ impl Object {
             let (dx, dy) = (p.x - center.x, p.y - center.y);
             if clockwise { v2(center.x - dy, center.y + dx) } else { v2(center.x + dy, center.y - dx) }
         };
+        if self.placement.is_some() {
+            return self.warp(&Warp::quarter_turn(center, clockwise));
+        }
         match self.shape {
             Shape::Text { .. } | Shape::Instance { .. } => return self.warp(&Warp::quarter_turn(center, clockwise)),
             Shape::Group { .. } => {
@@ -2016,7 +2197,8 @@ impl Editor {
                     next_id += 1;
                     piece.shape = Shape::Path { closed: false };
                     piece.bounds = Rect::of_points(&points);
-                    piece.points = points;
+                    // The cut was made on straight pieces, and each piece gets its curves back.
+                    (piece.points, piece.handles) = crate::fit::fit_curves(&points, false, crate::fit::TOLERANCE);
                     created.push(piece.id);
                     kept.push(piece);
                 }
@@ -3115,36 +3297,54 @@ mod tests {
     }
 
     #[test]
-    fn a_rectangle_turns_into_a_path_and_turns() {
+    fn a_turned_rectangle_is_still_a_rectangle() {
         let mut o = rect(1, 0.0, 0.0, 100.0, 50.0);
+        o.shape = Shape::Rect { radius: 8.0 };
         assert!(o.warp(&Warp::rotation(o.bounds.center(), std::f32::consts::FRAC_PI_2)));
-        assert_eq!(o.shape, Shape::Path { closed: true });
-        assert_eq!(o.points.len(), 4);
+        assert_eq!(o.shape, Shape::Rect { radius: 8.0 }, "the roundness can still be edited");
         let b = o.bounds;
         assert!((b.x - 25.0).abs() < 0.01 && (b.y + 25.0).abs() < 0.01 && (b.w - 50.0).abs() < 0.01 && (b.h - 100.0).abs() < 0.01, "{b:?}");
+        // Changing the roundness reshapes the turned rectangle.
+        let before = o.outline();
+        o.shape = Shape::Rect { radius: 0.0 };
+        o.refit_placed();
+        assert_eq!(o.outline().len(), 4);
+        assert_ne!(o.outline(), before);
+        // Standing it up again gives back the rectangle it was.
+        assert!(o.remove_transform());
+        assert_eq!(o.bounds, Rect { x: 0.0, y: 0.0, w: 100.0, h: 50.0 });
     }
 
     #[test]
-    fn a_circle_stays_round_at_any_angle() {
+    fn a_turned_circle_stays_round_and_becomes_four_curve_points_as_a_path() {
         let mut o = rect(1, 0.0, 0.0, 100.0, 100.0);
         o.shape = Shape::Ellipse;
         assert!(o.warp(&Warp::rotation(v2(50.0, 50.0), 0.5)));
-        assert_eq!(o.points.len(), 4, "four curve points, not a polygon");
-        assert!(o.is_curved());
-        for p in o.outline() {
-            let radius = ((p.x - 50.0).powi(2) + (p.y - 50.0).powi(2)).sqrt();
-            assert!((radius - 50.0).abs() < 0.05, "radius was {radius}");
-        }
+        assert_eq!(o.shape, Shape::Ellipse);
+        let round = |o: &Object, slack: f32| {
+            for p in o.outline() {
+                let radius = ((p.x - 50.0).powi(2) + (p.y - 50.0).powi(2)).sqrt();
+                assert!((radius - 50.0).abs() < slack, "radius was {radius}");
+            }
+        };
+        round(&o, 0.01);
         assert!((o.bounds.w - 100.0).abs() < 0.1 && (o.bounds.h - 100.0).abs() < 0.1);
+        // As a path it is four curve points, not a polygon, and keeps its turn.
+        assert!(o.to_path());
+        assert_eq!(o.shape, Shape::Path { closed: true });
+        assert_eq!(o.points.len(), 4);
+        assert!(o.is_curved() && o.placement.is_none());
+        round(&o, 0.05);
+        let first = o.points[0];
+        assert!((first.x - (50.0 + 50.0 * 0.5_f32.cos())).abs() < 0.01 && (first.y - (50.0 + 50.0 * 0.5_f32.sin())).abs() < 0.01, "{first:?}");
     }
 
     #[test]
-    fn rounded_corners_survive_as_curves() {
+    fn rounded_corners_become_curves_when_a_rectangle_becomes_a_path() {
         let mut o = rect(1, 0.0, 0.0, 100.0, 60.0);
         o.shape = Shape::Rect { radius: 20.0 };
         let before = o.outline();
-        // Turning by nothing still rewrites the shape as a path.
-        assert!(o.warp(&Warp::rotation(o.bounds.center(), 0.0)));
+        assert!(o.to_path());
         assert_eq!(o.points.len(), 8);
         let b = o.bounds;
         assert!(b.x.abs() < 0.01 && b.y.abs() < 0.01 && (b.w - 100.0).abs() < 0.01 && (b.h - 60.0).abs() < 0.01);
@@ -3154,6 +3354,40 @@ mod tests {
             let nearest = after.iter().map(|q| ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()).fold(f32::MAX, f32::min);
             assert!(nearest < 1.6, "{p:?} is {nearest} away");
         }
+    }
+
+    #[test]
+    fn flipping_mirrors_text_symbols_and_groups() {
+        // Text keeps its box and its words, and is drawn mirrored through its placement.
+        let mut text = label("Pardus");
+        let bounds = text.bounds;
+        text.flip(true);
+        assert!(same_rect(text.bounds, bounds));
+        assert!(matches!(&text.shape, Shape::Text { content, .. } if content == "Pardus"));
+        let placement = text.placement.expect("a mirrored text carries a placement");
+        let left_edge = placement.warp.apply(v2(bounds.x, bounds.y));
+        assert!((left_edge.x - bounds.right()).abs() < 0.01, "the start of the text is now on the right");
+        // Flipping twice is no flip at all.
+        text.flip(true);
+        let back = text.placement.unwrap().warp.apply(v2(bounds.x, bounds.y));
+        assert!((back.x - bounds.x).abs() < 0.01 && (back.y - bounds.y).abs() < 0.01);
+
+        // In a group the parts change sides.
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 0.0, 0.0, 20.0, 20.0));
+        e.add_object(rect(2, 80.0, 40.0, 10.0, 10.0));
+        e.selection = vec![1, 2];
+        assert!(e.group_selected());
+        let mut group = e.selected()[0].clone();
+        let whole = group.bounds;
+        group.flip(true);
+        assert!(same_rect(group.bounds, whole));
+        let parts = group.instance_parts();
+        assert!(same_rect(parts[0].bounds, Rect { x: 70.0, y: 0.0, w: 20.0, h: 20.0 }));
+        assert!(same_rect(parts[1].bounds, Rect { x: 0.0, y: 40.0, w: 10.0, h: 10.0 }));
+        group.flip(false);
+        let parts = group.instance_parts();
+        assert!(same_rect(parts[0].bounds, Rect { x: 70.0, y: 30.0, w: 20.0, h: 20.0 }));
     }
 
     #[test]
@@ -3412,6 +3646,61 @@ mod tests {
         let mut translated = moved.clone();
         translated.translate(7.0, 9.0);
         assert_eq!(translated.handles, moved.handles);
+    }
+
+    #[test]
+    fn a_vertex_added_to_a_curve_leaves_its_shape_alone() {
+        let mut o = arch();
+        let before = o.outline();
+        let (segment, along) = o.nearest_segment(v2(50.0, -45.0), 2.0).expect("the top of the arch is on the path");
+        assert_eq!(segment, 0);
+        assert!((along - 0.5).abs() < 0.05, "along was {along}");
+        assert!(o.nearest_segment(v2(50.0, 0.0), 2.0).is_none(), "the chord is not on the path");
+        let index = o.insert_point(segment, 0.5);
+        assert_eq!((index, o.points.len(), o.handles.len()), (1, 3, 3));
+        assert!(close(o.points[1], v2(50.0, -45.0)));
+        // The new vertex is smooth, and the curve still passes where it did.
+        let h = o.handles[1];
+        assert!(close(v2(-h.before.x, -h.before.y), h.after) && h.after.x > 0.0);
+        let after = o.outline();
+        for p in before {
+            let nearest = after.iter().map(|q| ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()).fold(f32::MAX, f32::min);
+            assert!(nearest < 1.6, "{p:?} is {nearest} away");
+        }
+    }
+
+    #[test]
+    fn a_vertex_added_to_a_straight_side_is_a_corner() {
+        let mut o = rect(1, 0.0, 0.0, 100.0, 50.0);
+        assert!(o.to_path());
+        // A long side is found even between the points it is sampled at.
+        let (segment, along) = o.nearest_segment(v2(37.0, 1.0), 2.0).unwrap();
+        assert_eq!(segment, 0);
+        let index = o.insert_point(segment, along);
+        assert_eq!(o.points.len(), 5);
+        assert!((o.points[index].x - 37.0).abs() < 1.0 && o.points[index].y == 0.0, "{:?}", o.points[index]);
+        assert!(o.handles.is_empty(), "still all corners");
+        // The closing side of a closed path takes one too, at the end of the list.
+        let (segment, along) = o.nearest_segment(v2(0.0, 25.0), 2.0).unwrap();
+        assert_eq!(segment, 4);
+        assert_eq!(o.insert_point(segment, along), 5);
+    }
+
+    #[test]
+    fn removing_vertices_stops_at_a_line() {
+        let mut o = arch();
+        o.insert_point(0, 0.5);
+        assert!(o.remove_point(1));
+        assert_eq!((o.points.len(), o.handles.len()), (2, 2));
+        assert!(!o.remove_point(0), "two vertices are the least a path can have");
+        assert!(!o.remove_point(9));
+        // Taking the only curved vertex away leaves plain corners.
+        let mut o = rect(1, 0.0, 0.0, 10.0, 10.0);
+        o.to_path();
+        o.set_handles(1, Handles::smooth(v2(3.0, 0.0)));
+        assert!(o.remove_point(1));
+        assert!(o.handles.is_empty());
+        assert_eq!(o.points.len(), 3);
     }
 
     #[test]

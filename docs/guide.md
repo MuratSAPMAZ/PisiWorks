@@ -6,9 +6,11 @@ Hold Shift while drawing to constrain shapes and lines. Hold Space to pan. Ctrl+
 
 With the Pen (P), click to place a corner. Press and drag instead to place a smooth point: the two handles you pull out bend the path on both sides of it.
 
-With Subselection (A), select a path to see its points and handles. Drag a point to move it, or a handle to reshape the curve. The opposite handle turns with it so the point stays smooth; hold Alt to move one handle on its own and make a cusp. Alt+drag a corner pulls handles out of it, and Alt+click a point turns it back into a corner.
+With Subselection (A), select a path to see its points. Click a point to pick it, which shows its handles; Shift+click picks more, and dragging a box over empty canvas picks every point inside it. Drag a picked point to move it, with any others you picked, or drag a handle to reshape the curve. The opposite handle turns with it so the point stays smooth; hold Alt to move one handle on its own and make a cusp. Alt+drag a corner pulls handles out of it, and Alt+click a point turns it back into a corner. Delete removes the picked points.
 
-Freeform, Knife and the Path panel work on straight pieces, so they turn a curve into many short segments.
+The Pen also edits a selected path. Click a segment to add a point there. Click a curve point to make it a corner, and click a corner to remove it. Drag from a point to pull handles out of it. Click the loose end of an open path to carry on drawing from it, and finish on the loose end of another open path to join the two.
+
+Ellipses turn into paths of a few curve points when you edit their points. A rectangle asks first, because as a path it no longer has a roundness setting. Freeform, Knife and the path operations give curved paths back: a circle joined to another is still made of curves.
 
 ## Editing images
 
@@ -35,9 +37,9 @@ Skew and Distort share the Scale button: hold the button down to list them, or p
 
 While you drag, the artwork only previews the transform, and you can go on with another handle or another of the three tools. Press Enter or double-click inside the box to apply it, or Esc to put everything back. Dragging inside the box moves the selection.
 
-Modify > Transform lists the same tools, with Rotate 180, Rotate 90 and the two flips. Numeric Transform (Ctrl+Shift+T) scales by a percentage, resizes to a size in pixels or rotates by an angle, around the middle of the selection.
+Modify > Transform lists the same tools, with Rotate 180, Rotate 90 and the two flips. Numeric Transform (Ctrl+Shift+T) scales by a percentage, resizes to a size in pixels or rotates by an angle. It works around the center point if you have dragged it, and around the middle of the selection otherwise.
 
-Text stays text when it is transformed, so you can still edit it and change its size, and a symbol stays linked to the library. Modify > Transform > Remove Transformations stands either one upright again. Rectangles and ellipses become paths, and bitmaps are redrawn. Web areas are not transformed. Text > Convert to Paths turns text into the outlines of its letters.
+Text stays text when it is transformed, so you can still edit it and change its size. A symbol stays linked to the library, a rectangle keeps its roundness and an auto shape its settings. Modify > Transform > Remove Transformations stands any of them upright again. Flip Horizontal and Flip Vertical mirror text, symbols and groups too. Bitmaps are redrawn. Web areas are not transformed. Text > Convert to Paths turns text into the outlines of its letters.
 
 Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again from Pencil) cuts selected vectors along a dragged line. With nothing selected, Knife cuts every vector it crosses. Both turn rectangles and ellipses into paths.
 

@@ -516,12 +516,14 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sub(
                 "Combine Paths",
                 &[
+                    // In the order of the Fireworks menu.
+                    cmd("Join", "", Cmd::PathOp(PathOp::Join)),
+                    cmd("Split", "", Cmd::PathOp(PathOp::Split)),
+                    Sep,
                     cmd("Union", "", Cmd::PathOp(PathOp::Union)),
                     cmd("Intersect", "", Cmd::PathOp(PathOp::Intersect)),
                     cmd("Punch", "", Cmd::PathOp(PathOp::Punch)),
                     cmd("Crop", "", Cmd::PathOp(PathOp::Crop)),
-                    cmd("Join", "", Cmd::PathOp(PathOp::Join)),
-                    cmd("Split", "", Cmd::PathOp(PathOp::Split)),
                 ],
             ),
             Sub(
@@ -571,13 +573,13 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Optimize", "F6", Cmd::Panel(Panel::Optimize)),
             cmd("Layers", "F2", Cmd::Panel(Panel::Layers)),
+            cmd("Common Library", "F7", Cmd::Panel(Panel::CommonLibrary)),
             cmd("Pages", "F5", Cmd::Panel(Panel::Pages)),
             cmd("States", "Shift+F2", Cmd::Panel(Panel::States)),
             cmd("History", "Shift+F10", Cmd::Panel(Panel::History)),
             cmd("Auto Shapes", "", Cmd::Panel(Panel::AutoShapes)),
             cmd("Styles", "Ctrl+F11", Cmd::Panel(Panel::Styles)),
             cmd("Document Library", "F11", Cmd::Panel(Panel::DocumentLibrary)),
-            cmd("Common Library", "F7", Cmd::Panel(Panel::CommonLibrary)),
             cmd("URL", "Alt+Shift+F10", Cmd::Panel(Panel::Url)),
             Sep,
             cmd("Color Mixer", "Shift+F9", Cmd::Panel(Panel::Mixer)),
