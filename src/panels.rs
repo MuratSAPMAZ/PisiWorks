@@ -467,7 +467,13 @@ impl Workspace {
             })
             .when(format == ExportFormat::Jpeg, |d| {
                 d.child(row().child(label(t("Quality:"))).child(self.field(FieldId::OptimizeQuality, 44., cx)).child(label("%")))
-                    .child(row().justify_between().child(greyed(t("Selective quality: 90"))).child(greyed(t("Smoothing: 0"))))
+                    .child(
+                        row()
+                            .child(self.check_box(t("Selective quality:"), settings.selective, cx, |this| this.set_export(|s| s.selective = !s.selective)))
+                            .child(self.field(FieldId::OptimizeSelective, 36., cx))
+                            .child(self.text_button(t("Settings..."), true, cx, |this, window, cx| this.run(Cmd::JpegSettings, window, cx))),
+                    )
+                    .child(row().child(label(t("Smoothing:"))).child(self.field(FieldId::OptimizeSmoothing, 36., cx)))
             })
             .children(animated_note)
             .child(
@@ -653,6 +659,70 @@ impl Workspace {
                                     })),
                             ),
                     ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
+    /// A box that is ticked or not, with its text, and what a click on it does.
+    pub(crate) fn check_box(&self, text: &'static str, on: bool, cx: &mut Context<Self>, toggle: fn(&mut Workspace)) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, cx| {
+                    this.commit_field();
+                    toggle(this);
+                    cx.notify();
+                }),
+            )
+            .child(
+                div()
+                    .size(px(13.))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .bg(rgb(INPUT))
+                    .border_1()
+                    .border_color(rgb(INPUT_BORDER))
+                    .when(on, |d| d.child(icon("check", 9., TEXT))),
+            )
+            .child(text)
+    }
+
+    pub(crate) fn jpeg_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.jpeg_dialog?;
+        let settings = self.ed.doc.page().export;
+        Some(
+            deferred(
+                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                    div()
+                        .w(px(280.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .bg(rgb(PANEL))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_lg()
+                        .child(div().font_weight(FontWeight::BOLD).child(t("Selective JPEG Settings")))
+                        .child(self.check_box(t("Enable selective quality"), settings.selective, cx, |this| this.set_export(|s| s.selective = !s.selective)))
+                        .child(div().flex().items_center().gap_1().child(label(t("Selective quality:"))).child(self.field(FieldId::OptimizeSelective, 44., cx)))
+                        .child(self.check_box(t("Preserve text quality"), settings.preserve_text, cx, |this| this.set_export(|s| s.preserve_text = !s.preserve_text)))
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_1()
+                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_jpeg_dialog(true)))
+                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_jpeg_dialog(false))),
+                        ),
+                ),
             )
             .with_priority(1)
             .into_any_element(),

@@ -56,7 +56,7 @@ Bu alanlar düzleştirilmiş görüntüde hiçbir zaman görünmez. `ad.png` dı
 Pencere menüsü her paneli açıp kapatır; F4 hepsini gizler veya geri getirir. Bir sekmeyi öne getirmek için tıklayın, grubunu daraltmak için öndeki sekmeye çift tıklayın.
 
 - **Durumlar**: her durumun kendi nesneleri vardır. Animasyonu oynatın, soğan zarını açın ve Katmanlar panelinden bir katmanı durumlar arasında paylaşın. Yeniden adlandırmak için bir sayfaya, duruma, katmana veya nesneye çift tıklayın.
-- **En İyileştir**: GIF, Animasyonlu GIF, JPEG, PNG 8, PNG 24 veya PNG 32 seçin. Panel dosya boyutunu tahmin eder; dışa aktarma bu ayarları kullanır.
+- **En İyileştir**: GIF, Animasyonlu GIF, JPEG, PNG 8, PNG 24 veya PNG 32 seçin. Panel dosya boyutunu tahmin eder; dışa aktarma bu ayarları kullanır. JPEG için Düzgünleştirme (0-8), dosyayı küçültmek üzere görüntüyü biraz bulanıklaştırır. Seçmeli kalite, sayfanın bir bölümünü kendi kalitesinde tutar: pikselleri seçin, Değiştir > Seçmeli JPEG > Seçimi JPEG Maskesi Olarak Kaydet komutunu verin ve Seçmeli kalite kutusunu işaretleyin. Maske pembe bir renklendirmeyle görünür. Ayarlar penceresinden tüm metnin seçmeli kalitede tutulması da istenebilir.
 - **Stiller**: uygulamak veya sonraki şeklin renklerini ayarlamak için bir stile tıklayın. Stiller dolgu, kontur ve opaklık bilgisini tutar.
 - **Yol**: Topla, Kesiştir, Zımbala, Kırp, Birleştir, Böl, Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet.
 - **Otomatik Şekiller**: bir kutucuğu tuvale sürükleyin veya şekli sayfanın ortasına yerleştirmek için tıklayın; ardından Otomatik Şekil Özellikleri panelinde ayarlayın.

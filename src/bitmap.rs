@@ -60,7 +60,97 @@ pub struct Mask {
     cells: Vec<bool>,
 }
 
+/// How a mask is written to a file: its size, then how many cells in a row are
+/// unset, set, unset and so on, row after row.
+#[derive(Serialize, Deserialize)]
+struct MaskRuns {
+    width: u32,
+    height: u32,
+    runs: Vec<u32>,
+}
+
+impl Serialize for Mask {
+    fn serialize<S: Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        let mut runs = Vec::new();
+        let (mut current, mut length) = (false, 0u32);
+        for cell in &self.cells {
+            if *cell != current {
+                runs.push(length);
+                (current, length) = (*cell, 0);
+            }
+            length += 1;
+        }
+        runs.push(length);
+        MaskRuns { width: self.width, height: self.height, runs }.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Mask {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        let file = MaskRuns::deserialize(deserializer)?;
+        let total = file.width as u64 * file.height as u64;
+        if file.width > MAX_DIMENSION || file.height > MAX_DIMENSION || file.runs.iter().map(|r| *r as u64).sum::<u64>() != total {
+            return Err(serde::de::Error::custom("mask does not fill its size"));
+        }
+        let mut cells = Vec::with_capacity(total as usize);
+        for (index, run) in file.runs.iter().enumerate() {
+            cells.extend(std::iter::repeat_n(index % 2 == 1, *run as usize));
+        }
+        Ok(Mask { width: file.width, height: file.height, cells })
+    }
+}
+
 impl Mask {
+    /// A mask of the given size with the cells set for which `set` says so.
+    pub fn from_fn(width: u32, height: u32, set: impl Fn(u32, u32) -> bool) -> Self {
+        let mut mask = Self::empty(width, height);
+        for y in 0..height {
+            for x in 0..width {
+                mask.cells[y as usize * width as usize + x as usize] = set(x, y);
+            }
+        }
+        mask
+    }
+
+    pub fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    /// The set cells as rectangles (left, top, width, height), with equal runs on
+    /// neighbouring rows joined, so a simple mask is a handful of them.
+    pub fn rects(&self) -> Vec<(u32, u32, u32, u32)> {
+        let mut done: Vec<(u32, u32, u32, u32)> = Vec::new();
+        let mut open: Vec<(u32, u32, u32, u32)> = Vec::new();
+        for y in 0..=self.height {
+            let mut runs = Vec::new();
+            let mut x = 0;
+            while y < self.height && x < self.width {
+                if self.is_set(x, y) {
+                    let start = x;
+                    while x < self.width && self.is_set(x, y) {
+                        x += 1;
+                    }
+                    runs.push((start, x - start));
+                } else {
+                    x += 1;
+                }
+            }
+            let mut still_open = Vec::new();
+            for rect in open.drain(..) {
+                match runs.iter().position(|run| *run == (rect.0, rect.2)) {
+                    Some(at) => {
+                        runs.remove(at);
+                        still_open.push((rect.0, rect.1, rect.2, rect.3 + 1));
+                    }
+                    None => done.push(rect),
+                }
+            }
+            still_open.extend(runs.into_iter().map(|(left, width)| (left, y, width, 1)));
+            open = still_open;
+        }
+        done
+    }
+
     pub fn empty(width: u32, height: u32) -> Self {
         Self { width, height, cells: vec![false; width as usize * height as usize] }
     }
@@ -851,6 +941,31 @@ mod tests {
         b.apply_filter(Filter::Grayscale);
         let p = b.pixel(0, 0).unwrap();
         assert!(p[0] == p[1] && p[1] == p[2] && p[3] == 77);
+    }
+
+    #[test]
+    fn a_mask_is_saved_as_runs_and_read_back_the_same() {
+        let mask = Mask::from_fn(7, 5, |x, y| (x + y) % 3 == 0 || y == 4);
+        let text = serde_json::to_string(&mask).unwrap();
+        assert_eq!(serde_json::from_str::<Mask>(&text).unwrap(), mask);
+        for mask in [Mask::empty(3, 3), Mask::from_fn(3, 3, |_, _| true)] {
+            assert_eq!(serde_json::from_str::<Mask>(&serde_json::to_string(&mask).unwrap()).unwrap(), mask);
+        }
+        // Runs that do not add up to the size are refused.
+        assert!(serde_json::from_str::<Mask>(r#"{"width":2,"height":2,"runs":[1,1]}"#).is_err());
+    }
+
+    #[test]
+    fn a_mask_breaks_down_into_few_rectangles() {
+        let block = Mask::rect(10, 10, v2(2.0, 3.0), v2(6.0, 8.0));
+        assert_eq!(block.rects(), vec![(2, 3, 4, 5)]);
+        assert!(Mask::empty(4, 4).rects().is_empty());
+        // An L shape is two rectangles, and together they cover exactly the set cells.
+        let ell = Mask::from_fn(6, 6, |x, y| x < 2 || y >= 4);
+        let rects = ell.rects();
+        assert_eq!(rects.len(), 2);
+        let covered = Mask::from_fn(6, 6, |x, y| rects.iter().any(|(l, t, w, h)| x >= *l && x < l + w && y >= *t && y < t + h));
+        assert_eq!(covered, ell);
     }
 
     #[test]

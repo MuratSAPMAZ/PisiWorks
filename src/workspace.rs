@@ -197,6 +197,8 @@ pub enum FieldId {
     AutoParam(usize),
     PathAmount,
     OptimizeQuality,
+    OptimizeSelective,
+    OptimizeSmoothing,
     OptimizeColors,
     Mixer(usize),
     FindText,
@@ -420,6 +422,10 @@ pub struct Workspace {
     stale_previews: Vec<Arc<RenderImage>>,
     pub size_dialog: Option<SizeDialog>,
     pub numeric_dialog: Option<NumericDialog>,
+    /// The Selective JPEG Settings dialog, holding the settings to go back to on Cancel.
+    pub jpeg_dialog: Option<ExportSettings>,
+    /// The JPEG mask as rectangles to tint, kept until the mask changes.
+    jpeg_tint: std::cell::RefCell<Option<(usize, Arc<Vec<Rect>>)>>,
     pub collapsed_layers: Vec<usize>,
     pub properties_collapsed: bool,
     pub properties_tab: PropertiesTab,
@@ -626,6 +632,8 @@ impl Workspace {
             stale_previews: Vec::new(),
             size_dialog: None,
             numeric_dialog: None,
+            jpeg_dialog: None,
+            jpeg_tint: std::cell::RefCell::new(None),
             collapsed_layers: Vec::new(),
             properties_collapsed: false,
             properties_tab: PropertiesTab::Properties,
@@ -1007,6 +1015,60 @@ impl Workspace {
     fn open_size_dialog(&mut self, kind: SizeDialogKind) {
         let page = self.ed.doc.page();
         self.size_dialog = Some(SizeDialog { kind, width: page.width, height: page.height, constrain: kind == SizeDialogKind::Image });
+    }
+
+    /// Keeps the pixel selection as the area a JPEG writes at its selective quality.
+    fn save_jpeg_mask(&mut self) {
+        let Some(selection) = self.active_pixels() else { return };
+        let mask = selection.mask.clone();
+        let Some(object) = self.ed.object(selection.object).cloned() else { return };
+        let page = self.ed.doc.page();
+        // The selection is in the pixels of its bitmap, and the mask in those of the page.
+        let page_mask = Mask::from_fn(page.width, page.height, |x, y| {
+            object.pixel_at(v2(x as f32 + 0.5, y as f32 + 0.5)).is_some_and(|(px, py)| mask.is_set(px, py))
+        });
+        if page_mask.is_empty() {
+            return;
+        }
+        self.ed.doc.page_mut().jpeg_mask = Some(Arc::new(page_mask));
+        self.ed.commit(t("Save Selection as JPEG Mask"));
+    }
+
+    /// Selects, on the selected bitmap, the pixels under the page's JPEG mask.
+    fn restore_jpeg_mask(&mut self) {
+        let Some(page_mask) = self.ed.doc.page().jpeg_mask.clone() else { return };
+        let Some(object) = self.ed.selected().into_iter().find(|o| o.is_image()).cloned() else { return };
+        let Some((width, height)) = object.bitmap().map(|b| (b.width(), b.height())) else { return };
+        let (page_width, page_height) = page_mask.size();
+        let mask = Mask::from_fn(width, height, |x, y| {
+            object.pixel_to_doc(v2(x as f32 + 0.5, y as f32 + 0.5)).is_some_and(|p| {
+                p.x >= 0.0 && p.y >= 0.0 && p.x < page_width as f32 && p.y < page_height as f32 && page_mask.is_set(p.x as u32, p.y as u32)
+            })
+        });
+        self.set_pixel_selection(object.id, Some(mask), MaskMode::Replace);
+    }
+
+    /// The JPEG mask of the page as document rectangles, for the tint that shows where it is.
+    pub fn jpeg_mask_rects(&self) -> Option<Arc<Vec<Rect>>> {
+        let page = self.ed.doc.page();
+        let mask = page.jpeg_mask.as_ref().filter(|mask| mask.size() == (page.width, page.height))?;
+        let key = Arc::as_ptr(mask) as usize;
+        let mut cache = self.jpeg_tint.borrow_mut();
+        if cache.as_ref().is_none_or(|(cached, _)| *cached != key) {
+            let rects = mask.rects().into_iter().map(|(x, y, w, h)| Rect { x: x as f32, y: y as f32, w: w as f32, h: h as f32 }).collect();
+            *cache = Some((key, Arc::new(rects)));
+        }
+        cache.as_ref().map(|(_, rects)| rects.clone())
+    }
+
+    /// Closes the Selective JPEG Settings dialog, putting the settings back unless `keep` is set.
+    pub fn close_jpeg_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        if let Some(before) = self.jpeg_dialog.take().filter(|_| !keep) {
+            if before != self.ed.doc.page().export {
+                self.set_export(|settings| *settings = before);
+            }
+        }
     }
 
     fn open_numeric_dialog(&mut self, center_point: Option<Vec2>) {
@@ -1406,6 +1468,9 @@ impl Workspace {
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
             Cmd::Rotate180 | Cmd::NumericTransform => has_selection,
+            Cmd::JpegMaskSave => self.active_pixels().is_some(),
+            Cmd::JpegMaskRestore => self.ed.doc.page().jpeg_mask.is_some() && self.ed.selected().iter().any(|o| o.is_image()),
+            Cmd::JpegMaskRemove => self.ed.doc.page().jpeg_mask.is_some(),
             Cmd::RemoveTransform => self.ed.selected().iter().any(|o| o.placement.is_some()),
             Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
@@ -1551,6 +1616,13 @@ impl Workspace {
             }
             Cmd::FreeTransform => self.set_tool(Tool::Scale),
             Cmd::NumericTransform => self.open_numeric_dialog(center_point),
+            Cmd::JpegMaskSave => self.save_jpeg_mask(),
+            Cmd::JpegMaskRestore => self.restore_jpeg_mask(),
+            Cmd::JpegMaskRemove => {
+                self.ed.doc.page_mut().jpeg_mask = None;
+                self.ed.commit(t("Remove JPEG Mask"));
+            }
+            Cmd::JpegSettings => self.jpeg_dialog = Some(self.ed.doc.page().export),
             Cmd::SelectTool(tool) => self.set_tool(tool),
             Cmd::TextToPaths => {
                 self.ed.for_selected(|o| {
@@ -2915,6 +2987,12 @@ impl Workspace {
                 "enter" => self.edit_text(|t| t.push('\n')),
                 _ => {}
             }
+        } else if self.jpeg_dialog.is_some() {
+            match key {
+                "enter" => self.close_jpeg_dialog(true),
+                "escape" => self.close_jpeg_dialog(false),
+                _ => {}
+            }
         } else if self.numeric_dialog.is_some() {
             match key {
                 "enter" => self.apply_numeric_dialog(),
@@ -3120,6 +3198,8 @@ impl Workspace {
             },
             FieldId::PathAmount => number(self.path_amount),
             FieldId::OptimizeQuality => page.export.quality.to_string(),
+            FieldId::OptimizeSelective => page.export.selective_quality.to_string(),
+            FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
             FieldId::OptimizeColors => page.export.colors.to_string(),
             FieldId::Mixer(channel) => {
                 let color = self.current_color(self.mixer_target).unwrap_or(Color::BLACK);
@@ -3335,6 +3415,14 @@ impl Workspace {
             FieldId::OptimizeQuality => {
                 let Some(v) = number else { return };
                 self.set_export(|s| s.quality = v.clamp(1.0, 100.0) as u8);
+            }
+            FieldId::OptimizeSelective => {
+                let Some(v) = number else { return };
+                self.set_export(|s| s.selective_quality = v.clamp(1.0, 100.0) as u8);
+            }
+            FieldId::OptimizeSmoothing => {
+                let Some(v) = number else { return };
+                self.set_export(|s| s.smoothing = v.clamp(0.0, crate::optimize::MAX_SMOOTHING as f32) as u8);
             }
             FieldId::OptimizeColors => {
                 let Some(v) = number else { return };

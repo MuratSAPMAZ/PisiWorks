@@ -8,6 +8,7 @@ mod fit;
 mod fonts;
 mod i18n;
 mod icons;
+mod jpeg;
 mod library;
 mod menus;
 mod model;

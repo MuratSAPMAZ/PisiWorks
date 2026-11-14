@@ -1447,6 +1447,9 @@ pub struct Page {
     pub active_state: usize,
     #[serde(default)]
     pub export: ExportSettings,
+    /// The part of the page a JPEG keeps at its selective quality, a cell for each pixel of the page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jpeg_mask: Option<Arc<crate::bitmap::Mask>>,
 }
 
 impl Page {
@@ -1461,6 +1464,7 @@ impl Page {
             states: default_states(),
             active_state: 0,
             export: ExportSettings::default(),
+            jpeg_mask: None,
         }
     }
 

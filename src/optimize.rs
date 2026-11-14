@@ -73,13 +73,13 @@ impl ExportFormat {
 
 /// Ready-made settings offered at the top of the Optimize panel.
 pub const PRESETS: [(&str, ExportSettings); 7] = [
-    ("GIF Web 216", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 216, transparent: false, matte: None }),
-    ("GIF Web 256", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 256, transparent: false, matte: None }),
-    ("Animated GIF", ExportSettings { format: ExportFormat::AnimatedGif, quality: 80, colors: 256, transparent: false, matte: None }),
-    ("JPEG - Better Quality", ExportSettings { format: ExportFormat::Jpeg, quality: 80, colors: 256, transparent: false, matte: None }),
-    ("JPEG - Smaller File", ExportSettings { format: ExportFormat::Jpeg, quality: 60, colors: 256, transparent: false, matte: None }),
-    ("PNG 8", ExportSettings { format: ExportFormat::Png8, quality: 80, colors: 256, transparent: false, matte: None }),
-    ("PNG 32", ExportSettings { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None }),
+    ("GIF Web 216", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 216, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("GIF Web 256", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("Animated GIF", ExportSettings { format: ExportFormat::AnimatedGif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("JPEG - Better Quality", ExportSettings { format: ExportFormat::Jpeg, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("JPEG - Smaller File", ExportSettings { format: ExportFormat::Jpeg, quality: 60, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("PNG 8", ExportSettings { format: ExportFormat::Png8, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("PNG 32", ExportSettings { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
 ];
 
 /// The settings compared in 4-Up view: the current ones and two cheaper alternatives.
@@ -140,11 +140,29 @@ pub struct ExportSettings {
     pub transparent: bool,
     /// Backdrop for flattened areas; `None` is white.
     pub matte: Option<Color>,
+    /// JPEG smoothing, 0 to 8: how much the picture is blurred before it is compressed,
+    /// which hides blocking and makes the file smaller.
+    #[serde(default)]
+    pub smoothing: u8,
+    /// Whether the page's JPEG mask, and text if `preserve_text` is set, is written at `selective_quality`.
+    #[serde(default)]
+    pub selective: bool,
+    #[serde(default = "default_selective_quality")]
+    pub selective_quality: u8,
+    #[serde(default)]
+    pub preserve_text: bool,
 }
+
+fn default_selective_quality() -> u8 {
+    90
+}
+
+/// The largest JPEG smoothing setting.
+pub const MAX_SMOOTHING: u8 = 8;
 
 impl Default for ExportSettings {
     fn default() -> Self {
-        Self { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None }
+        Self { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }
     }
 }
 
@@ -268,6 +286,28 @@ fn quantize(rgba: &[u8], colors: u16) -> Indexed {
     Indexed { palette, indices, transparent: has_transparency.then_some(0) }
 }
 
+/// Blurs RGB pixels a little, as much as the JPEG smoothing setting asks for.
+fn smoothed(rgb: Vec<u8>, width: u32, height: u32, smoothing: u8) -> Vec<u8> {
+    if smoothing == 0 {
+        return rgb;
+    }
+    // A blur of three pixels across, mixed with the picture: 8 is the full blur.
+    let amount = smoothing.min(MAX_SMOOTHING) as f32 / MAX_SMOOTHING as f32;
+    let (w, h) = (width as i64, height as i64);
+    let at = |x: i64, y: i64, c: usize| rgb[((y.clamp(0, h - 1) * w + x.clamp(0, w - 1)) * 3) as usize + c] as f32;
+    let mut out = vec![0u8; rgb.len()];
+    for y in 0..h {
+        for x in 0..w {
+            for c in 0..3 {
+                let around: f32 = (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| (dx, dy))).map(|(dx, dy)| at(x + dx, y + dy, c)).sum::<f32>() / 9.0;
+                let here = at(x, y, c);
+                out[((y * w + x) * 3) as usize + c] = (here + (around - here) * amount).round() as u8;
+            }
+        }
+    }
+    out
+}
+
 fn prepared(pixmap: &Pixmap, settings: &ExportSettings) -> Vec<u8> {
     let mut rgba = straight_rgba(pixmap);
     if settings.format != ExportFormat::Png32 {
@@ -350,7 +390,24 @@ pub fn encode(page: &Page, settings: &ExportSettings) -> Result<Vec<u8>> {
             if settings.format == ExportFormat::Png24 {
                 PngEncoder::new(&mut out).write_image(&rgb, w, h, ExtendedColorType::Rgb8)?;
             } else {
-                JpegEncoder::new_with_quality(&mut out, settings.quality.clamp(1, 100)).write_image(&rgb, w, h, ExtendedColorType::Rgb8)?;
+                let rgb = smoothed(rgb, w, h, settings.smoothing);
+                let quality = settings.quality.clamp(1, 100);
+                // The areas kept at the selective quality: the JPEG mask, and text if it is to be preserved.
+                let mask = page.jpeg_mask.as_ref().filter(|mask| mask.size() == (w, h));
+                let text: Vec<crate::model::Rect> = if settings.preserve_text {
+                    page.objects().filter(|o| o.visible && matches!(o.shape, crate::model::Shape::Text { .. })).map(|o| o.bounds).collect()
+                } else {
+                    Vec::new()
+                };
+                if settings.selective && (mask.is_some() || !text.is_empty()) {
+                    let covers = |x: u32, y: u32| {
+                        mask.is_some_and(|mask| mask.is_set(x, y)) || text.iter().any(|b| b.contains(crate::model::v2(x as f32 + 0.5, y as f32 + 0.5)))
+                    };
+                    let selective = crate::jpeg::Selective { covers: &covers, quality: settings.selective_quality.clamp(1, 100) };
+                    out = crate::jpeg::encode(&rgb, w, h, quality, Some(selective));
+                } else {
+                    JpegEncoder::new_with_quality(&mut out, quality).write_image(&rgb, w, h, ExtendedColorType::Rgb8)?;
+                }
             }
         }
         ExportFormat::Gif | ExportFormat::AnimatedGif => return Err(anyhow!("handled above")),
@@ -461,6 +518,64 @@ mod tests {
             assert!(result.palette.len() / 3 <= colors as usize, "{colors}");
             assert!(result.indices.iter().all(|i| (*i as usize) < result.palette.len() / 3));
         }
+    }
+
+    /// A page filled with a noisy bitmap, which JPEG finds expensive.
+    fn noisy_page() -> Page {
+        let mut source = Page::new("p", 64, 64);
+        let bitmap = crate::bitmap::Bitmap::from_rgba(64, 64, (0..64 * 64).flat_map(|i: u32| [(i * 37 % 256) as u8, (i * 91 % 256) as u8, (i * 13 % 256) as u8, 255]).collect()).unwrap();
+        source.layers[0].objects.push(Object::new_bitmap(1, "b", bitmap, 0.0, 0.0));
+        source
+    }
+
+    #[test]
+    fn smoothing_makes_a_jpeg_smaller() {
+        let source = noisy_page();
+        let size = |smoothing: u8| encode(&source, &ExportSettings { smoothing, ..settings(ExportFormat::Jpeg) }).unwrap().len();
+        assert!(size(8) < size(4) && size(4) < size(0), "{} {} {}", size(8), size(4), size(0));
+        // Out-of-range values are treated as the strongest setting.
+        assert_eq!(size(200), size(8));
+    }
+
+    #[test]
+    fn the_jpeg_mask_is_written_at_the_selective_quality() {
+        let mut source = noisy_page();
+        let plain = ExportSettings { quality: 20, ..settings(ExportFormat::Jpeg) };
+        let selective = ExportSettings { selective: true, selective_quality: 95, ..plain };
+        let rough = encode(&source, &plain).unwrap().len();
+        // Without a mask there is nothing to keep, and the file is the plain one.
+        assert_eq!(encode(&source, &selective).unwrap().len(), rough);
+
+        source.jpeg_mask = Some(std::sync::Arc::new(crate::bitmap::Mask::from_fn(64, 64, |x, _| x < 32)));
+        let mixed = encode(&source, &selective).unwrap();
+        let fine = encode(&source, &ExportSettings { quality: 95, ..plain }).unwrap().len();
+        assert!(mixed.len() > rough * 2 && mixed.len() < fine, "{rough} {} {fine}", mixed.len());
+        assert!(image::load_from_memory(&mixed).is_ok());
+        // Switched off, the mask is ignored.
+        assert_eq!(encode(&source, &plain).unwrap().len(), rough);
+        // A mask left over from another page size is ignored too.
+        source.jpeg_mask = Some(std::sync::Arc::new(crate::bitmap::Mask::from_fn(10, 10, |_, _| true)));
+        assert_eq!(encode(&source, &selective).unwrap().len(), rough);
+    }
+
+    #[test]
+    fn text_can_be_kept_at_the_selective_quality() {
+        let mut source = noisy_page();
+        let mut text = Object::new_bitmap(2, "t", crate::bitmap::Bitmap::from_rgba(1, 1, vec![0, 0, 0, 0]).unwrap(), 8.0, 8.0);
+        text.shape = crate::model::Shape::Text { content: "a".into(), size: 20.0 };
+        text.bounds = crate::model::Rect { x: 8.0, y: 8.0, w: 32.0, h: 24.0 };
+        source.layers[0].objects.push(text);
+        let plain = ExportSettings { quality: 20, selective: true, selective_quality: 95, ..settings(ExportFormat::Jpeg) };
+        let without = encode(&source, &plain).unwrap().len();
+        let with = encode(&source, &ExportSettings { preserve_text: true, ..plain }).unwrap().len();
+        assert!(with > without, "{with} against {without}");
+    }
+
+    #[test]
+    fn settings_saved_before_these_options_existed_still_load() {
+        let old = r#"{"format":"Jpeg","quality":70,"colors":256,"transparent":false,"matte":null}"#;
+        let loaded: ExportSettings = serde_json::from_str(old).unwrap();
+        assert_eq!((loaded.smoothing, loaded.selective, loaded.selective_quality, loaded.preserve_text), (0, false, 90, false));
     }
 
     #[test]

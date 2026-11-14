@@ -54,7 +54,7 @@ They never appear in the flattened image. Exporting `name.png` also writes `name
 The Window menu opens and closes every panel, and F4 hides or restores them all. Click a tab to bring it forward, and double-click the front tab to collapse its group.
 
 - **States**: each state has its own objects. Play the animation, turn on onion skinning, and share a layer across states from the Layers panel. Double-click a page, state, layer or object to rename it.
-- **Optimize**: pick GIF, Animated GIF, JPEG, PNG 8, PNG 24 or PNG 32. The panel estimates the file size, and Export Page uses these settings.
+- **Optimize**: pick GIF, Animated GIF, JPEG, PNG 8, PNG 24 or PNG 32. The panel estimates the file size, and Export Page uses these settings. For a JPEG, Smoothing (0 to 8) blurs the picture a little to make the file smaller. Selective quality keeps part of the page at a quality of its own: select the pixels, choose Modify > Selective JPEG > Save Selection as JPEG Mask, and tick Selective quality. The mask shows as a pink tint. Settings can also keep all text at the selective quality.
 - **Styles**: click a style to apply it, or to set the colors for the next shape. Styles hold fill, stroke and opacity.
 - **Path**: Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset.
 - **Auto Shapes**: drag a tile onto the canvas, or click it to place the shape in the middle of the page, then adjust it in Auto Shape Properties.

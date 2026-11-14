@@ -84,7 +84,7 @@ cargo test
 Emberframe is at version 0.1, so some things are still missing:
 
 - Masks and live effects in Styles.
-- Printing, layer blend modes, and JPEG Selective quality and Smoothing, which appear greyed out.
+- Printing and layer blend modes, which appear greyed out.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - macOS and Linux builds.
 
