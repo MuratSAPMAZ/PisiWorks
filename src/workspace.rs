@@ -16,6 +16,8 @@ use gpui::{
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::i18n::{t, tc, tf};
+use crate::settings::Settings;
 use crate::bitmap::{Bitmap, Mask, MaskMode, FILL_TOLERANCE};
 use crate::canvas_view::{encoded_texture, handle_rects, make_texture, texture_key, Textures};
 use crate::autoshape::AutoKind;
@@ -304,17 +306,17 @@ fn constrain_angle(start: Vec2, p: Vec2) -> Vec2 {
 
 pub fn kind_label(shape: &Shape) -> &'static str {
     match shape {
-        Shape::Rect { .. } => "Rectangle",
-        Shape::Ellipse => "Ellipse",
-        Shape::Line => "Line",
-        Shape::Path { .. } => "Path",
-        Shape::Text { .. } => "Text",
-        Shape::Image { .. } => "Bitmap",
-        Shape::Web { kind: WebKind::Hotspot, .. } => "Hotspot",
-        Shape::Web { kind: WebKind::Slice, .. } => "Slice",
+        Shape::Rect { .. } => t("Rectangle"),
+        Shape::Ellipse => t("Ellipse"),
+        Shape::Line => t("Line"),
+        Shape::Path { .. } => t("Path"),
+        Shape::Text { .. } => t("Text"),
+        Shape::Image { .. } => t("Bitmap"),
+        Shape::Web { kind: WebKind::Hotspot, .. } => t("Hotspot"),
+        Shape::Web { kind: WebKind::Slice, .. } => t("Slice"),
         Shape::Auto { kind, .. } => kind.label(),
-        Shape::Instance { .. } => "Symbol",
-        Shape::Group { .. } => "Group",
+        Shape::Instance { .. } => t("Symbol"),
+        Shape::Group { .. } => tc("object", "Group"),
     }
 }
 
@@ -370,14 +372,14 @@ enum Opened {
 /// Identifies a file by content, so a misnamed file still opens correctly.
 fn parse_file(bytes: &[u8]) -> Result<Opened> {
     if bytes.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'{') {
-        let text = std::str::from_utf8(bytes).context("not an Emberframe document")?;
+        let text = std::str::from_utf8(bytes).context(t("not an Emberframe document"))?;
         return document_from_json(text).map(Opened::Document);
     }
     Bitmap::decode(bytes).map(Opened::Image)
 }
 
 fn file_stem(path: &Path) -> String {
-    path.file_stem().map_or_else(|| "Untitled".into(), |s| s.to_string_lossy().into_owned())
+    path.file_stem().map_or_else(|| t("Untitled").into(), |s| s.to_string_lossy().into_owned())
 }
 
 impl Workspace {
@@ -466,7 +468,7 @@ impl Workspace {
             .or(self.source_image.as_ref())
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| format!("Untitled.{FILE_EXTENSION}"))
+            .unwrap_or_else(|| format!("{}.{FILE_EXTENSION}", t("Untitled")))
     }
 
     /// Name offered by Save As; an opened image becomes a document beside it.
@@ -607,13 +609,14 @@ impl Workspace {
             Cmd::HidePanels => self.panels_off,
             Cmd::Rulers => self.show_rulers,
             Cmd::Grid => self.show_grid,
+            Cmd::Language(language) => crate::i18n::language() == language,
             _ => false,
         }
     }
 
     pub fn set_export(&mut self, change: impl FnOnce(&mut ExportSettings)) {
         change(&mut self.ed.doc.page_mut().export);
-        self.ed.commit("Optimize");
+        self.ed.commit(t("Optimize"));
     }
 
     /// Measures the exported size in the background whenever the page changes.
@@ -728,11 +731,11 @@ impl Workspace {
         match dialog.kind {
             SizeDialogKind::Canvas => {
                 self.ed.resize_canvas(dialog.width, dialog.height);
-                self.ed.commit("Canvas Size");
+                self.ed.commit(t("Canvas Size"));
             }
             SizeDialogKind::Image => {
                 self.ed.resize_image(dialog.width, dialog.height);
-                self.ed.commit("Image Size");
+                self.ed.commit(t("Image Size"));
             }
         }
     }
@@ -771,7 +774,7 @@ impl Workspace {
             return;
         }
         if self.ed.doc.page().states.iter().filter(|s| s.exported).count() < 2 {
-            self.status = "Add a second state to play an animation".into();
+            self.status = t("Add a second state to play an animation").into();
             return;
         }
         self.playing = true;
@@ -817,7 +820,7 @@ impl Workspace {
             return;
         }
         self.ed.apply_style(&style);
-        self.ed.commit("Apply Style");
+        self.ed.commit(t("Apply Style"));
     }
 
     fn run_path_op(&mut self, op: PathOp) {
@@ -837,20 +840,20 @@ impl Workspace {
             h: AUTO_SHAPE_SIZE,
         };
         let object = self.new_object(kind.label(), Shape::Auto { kind, a: d.a, b: d.b, count: d.count }, bounds, Vec::new());
-        self.add_new(object, "Auto Shape");
+        self.add_new(object, t("Auto Shape"));
     }
 
     pub fn place_symbol(&mut self, id: u64) {
         if self.ed.place_symbol(id) {
-            self.ed.commit("Insert Symbol");
+            self.ed.commit(t("Insert Symbol"));
         } else {
-            self.status = "All layers are locked".into();
+            self.status = t("All layers are locked").into();
         }
     }
 
     pub fn insert_common(&mut self, index: usize) {
         let Some(item) = common_items().get(index) else { return };
-        let id = self.ed.add_library_symbol(item.name, &item.objects());
+        let id = self.ed.add_library_symbol(t(item.name), &item.objects());
         self.symbol_selection = Some(id);
         self.place_symbol(id);
     }
@@ -860,9 +863,9 @@ impl Workspace {
             Some(id) => {
                 self.symbol_selection = Some(id);
                 self.pixel_sel = None;
-                self.ed.commit("Convert to Symbol");
+                self.ed.commit(t("Convert to Symbol"));
             }
-            None => self.status = "Select objects to make a symbol from".into(),
+            None => self.status = t("Select objects to make a symbol from").into(),
         }
     }
 
@@ -875,7 +878,7 @@ impl Workspace {
                 url.clone_from(&link);
             }
         });
-        self.ed.commit("Hotspot Link");
+        self.ed.commit(t("Hotspot Link"));
     }
 
     fn set_mixer_channel(&mut self, channel: usize, value: u8) {
@@ -926,7 +929,7 @@ impl Workspace {
     pub fn run_find(&mut self, replace: bool) {
         let (find, change) = (self.find_text.clone(), self.replace_text.clone());
         if find.is_empty() {
-            self.status = "Type what to find first".into();
+            self.status = t("Type what to find first").into();
             return;
         }
         let colors = match self.find_mode {
@@ -934,7 +937,7 @@ impl Workspace {
             FindMode::Color => match (Color::parse_hex(&find), Color::parse_hex(&change).or(if replace { None } else { Some(Color::BLACK) })) {
                 (Some(from), Some(to)) => Some((from, to)),
                 _ => {
-                    self.status = "Enter colors as hex, such as #FF0000".into();
+                    self.status = t("Enter colors as hex, such as #FF0000").into();
                     return;
                 }
             },
@@ -946,7 +949,7 @@ impl Workspace {
         if !replace {
             self.ed.selection = self.ed.doc.page().objects().filter(|o| matches(o)).map(|o| o.id).collect();
             let count = self.ed.selection.len();
-            self.status = format!("Found {count} on this page");
+            self.status = tf("Found {} on this page", &[&count]);
             return;
         }
         let active = self.ed.doc.active_page;
@@ -973,8 +976,8 @@ impl Workspace {
                 }
             }
         }
-        self.ed.commit("Replace");
-        self.status = format!("Replaced {count}");
+        self.ed.commit(t("Replace"));
+        self.status = tf("Replaced {}", &[&count]);
     }
 
     /// Adds a character to the text being edited, or to the selected text object.
@@ -993,9 +996,9 @@ impl Workspace {
             }
         });
         if changed {
-            self.ed.commit("Special Character");
+            self.ed.commit(t("Special Character"));
         } else {
-            self.status = "Select a text object, or start typing with the Text tool".into();
+            self.status = t("Select a text object, or start typing with the Text tool").into();
         }
     }
 
@@ -1060,7 +1063,7 @@ impl Workspace {
                         self.ed.delete_selected();
                     }
                 }
-                self.ed.commit("Cut");
+                self.ed.commit(t("Cut"));
             }
             Cmd::Copy => match &pixels {
                 Some((id, mask)) => self.ed.copy_pixels(*id, mask),
@@ -1069,18 +1072,18 @@ impl Workspace {
             Cmd::Paste => {
                 self.pixel_sel = None;
                 self.ed.paste(PASTE_OFFSET);
-                self.ed.commit("Paste");
+                self.ed.commit(t("Paste"));
             }
             Cmd::Clear => {
                 match &pixels {
                     Some((id, mask)) => self.ed.clear_pixels(*id, mask),
                     None => self.ed.delete_selected(),
                 }
-                self.ed.commit("Clear");
+                self.ed.commit(t("Clear"));
             }
             Cmd::Duplicate => {
                 self.ed.duplicate(PASTE_OFFSET);
-                self.ed.commit("Duplicate");
+                self.ed.commit(t("Duplicate"));
             }
             Cmd::ZoomIn => self.step_zoom(true, None),
             Cmd::ZoomOut => self.step_zoom(false, None),
@@ -1097,15 +1100,15 @@ impl Workspace {
             }
             Cmd::Arrange(op) => {
                 self.ed.arrange(op);
-                self.ed.commit("Arrange");
+                self.ed.commit(t("Arrange"));
             }
             Cmd::Align(op) => {
                 self.ed.align(op);
-                self.ed.commit("Align");
+                self.ed.commit(t("Align"));
             }
             Cmd::FlipH | Cmd::FlipV => {
                 self.ed.for_selected(|o| o.flip(matches!(cmd, Cmd::FlipH)));
-                self.ed.commit("Flip");
+                self.ed.commit(t("Flip"));
             }
             Cmd::Filter(filter) => {
                 self.ed.apply_filter(filter, pixels.as_ref().map(|(id, mask)| (*id, mask.as_ref())));
@@ -1113,47 +1116,55 @@ impl Workspace {
             }
             Cmd::ShowWeb(visible) => {
                 self.ed.set_web_visible(visible);
-                self.ed.commit(if visible { "Show Slices" } else { "Hide Slices" });
+                self.ed.commit(if visible { t("Show Slices") } else { t("Hide Slices") });
             }
             Cmd::AddLayer => {
                 self.ed.add_layer();
-                self.ed.commit("New Layer");
+                self.ed.commit(t("New Layer"));
             }
             Cmd::AddPage => {
                 self.ed.add_page();
-                self.ed.commit("New Page");
+                self.ed.commit(t("New Page"));
             }
             Cmd::Panel(panel) => self.toggle_panel(panel),
             Cmd::HidePanels => self.panels_off = !self.panels_off,
+            Cmd::Language(language) => {
+                crate::i18n::set_language(language);
+                let mut settings = Settings::load();
+                settings.set_language(language);
+                if let Err(error) = settings.save() {
+                    self.status = tf("Could not save: {}", &[&error]);
+                }
+            }
             Cmd::ConvertToSymbol => self.make_symbol(),
             Cmd::BreakApart => {
                 self.ed.break_apart();
-                self.ed.commit("Break Apart");
+                self.ed.commit(t("Break Apart"));
             }
             Cmd::PathOp(op) => self.run_path_op(op),
             Cmd::Group => {
                 if self.ed.group_selected() {
-                    self.ed.commit("Group");
+                    self.ed.commit(t("Group"));
                 }
             }
             Cmd::Ungroup => {
                 self.ed.break_apart();
-                self.ed.commit("Ungroup");
+                self.ed.commit(t("Ungroup"));
             }
             Cmd::Rotate { clockwise } => {
                 let skipped = self.ed.rotate_selected(clockwise);
-                self.ed.commit("Rotate");
+                self.ed.commit(t("Rotate"));
                 if skipped > 0 {
-                    self.status = format!("{skipped} text or symbol object(s) could not be rotated");
+                    self.status = tf("{} text or symbol object(s) could not be rotated", &[&skipped]);
                 }
             }
             Cmd::CanvasSize => self.open_size_dialog(SizeDialogKind::Canvas),
             Cmd::ImageSize => self.open_size_dialog(SizeDialogKind::Image),
             Cmd::FitCanvas => {
                 if self.ed.fit_canvas() {
-                    self.ed.commit("Fit Canvas");
+                    self.ed.commit(t("Fit Canvas"));
                 } else {
-                    self.status = "There is no artwork to fit the canvas to".into();
+                    self.status = t("There is no artwork to fit the canvas to").into();
                 }
             }
             Cmd::ScreenMode(mode) => self.set_screen_mode(mode, window),
@@ -1175,8 +1186,8 @@ impl Workspace {
                 let _ = window.prompt(
                     PromptLevel::Info,
                     APP_NAME,
-                    Some(concat!("Version ", env!("CARGO_PKG_VERSION"))),
-                    &["OK"],
+                    Some(&tf("Version {}", &[&env!("CARGO_PKG_VERSION")])),
+                    &[t("OK")],
                     cx,
                 );
             }
@@ -1191,9 +1202,9 @@ impl Workspace {
         }
         let answer = window.prompt(
             PromptLevel::Warning,
-            "Discard unsaved changes?",
-            Some("Your changes to this document will be lost."),
-            &["Discard", "Cancel"],
+            t("Discard unsaved changes?"),
+            Some(t("Your changes to this document will be lost.")),
+            &[t("Discard"), t("Cancel")],
             cx,
         );
         cx.spawn_in(window, async move |this, cx| {
@@ -1267,11 +1278,11 @@ impl Workspace {
         let opened = std::fs::read(&path).map_err(anyhow::Error::from).and_then(|bytes| parse_file(&bytes));
         match opened {
             Ok(Opened::Document(doc)) => {
-                self.status = format!("Opened {}", path.file_name().unwrap_or_default().to_string_lossy());
+                self.status = tf("Opened {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]);
                 self.load_document(doc, Some(path));
             }
             Ok(Opened::Image(bitmap)) => {
-                self.status = format!("Opened {}", path.file_name().unwrap_or_default().to_string_lossy());
+                self.status = tf("Opened {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]);
                 let doc = Document::from_bitmap(file_stem(&path), bitmap);
                 let id = doc.next_id - 1;
                 self.load_document(doc, None);
@@ -1279,7 +1290,7 @@ impl Workspace {
                 self.source_image = Some(path);
                 self.fit_if_larger_than_view();
             }
-            Err(error) => self.status = format!("Could not open file: {error}"),
+            Err(error) => self.status = tf("Could not open file: {}", &[&error]),
         }
     }
 
@@ -1291,11 +1302,11 @@ impl Workspace {
                 let page = self.ed.doc.page();
                 let x = ((page.width as f32 - bitmap.width() as f32) / 2.0).round();
                 let y = ((page.height as f32 - bitmap.height() as f32) / 2.0).round();
-                self.status = format!("Imported {}", path.display());
+                self.status = tf("Imported {}", &[&path.display()]);
                 let object = Object::new_bitmap(self.ed.alloc_id(), file_stem(path), bitmap, x, y);
-                self.add_new(object, "Import");
+                self.add_new(object, t("Import"));
             }
-            Err(error) => self.status = format!("Could not import file: {error}"),
+            Err(error) => self.status = tf("Could not import file: {}", &[&error]),
         }
     }
 
@@ -1342,24 +1353,24 @@ impl Workspace {
         match result {
             Ok(()) => {
                 self.ed.mark_saved();
-                self.status = format!("Saved {}", path.display());
+                self.status = tf("Saved {}", &[&path.display()]);
                 self.path = Some(path);
             }
-            Err(error) => self.status = format!("Could not save: {error}"),
+            Err(error) => self.status = tf("Could not save: {}", &[&error]),
         }
     }
 
     fn export_to(&mut self, path: &Path) {
         let page = self.ed.doc.page();
         self.status = match export_page(page, path).and_then(|()| export_web(page, path)) {
-            Ok(0) => format!("Exported {}", path.display()),
-            Ok(extra) => format!("Exported {} and {extra} web file(s) beside it", path.display()),
-            Err(error) => format!("Export failed: {error:#}"),
+            Ok(0) => tf("Exported {}", &[&path.display()]),
+            Ok(extra) => tf("Exported {} and {} web file(s) beside it", &[&path.display(), &extra]),
+            Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
         };
     }
 
     pub fn export(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| "Untitled".into(), |p| file_stem(p));
+        let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").into(), |p| file_stem(p));
         let extension = self.ed.doc.page().export.format.extension();
         let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.{extension}")));
         cx.spawn_in(window, async move |this, cx| {
@@ -1464,12 +1475,12 @@ impl Workspace {
                 Some(target) => {
                     self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: selection_mode(ev.modifiers) });
                 }
-                None => self.status = "Selections work on bitmaps. Open or import an image first.".into(),
+                None => self.status = t("Selections work on bitmaps. Open or import an image first.").into(),
             },
             Tool::Wand => self.wand_click(ev, p),
             Tool::Blur => match self.ed.doc.page().bitmap_at(p, &self.ed.selection) {
                 Some(id) => self.drag = Some(Drag::Freehand { points: vec![p], target: Some(id) }),
-                None => self.status = "The Blur tool works on bitmaps.".into(),
+                None => self.status = t("The Blur tool works on bitmaps.").into(),
             },
             Tool::Stamp => self.stamp_down(ev, p),
             Tool::Freeform => self.freeform_down(p),
@@ -1484,7 +1495,7 @@ impl Workspace {
             }
             Tool::Eraser => match self.ed.doc.page().bitmap_at(p, &self.ed.selection) {
                 Some(id) => self.drag = Some(Drag::Freehand { points: vec![p], target: Some(id) }),
-                None => self.status = "The Eraser works on bitmaps. Open or import an image first.".into(),
+                None => self.status = t("The Eraser works on bitmaps. Open or import an image first.").into(),
             },
             Tool::Crop => {
                 if ev.click_count >= 2 && self.crop_area.is_some() {
@@ -1598,7 +1609,7 @@ impl Workspace {
 
     fn wand_click(&mut self, ev: &MouseDownEvent, p: Vec2) {
         let Some(id) = self.ed.doc.page().bitmap_at(p, &self.ed.selection) else {
-            self.status = "The Magic Wand works on bitmaps.".into();
+            self.status = t("The Magic Wand works on bitmaps.").into();
             return;
         };
         let Some(object) = self.ed.object(id) else { return };
@@ -1608,12 +1619,12 @@ impl Workspace {
 
     fn stamp_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
         let Some(id) = self.ed.doc.page().bitmap_at(p, &self.ed.selection) else {
-            self.status = "The Rubber Stamp works on bitmaps.".into();
+            self.status = t("The Rubber Stamp works on bitmaps.").into();
             return;
         };
         if ev.modifiers.alt {
             self.stamp = Some(Stamp { object: id, source: p, offset: None });
-            self.status = "Clone source set. Drag to paint.".into();
+            self.status = t("Clone source set. Drag to paint.").into();
             return;
         }
         match self.stamp.as_mut().filter(|s| s.object == id) {
@@ -1622,14 +1633,14 @@ impl Workspace {
                 stamp.offset.get_or_insert(v2(source.x - p.x, source.y - p.y));
                 self.drag = Some(Drag::Freehand { points: vec![p], target: Some(id) });
             }
-            None => self.status = "Alt+click this image to set the clone source first.".into(),
+            None => self.status = t("Alt+click this image to set the clone source first.").into(),
         }
     }
 
     fn freeform_down(&mut self, p: Vec2) {
         let radius = self.freeform_size / 2.0;
         let Some(id) = self.ed.doc.page().nearest_path(p, radius, &self.ed.selection) else {
-            self.status = "Press near a vector path or shape to reshape it.".into();
+            self.status = t("Press near a vector path or shape to reshape it.").into();
             return;
         };
         let Some(object) = self.ed.object_mut(id) else { return };
@@ -1667,13 +1678,13 @@ impl Workspace {
                 let color = Color::rgb(r, g, b);
                 self.fill = Some(color);
                 self.stroke = Some(color);
-                self.status = format!("Picked {}", color.hex());
+                self.status = tf("Picked {}", &[&color.hex()]);
             }
             return;
         }
         if let Some(color) = object.fill.or(object.stroke.map(|s| s.color)) {
             self.fill = Some(color);
-            self.status = format!("Picked {}", color.hex());
+            self.status = tf("Picked {}", &[&color.hex()]);
         }
     }
 
@@ -1682,7 +1693,7 @@ impl Workspace {
         let Some(id) = self.ed.doc.page().art_at(p, self.tolerance()) else { return };
         if self.ed.object(id).is_some_and(Object::is_image) {
             let Some(color) = fill else {
-                self.status = "Choose a fill color first".into();
+                self.status = t("Choose a fill color first").into();
                 return;
             };
             let mask = self.mask_for(id);
@@ -1691,13 +1702,13 @@ impl Workspace {
             object.edit_pixels(mask.as_deref(), |bitmap| {
                 bitmap.flood_fill(x, y, color, FILL_TOLERANCE);
             });
-            self.ed.commit("Paint Bucket");
+            self.ed.commit(t("Paint Bucket"));
             return;
         }
         if let Some(object) = self.ed.object_mut(id) {
             object.fill = fill;
         }
-        self.ed.commit("Paint Bucket");
+        self.ed.commit(t("Paint Bucket"));
     }
 
     fn new_object(&mut self, name: &str, shape: Shape, bounds: Rect, points: Vec<Vec2>) -> Object {
@@ -1720,7 +1731,7 @@ impl Workspace {
         if self.ed.add_object(object) {
             self.ed.commit(label);
         } else {
-            self.status = "All layers are locked".into();
+            self.status = t("All layers are locked").into();
             self.ed.rollback();
         }
     }
@@ -1747,22 +1758,22 @@ impl Workspace {
             return;
         }
         let bounds = Rect::of_points(&points);
-        let object = self.new_object("Path", Shape::Path { closed }, bounds, points);
-        self.add_new(object, "Pen");
+        let object = self.new_object(t("Path"), Shape::Path { closed }, bounds, points);
+        self.add_new(object, t("Pen"));
     }
 
     fn begin_text(&mut self, p: Vec2) {
         let size = 24.0;
         let (w, h) = measure_text("", size);
         let bounds = Rect { x: p.x, y: p.y, w, h };
-        let mut object = self.new_object("Text", Shape::Text { content: String::new(), size }, bounds, Vec::new());
+        let mut object = self.new_object(t("Text"), Shape::Text { content: String::new(), size }, bounds, Vec::new());
         object.fill = self.stroke.or(self.fill).or(Some(Color::BLACK));
         object.stroke = None;
         let id = object.id;
         if self.ed.add_object(object) {
             self.text_edit = Some(id);
         } else {
-            self.status = "All layers are locked".into();
+            self.status = t("All layers are locked").into();
         }
     }
 
@@ -1785,7 +1796,7 @@ impl Workspace {
             self.ed.delete_selected();
             self.ed.rollback();
         } else {
-            self.ed.commit("Text");
+            self.ed.commit(t("Text"));
         }
     }
 
@@ -1872,16 +1883,16 @@ impl Workspace {
     pub fn mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
         let Some(drag) = self.drag.take() else { return };
         match drag {
-            Drag::Move { .. } => self.ed.commit("Move"),
-            Drag::Resize { .. } => self.ed.commit("Scale"),
-            Drag::Vertex { .. } => self.ed.commit("Edit Path"),
+            Drag::Move { .. } => self.ed.commit(t("Move")),
+            Drag::Resize { .. } => self.ed.commit(t("Scale")),
+            Drag::Vertex { .. } => self.ed.commit(t("Edit Path")),
             Drag::Marquee { start, current } => self.ed.select_in_rect(Rect::from_corners(start, current)),
             Drag::Create { start, current } => self.finish_create(start, current),
             Drag::Freehand { points, target } => self.finish_freehand(points, target),
             Drag::Crop { start, current } => self.finish_crop_drag(start, current),
             Drag::PixelArea { target, points, mode } => self.finish_pixel_area(target, points, mode),
-            Drag::Scale { .. } => self.ed.commit("Scale"),
-            Drag::Freeform { .. } => self.ed.commit("Freeform"),
+            Drag::Scale { .. } => self.ed.commit(t("Scale")),
+            Drag::Freeform { .. } => self.ed.commit(t("Freeform")),
             Drag::Pan { .. } => {}
         }
         cx.notify();
@@ -1894,19 +1905,19 @@ impl Workspace {
         }
         if self.tool == Tool::Knife {
             if self.ed.knife(start, current) > 0 {
-                self.ed.commit("Knife");
+                self.ed.commit(t("Knife"));
             } else {
-                self.status = "The Knife line did not cross a vector path.".into();
+                self.status = t("The Knife line did not cross a vector path.").into();
             }
             return;
         }
         let object = match self.tool {
             Tool::Hotspot => Object::new_web(self.ed.alloc_id(), WebKind::Hotspot, bounds),
             Tool::Slice => Object::new_web(self.ed.alloc_id(), WebKind::Slice, bounds),
-            Tool::Rect =>self.new_object("Rectangle", Shape::Rect { radius: 0.0 }, bounds, Vec::new()),
-            Tool::Ellipse => self.new_object("Ellipse", Shape::Ellipse, bounds, Vec::new()),
+            Tool::Rect =>self.new_object(t("Rectangle"), Shape::Rect { radius: 0.0 }, bounds, Vec::new()),
+            Tool::Ellipse => self.new_object(t("Ellipse"), Shape::Ellipse, bounds, Vec::new()),
             _ => {
-                let mut line = self.new_object("Line", Shape::Line, bounds, vec![start, current]);
+                let mut line = self.new_object(t("Line"), Shape::Line, bounds, vec![start, current]);
                 line.stroke = line.stroke.or(Some(Stroke { color: Color::BLACK, width: 1.0 }));
                 line
             }
@@ -1923,28 +1934,28 @@ impl Workspace {
         }
         self.crop_area = self.ed.doc.page().rect().intersect(dragged);
         if self.crop_area.is_some() {
-            self.status = "Press Enter or double-click to crop, Esc to cancel".into();
+            self.status = t("Press Enter or double-click to crop, Esc to cancel").into();
         }
     }
 
     fn apply_crop(&mut self) {
         let Some(area) = self.crop_area.take() else { return };
         if self.ed.crop_canvas(area) {
-            self.ed.commit("Crop Document");
+            self.ed.commit(t("Crop Document"));
             self.status.clear();
         }
     }
 
     fn finish_freehand(&mut self, points: Vec<Vec2>, target: Option<u64>) {
         let width = self.freehand_width();
-        let name = if self.tool == Tool::Pencil { "Pencil" } else { "Brush" };
+        let name = if self.tool == Tool::Pencil { t("Pencil") } else { t("Brush") };
         let color = self.stroke.unwrap_or(Color::BLACK);
         if let Some(id) = target {
             let offset = self.stamp.and_then(|s| s.offset).unwrap_or_default();
             let (op, label) = match self.tool {
-                Tool::Eraser => (PixelStroke::Erase, "Eraser"),
-                Tool::Blur => (PixelStroke::Blur, "Blur"),
-                Tool::Stamp => (PixelStroke::Clone(offset), "Rubber Stamp"),
+                Tool::Eraser => (PixelStroke::Erase, t("Eraser")),
+                Tool::Blur => (PixelStroke::Blur, t("Blur")),
+                Tool::Stamp => (PixelStroke::Clone(offset), t("Rubber Stamp")),
                 _ => (PixelStroke::Paint(color), name),
             };
             let mask = self.mask_for(id);
@@ -2123,7 +2134,7 @@ impl Workspace {
     fn nudge(&mut self, dx: f32, dy: f32) {
         if !self.ed.selection.is_empty() {
             self.ed.for_selected(|o| o.translate(dx, dy));
-            self.ed.commit("Move");
+            self.ed.commit(t("Move"));
         }
     }
 
@@ -2248,12 +2259,12 @@ impl Workspace {
                 let (Some(v), Some(bounds)) = (number, self.ed.selection_bounds()) else { return };
                 let (dx, dy) = if field.id == FieldId::X { (v - bounds.x, 0.0) } else { (0.0, v - bounds.y) };
                 self.ed.for_selected(|o| o.translate(dx, dy));
-                self.ed.commit("Move");
+                self.ed.commit(t("Move"));
             }
             FieldId::W | FieldId::H => {
                 let Some(v) = number.filter(|v| *v > 0.0) else { return };
                 if self.ed.selection.len() != 1 {
-                    self.status = "Width and height apply to a single object".into();
+                    self.status = t("Width and height apply to a single object").into();
                     return;
                 }
                 let is_width = field.id == FieldId::W;
@@ -2266,7 +2277,7 @@ impl Workspace {
                     }
                     o.set_bounds(b);
                 });
-                self.ed.commit("Resize");
+                self.ed.commit(t("Resize"));
             }
             FieldId::Radius => {
                 let Some(v) = number.filter(|v| *v >= 0.0) else { return };
@@ -2275,7 +2286,7 @@ impl Workspace {
                         *radius = v;
                     }
                 });
-                self.ed.commit("Roundness");
+                self.ed.commit(t("Roundness"));
             }
             FieldId::TextSize => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
@@ -2287,7 +2298,7 @@ impl Workspace {
                         o.bounds.h = h;
                     }
                 });
-                self.ed.commit("Text Size");
+                self.ed.commit(t("Text Size"));
             }
             FieldId::StrokeWidth => {
                 let Some(v) = number.filter(|v| *v >= 0.0) else { return };
@@ -2299,7 +2310,7 @@ impl Workspace {
                             stroke.width = v;
                         }
                     });
-                    self.ed.commit("Stroke Width");
+                    self.ed.commit(t("Stroke Width"));
                 }
             }
             FieldId::BrushSize => {
@@ -2317,13 +2328,13 @@ impl Workspace {
                         url.clone_from(&link);
                     }
                 });
-                self.ed.commit("Hotspot Link");
+                self.ed.commit(t("Hotspot Link"));
             }
             FieldId::Opacity => {
                 let Some(v) = number else { return };
                 let v = v.clamp(0.0, 100.0) / 100.0;
                 self.ed.for_selected(|o| o.opacity = v);
-                self.ed.commit("Opacity");
+                self.ed.commit(t("Opacity"));
             }
             FieldId::FillHex if color.is_some() || cleared => self.apply_color(ColorTarget::Fill, color),
             FieldId::StrokeHex if color.is_some() || cleared => self.apply_color(ColorTarget::Stroke, color),
@@ -2332,38 +2343,38 @@ impl Workspace {
                 if let Some(page) = self.ed.doc.pages.get_mut(i) {
                     page.name = text.to_string();
                 }
-                self.ed.commit("Rename Page");
+                self.ed.commit(t("Rename Page"));
             }
             FieldId::RenameState(i) if !cleared => {
                 if let Some(state) = self.ed.doc.page_mut().states.get_mut(i) {
                     state.name = text.to_string();
                 }
-                self.ed.commit("Rename State");
+                self.ed.commit(t("Rename State"));
             }
             FieldId::RenameLayer(i) if !cleared => {
                 if let Some(layer) = self.ed.doc.page_mut().layers.get_mut(i) {
                     layer.name = text.to_string();
                 }
-                self.ed.commit("Rename Layer");
+                self.ed.commit(t("Rename Layer"));
             }
             FieldId::RenameObject(id) if !cleared => {
                 if let Some(object) = self.ed.object_mut(id) {
                     object.name = text.to_string();
                 }
-                self.ed.commit("Rename Object");
+                self.ed.commit(t("Rename Object"));
             }
             FieldId::RenameSymbol(id) if !cleared => {
                 if let Some(symbol) = self.ed.doc.symbols.iter_mut().find(|s| s.id == id) {
                     symbol.name = text.to_string();
                 }
-                self.ed.commit("Rename Symbol");
+                self.ed.commit(t("Rename Symbol"));
             }
             FieldId::StateDelay(i) => {
                 let Some(v) = number else { return };
                 if let Some(state) = self.ed.doc.page_mut().states.get_mut(i) {
                     state.delay_ms = (v.round() as u32).clamp(MIN_STATE_DELAY, MAX_STATE_DELAY);
                 }
-                self.ed.commit("State Delay");
+                self.ed.commit(t("State Delay"));
             }
             FieldId::AutoParam(slot) => {
                 let Some(v) = number else { return };
@@ -2377,7 +2388,7 @@ impl Workspace {
                         _ => *count = value.round() as u32,
                     }
                 });
-                self.ed.commit("Auto Shape");
+                self.ed.commit(t("Auto Shape"));
             }
             FieldId::PathAmount => {
                 let Some(v) = number.filter(|v| *v > 0.0) else { return };
@@ -2419,7 +2430,7 @@ impl Workspace {
             FieldId::NewUrl if !cleared => {
                 if !self.ed.doc.urls.iter().any(|u| u == text) {
                     self.ed.doc.urls.push(text.to_string());
-                    self.ed.commit("Add URL");
+                    self.ed.commit(t("Add URL"));
                 }
             }
             _ => {}
@@ -2446,7 +2457,7 @@ impl Workspace {
                         o.fill = color;
                     }
                 });
-                self.ed.commit("Fill");
+                self.ed.commit(t("Fill"));
             }
             ColorTarget::Stroke => {
                 self.stroke = color;
@@ -2456,11 +2467,11 @@ impl Workspace {
                         o.stroke = color.map(|color| Stroke { color, width: o.stroke.map_or(width, |s| s.width) });
                     }
                 });
-                self.ed.commit("Stroke");
+                self.ed.commit(t("Stroke"));
             }
             ColorTarget::Canvas => {
                 self.ed.doc.page_mut().canvas = color;
-                self.ed.commit("Canvas Color");
+                self.ed.commit(t("Canvas Color"));
             }
             ColorTarget::Matte => self.set_export(|s| s.matte = color),
         }

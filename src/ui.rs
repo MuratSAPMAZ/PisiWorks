@@ -9,6 +9,7 @@ use gpui::{
     Window, WindowControlArea,
 };
 
+use crate::i18n::{t, tf};
 use crate::canvas_view::{paint_thumbnail_with, Scene, Textures};
 use crate::icons::{colored, layer_path};
 use crate::menus::{Cmd, Entry, Panel, SlotAction, ToolSlot, COLOR_TOOLS, DOCK_GROUPS, MENUS, SCREEN_MODES, TOOL_SECTIONS, VIEW_TOOLS};
@@ -87,6 +88,12 @@ pub(crate) fn color_u32(c: Color) -> u32 {
     (c.r as u32) << 16 | (c.g as u32) << 8 | c.b as u32
 }
 
+/// The width a column of labels needs, so a longer translation is not wrapped.
+/// It is never narrower than `least`, the width the English labels were laid out for.
+pub(crate) fn label_width(texts: &[&str], least: f32) -> f32 {
+    texts.iter().map(|text| crate::export::measure_text(text, FONT_SIZE).0.ceil() + 3.0).fold(least, f32::max)
+}
+
 pub(crate) fn label(text: impl Into<SharedString>) -> Div {
     div().text_color(rgb(TEXT_DIM)).child(text.into())
 }
@@ -127,7 +134,7 @@ impl Workspace {
                             cx.notify();
                         }
                     }))
-                    .child(*title)
+                    .child(t(title))
                     .when(open, |d| {
                         d.child(deferred(
                             self.menu_panel(entries, true, cx).absolute().top(px(MENU_BAR_HEIGHT)).left_0(),
@@ -193,7 +200,7 @@ impl Workspace {
             })
         };
         let zoom = (self.zoom * 100.0).round() as u32;
-        let mode = if self.compact_workspace { "Collapsed Mode" } else { "Expanded Mode" };
+        let mode = if self.compact_workspace { t("Collapsed Mode") } else { t("Expanded Mode") };
         div()
             .h(px(MENU_BAR_HEIGHT))
             .flex()
@@ -265,7 +272,7 @@ impl Workspace {
                         }))
                     })
                     .when(checked, |d| d.child(div().absolute().left(px(1.)).child(icon("check", 10., TEXT))))
-                    .child(*name)
+                    .child(t(name))
                     .child(div().text_color(rgb(TEXT_DIM)).child(*keys))
                     .into_any_element()
             }
@@ -280,7 +287,7 @@ impl Workspace {
                             cx.notify();
                         }
                     }))
-                    .child(*name)
+                    .child(t(name))
                     .child(icon("chevron", 10., TEXT_DIM))
                     .when(open, |d| {
                         d.child(self.menu_panel(children, false, cx).absolute().left(px(238.)).top(px(-5.)))
@@ -302,36 +309,36 @@ impl Workspace {
             .bg(rgb(PANEL))
             .border_b_1()
             .border_color(rgb(BORDER))
-            .child(self.tool_button("new", "New", Cmd::New, cx))
-            .child(self.tool_button("save", "Save", Cmd::Save, cx))
-            .child(self.tool_button("open", "Open", Cmd::Open, cx))
-            .child(self.tool_button("import", "Import", Cmd::Import, cx))
-            .child(self.tool_button("export", "Export", Cmd::Export, cx))
-            .child(div().id("print").size(px(24.)).flex().items_center().justify_center().tooltip(tip("Print (not available yet)")).child(color_icon("print", 16., false)))
+            .child(self.tool_button("new", t("New"), Cmd::New, cx))
+            .child(self.tool_button("save", t("Save"), Cmd::Save, cx))
+            .child(self.tool_button("open", t("Open"), Cmd::Open, cx))
+            .child(self.tool_button("import", t("Import"), Cmd::Import, cx))
+            .child(self.tool_button("export", t("Export"), Cmd::Export, cx))
+            .child(div().id("print").size(px(24.)).flex().items_center().justify_center().tooltip(tip(t("Print (not available yet)"))).child(color_icon("print", 16., false)))
             .child(sep())
-            .child(self.tool_button("undo", "Undo", Cmd::Undo, cx))
-            .child(self.tool_button("redo", "Redo", Cmd::Redo, cx))
+            .child(self.tool_button("undo", t("Undo"), Cmd::Undo, cx))
+            .child(self.tool_button("redo", t("Redo"), Cmd::Redo, cx))
             .child(sep())
-            .child(self.tool_button("cut", "Cut", Cmd::Cut, cx))
-            .child(self.tool_button("copy", "Copy", Cmd::Copy, cx))
-            .child(self.tool_button("paste", "Paste", Cmd::Paste, cx))
+            .child(self.tool_button("cut", t("Cut"), Cmd::Cut, cx))
+            .child(self.tool_button("copy", t("Copy"), Cmd::Copy, cx))
+            .child(self.tool_button("paste", t("Paste"), Cmd::Paste, cx))
             .child(sep())
-            .child(self.tool_button("group", "Group", Cmd::Group, cx))
-            .child(self.tool_button("ungroup", "Ungroup", Cmd::Ungroup, cx))
-            .child(self.tool_button("join", "Join", Cmd::PathOp(PathOp::Join), cx))
-            .child(self.tool_button("split", "Split", Cmd::PathOp(PathOp::Split), cx))
+            .child(self.tool_button("group", t("Group"), Cmd::Group, cx))
+            .child(self.tool_button("ungroup", t("Ungroup"), Cmd::Ungroup, cx))
+            .child(self.tool_button("join", t("Join"), Cmd::PathOp(PathOp::Join), cx))
+            .child(self.tool_button("split", t("Split"), Cmd::PathOp(PathOp::Split), cx))
             .child(sep())
-            .child(self.tool_button("arrange-front", "Bring to Front", Cmd::Arrange(Arrange::Front), cx))
-            .child(self.tool_button("arrange-forward", "Bring Forward", Cmd::Arrange(Arrange::Forward), cx))
-            .child(self.tool_button("arrange-backward", "Send Backward", Cmd::Arrange(Arrange::Backward), cx))
-            .child(self.tool_button("arrange-back", "Send to Back", Cmd::Arrange(Arrange::Back), cx))
+            .child(self.tool_button("arrange-front", t("Bring to Front"), Cmd::Arrange(Arrange::Front), cx))
+            .child(self.tool_button("arrange-forward", t("Bring Forward"), Cmd::Arrange(Arrange::Forward), cx))
+            .child(self.tool_button("arrange-backward", t("Send Backward"), Cmd::Arrange(Arrange::Backward), cx))
+            .child(self.tool_button("arrange-back", t("Send to Back"), Cmd::Arrange(Arrange::Back), cx))
             .child(sep())
-            .child(self.combo(Combo::Align, "Align", 62., cx).bg(rgb(PANEL_RAISED)))
+            .child(self.combo(Combo::Align, t("Align"), 62., cx).bg(rgb(PANEL_RAISED)))
             .child(sep())
-            .child(self.tool_button("rotate-ccw", "Rotate 90 CCW", Cmd::Rotate { clockwise: false }, cx))
-            .child(self.tool_button("rotate-cw", "Rotate 90 CW", Cmd::Rotate { clockwise: true }, cx))
-            .child(self.tool_button("flip-h", "Flip Horizontal", Cmd::FlipH, cx))
-            .child(self.tool_button("flip-v", "Flip Vertical", Cmd::FlipV, cx))
+            .child(self.tool_button("rotate-ccw", t("Rotate 90 CCW"), Cmd::Rotate { clockwise: false }, cx))
+            .child(self.tool_button("rotate-cw", t("Rotate 90 CW"), Cmd::Rotate { clockwise: true }, cx))
+            .child(self.tool_button("flip-h", t("Flip Horizontal"), Cmd::FlipH, cx))
+            .child(self.tool_button("flip-v", t("Flip Vertical"), Cmd::FlipV, cx))
     }
 
     fn tool_button(&self, name: &'static str, hint: &'static str, cmd: Cmd, cx: &mut Context<Self>) -> Stateful<Div> {
@@ -372,7 +379,7 @@ impl Workspace {
             .flex_none()
             .items_center()
             .justify_center()
-            .tooltip(tip(slot.label))
+            .tooltip(tip(t(slot.label)))
             .when(active, |d| d.bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)))
             .when(!active, |d| {
                 d.hover(|s| s.bg(rgb(HOVER))).on_mouse_down(
@@ -418,7 +425,7 @@ impl Workspace {
             .border_r_1()
             .border_color(rgb(DIVIDER));
         for (name, slots) in TOOL_SECTIONS {
-            panel = panel.child(heading(name)).child(group(self, slots, cx));
+            panel = panel.child(heading(t(name))).child(group(self, slots, cx));
         }
         let color_row = |this: &Self, name: &'static str, target, cx: &mut Context<Self>| {
             div().h(px(23.)).flex().flex_none().items_center().justify_center().gap_1().child(color_icon(name, 15., true)).child(this.swatch(target, 26., cx))
@@ -443,7 +450,7 @@ impl Workspace {
                 .child(color_icon(name, 13., true))
         };
         panel
-            .child(heading("Colors"))
+            .child(heading(t("Colors")))
             .child(group(self, COLOR_TOOLS, cx))
             .child(color_row(self, "pencil", ColorTarget::Stroke, cx))
             .child(color_row(self, "bucket", ColorTarget::Fill, cx))
@@ -452,11 +459,11 @@ impl Workspace {
                     .flex()
                     .flex_none()
                     .justify_center()
-                    .child(mini("defaults", "Set Default Stroke/Fill Colors", Workspace::default_colors, cx))
-                    .child(mini("none", "No Fill", |w| w.apply_color(ColorTarget::Fill, None), cx))
-                    .child(mini("swap", "Swap Stroke/Fill Colors", Workspace::swap_colors, cx)),
+                    .child(mini("defaults", t("Set Default Stroke/Fill Colors"), Workspace::default_colors, cx))
+                    .child(mini("none", t("No Fill"), |w| w.apply_color(ColorTarget::Fill, None), cx))
+                    .child(mini("swap", t("Swap Stroke/Fill Colors"), Workspace::swap_colors, cx)),
             )
-            .child(heading("View"))
+            .child(heading(t("View")))
             .child(div().flex().flex_none().justify_center().py(px(2.)).children(SCREEN_MODES.iter().map(|s| self.sized_tool_slot(s, 20., cx)).collect::<Vec<_>>()))
             .child(group(self, VIEW_TOOLS, cx))
     }
@@ -607,10 +614,10 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(self.view_button(ViewMode::Original, "view-original", "Original", cx))
-                    .child(self.view_button(ViewMode::Preview, "view-preview", "Preview", cx))
-                    .child(self.view_button(ViewMode::TwoUp, "view-2up", "2-Up", cx))
-                    .child(self.view_button(ViewMode::FourUp, "view-4up", "4-Up", cx)),
+                    .child(self.view_button(ViewMode::Original, "view-original", t("Original"), cx))
+                    .child(self.view_button(ViewMode::Preview, "view-preview", t("Preview"), cx))
+                    .child(self.view_button(ViewMode::TwoUp, "view-2up", t("2-Up"), cx))
+                    .child(self.view_button(ViewMode::FourUp, "view-4up", t("4-Up"), cx)),
             )
             .child(self.combo(Combo::Page, page.name.clone(), 110., cx));
         let status_bar = div()
@@ -646,12 +653,12 @@ impl Workspace {
                         div()
                             .flex()
                             .items_center()
-                            .child(self.command_button("first", "First State", Cmd::FirstState, 18., 11., cx))
-                            .child(self.command_button(if self.playing { "stop" } else { "play" }, "Play or stop the animation", Cmd::PlayStates, 18., 11., cx))
-                            .child(self.command_button("last", "Last State", Cmd::LastState, 18., 11., cx))
+                            .child(self.command_button("first", t("First State"), Cmd::FirstState, 18., 11., cx))
+                            .child(self.command_button(if self.playing { "stop" } else { "play" }, t("Play or stop the animation"), Cmd::PlayStates, 18., 11., cx))
+                            .child(self.command_button("last", t("Last State"), Cmd::LastState, 18., 11., cx))
                             .child(div().w(px(24.)).flex().justify_center().child(label(format!("{}", page.active_state + 1))))
-                            .child(self.command_button("prev", "Previous State", Cmd::PreviousState, 18., 11., cx))
-                            .child(self.command_button("next", "Next State", Cmd::NextState, 18., 11., cx)),
+                            .child(self.command_button("prev", t("Previous State"), Cmd::PreviousState, 18., 11., cx))
+                            .child(self.command_button("next", t("Next State"), Cmd::NextState, 18., 11., cx)),
                     )
                     .child(label(format!("{} x {}", page.width, page.height)))
                     .child(self.combo(Combo::Zoom, format!("{zoom}%"), 64., cx)),
@@ -716,7 +723,7 @@ impl Workspace {
             .bg(rgb(PANEL_DARK))
             .border_b_1()
             .border_color(rgb(TAB_LINE))
-            .child(div().h_full().flex().child(tab("Properties", PropertiesTab::Properties, cx)).child(tab("Symbol Properties", PropertiesTab::Symbol, cx)))
+            .child(div().h_full().flex().child(tab(t("Properties"), PropertiesTab::Properties, cx)).child(tab(t("Symbol Properties"), PropertiesTab::Symbol, cx)))
             .child(
                 div()
                     .id("properties-collapse")
@@ -725,7 +732,7 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .tooltip(tip(if collapsed { "Expand" } else { "Collapse" }))
+                    .tooltip(tip(if collapsed { t("Expand") } else { t("Collapse") }))
                     .hover(|s| s.bg(rgb(HOVER)))
                     .on_mouse_down(
                         MouseButton::Left,
@@ -776,8 +783,8 @@ impl Workspace {
         let selected = self.ed.selected();
         use crate::menus::Tool;
         let tool_size = match self.tool {
-            Tool::Brush | Tool::Eraser | Tool::Blur | Tool::Stamp => Some(("Brush size:", FieldId::BrushSize)),
-            Tool::Freeform => Some(("Size:", FieldId::FreeformSize)),
+            Tool::Brush | Tool::Eraser | Tool::Blur | Tool::Stamp => Some((t("Brush size:"), FieldId::BrushSize)),
+            Tool::Freeform => Some((t("Size:"), FieldId::FreeformSize)),
             _ => None,
         };
         let brush_size = tool_size.map(|(name, id)| {
@@ -802,7 +809,7 @@ impl Workspace {
                                 .flex()
                                 .flex_col()
                                 .gap_1()
-                                .child(div().font_weight(FontWeight::BOLD).text_color(rgb(TEXT)).child("Document"))
+                                .child(div().font_weight(FontWeight::BOLD).text_color(rgb(TEXT)).child(t("Document")))
                                 .child(label(self.document_name())),
                         ),
                 )
@@ -818,7 +825,7 @@ impl Workspace {
                                 .items_center()
                                 .gap_1()
                                 .h(px(20.))
-                                .child(label("Canvas:"))
+                                .child(label(t("Canvas:")))
                                 .child(self.swatch(ColorTarget::Canvas, 18., cx))
                                 .child(self.field(FieldId::CanvasHex, 66., cx)),
                         )
@@ -826,9 +833,9 @@ impl Workspace {
                             div()
                                 .flex()
                                 .gap_1()
-                                .child(button(self, "Canvas Size...", Cmd::CanvasSize, cx))
-                                .child(button(self, "Image Size...", Cmd::ImageSize, cx))
-                                .child(button(self, "Fit Canvas", Cmd::FitCanvas, cx)),
+                                .child(button(self, t("Canvas Size..."), Cmd::CanvasSize, cx))
+                                .child(button(self, t("Image Size..."), Cmd::ImageSize, cx))
+                                .child(button(self, t("Fit Canvas"), Cmd::FitCanvas, cx)),
                         ),
                 )
                 .child(div().w(px(1.)).h_full().flex_none().bg(rgb(SEPARATOR)))
@@ -838,7 +845,7 @@ impl Workspace {
                         .items_center()
                         .gap_1()
                         .h(px(20.))
-                        .child(label("State:"))
+                        .child(label(t("State:")))
                         .child(self.combo(Combo::State, page.states[page.active_state].name.clone(), 120., cx)),
                 )
                 .children(brush_size)
@@ -848,26 +855,27 @@ impl Workspace {
         let is_web = first.is_web();
         let single = selected.len() == 1;
         let title: SharedString =
-            if single { kind_label(&first.shape).into() } else { format!("{} objects", selected.len()).into() };
+            if single { kind_label(&first.shape).into() } else { tf("{} objects", &[&selected.len()]).into() };
         let mut extra = div().flex().flex_col().gap_1();
         match first.shape {
             crate::model::Shape::Rect { .. } => {
-                extra = extra.child(div().flex().items_center().gap_1().child(label("Roundness:")).child(self.field(FieldId::Radius, 44., cx)));
+                extra = extra.child(div().flex().items_center().gap_1().child(label(t("Roundness:"))).child(self.field(FieldId::Radius, 44., cx)));
             }
             crate::model::Shape::Text { .. } => {
-                extra = extra.child(div().flex().items_center().gap_1().child(label("Size:")).child(self.field(FieldId::TextSize, 44., cx)));
+                extra = extra.child(div().flex().items_center().gap_1().child(label(t("Size:"))).child(self.field(FieldId::TextSize, 44., cx)));
             }
             crate::model::Shape::Web { kind: crate::model::WebKind::Hotspot, .. } => {
-                extra = extra.child(div().flex().items_center().gap_1().child(label("Link:")).child(self.field(FieldId::Url, 220., cx)));
+                extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
             }
             _ => {}
         }
+        let color_label_width = label_width(&[t("Fill:"), t("Stroke:"), t("Width:")], 34.);
         let color_line = |this: &Self, name: &'static str, target, hex, cx: &mut Context<Self>| {
             div()
                 .flex()
                 .items_center()
                 .gap_1()
-                .child(div().w(px(34.)).child(label(name)))
+                .child(div().w(px(color_label_width)).flex_none().child(label(name)))
                 .child(this.swatch(target, 18., cx))
                 .child(this.field(hex, 66., cx))
         };
@@ -887,13 +895,13 @@ impl Workspace {
                         .flex()
                         .flex_col()
                         .gap_1()
-                        .child(color_line(self, "Fill:", ColorTarget::Fill, FieldId::FillHex, cx))
-                        .child(color_line(self, "Stroke:", ColorTarget::Stroke, FieldId::StrokeHex, cx))
-                        .child(div().flex().items_center().gap_1().child(div().w(px(34.)).child(label("Width:"))).child(self.field(FieldId::StrokeWidth, 44., cx))),
+                        .child(color_line(self, t("Fill:"), ColorTarget::Fill, FieldId::FillHex, cx))
+                        .child(color_line(self, t("Stroke:"), ColorTarget::Stroke, FieldId::StrokeHex, cx))
+                        .child(div().flex().items_center().gap_1().child(div().w(px(color_label_width)).flex_none().child(label(t("Width:")))).child(self.field(FieldId::StrokeWidth, 44., cx))),
                 )
             })
             .when(!is_web, |d| {
-                d.child(div().flex().items_center().gap_1().h(px(20.)).child(label("Opacity:")).child(self.field(FieldId::Opacity, 44., cx)).child(label("%")))
+                d.child(div().flex().items_center().gap_1().h(px(20.)).child(label(t("Opacity:"))).child(self.field(FieldId::Opacity, 44., cx)).child(label("%")))
             })
             .child(extra)
             .children(brush_size)
@@ -1020,14 +1028,14 @@ impl Workspace {
                 div()
                     .flex()
                     .gap_1()
-                    .child(button(self, "align-left", "Align Left", Align::Left, cx))
-                    .child(button(self, "align-center-x", "Center", Align::CenterX, cx))
-                    .child(button(self, "align-right", "Align Right", Align::Right, cx))
-                    .child(button(self, "align-top", "Align Top", Align::Top, cx))
-                    .child(button(self, "align-center-y", "Center Vertically", Align::CenterY, cx))
-                    .child(button(self, "align-bottom", "Align Bottom", Align::Bottom, cx)),
+                    .child(button(self, "align-left", t("Align Left"), Align::Left, cx))
+                    .child(button(self, "align-center-x", t("Center"), Align::CenterX, cx))
+                    .child(button(self, "align-right", t("Align Right"), Align::Right, cx))
+                    .child(button(self, "align-top", t("Align Top"), Align::Top, cx))
+                    .child(button(self, "align-center-y", t("Center Vertically"), Align::CenterY, cx))
+                    .child(button(self, "align-bottom", t("Align Bottom"), Align::Bottom, cx)),
             )
-            .child(label("A single object aligns to the canvas."))
+            .child(label(t("A single object aligns to the canvas.")))
             .into_any_element()
     }
 
@@ -1098,13 +1106,13 @@ impl Workspace {
                 None,
                 |w| {
                     w.ed.add_page();
-                    w.ed.commit("New Page");
+                    w.ed.commit(t("New Page"));
                 },
                 |w| {
                     if w.ed.delete_page() {
-                        w.ed.commit("Delete Page");
+                        w.ed.commit(t("Delete Page"));
                     } else {
-                        w.status = "A document needs at least one page".into();
+                        w.status = t("A document needs at least one page").into();
                     }
                 },
                 cx,
@@ -1149,7 +1157,7 @@ impl Workspace {
                     if let Some(object) = this.ed.object_mut(id) {
                         object.visible = !object.visible;
                     }
-                    this.ed.commit("Object Visibility");
+                    this.ed.commit(t("Object Visibility"));
                     cx.notify();
                 }),
             ))
@@ -1159,7 +1167,7 @@ impl Workspace {
                     if let Some(object) = this.ed.object_mut(id) {
                         object.locked = !object.locked;
                     }
-                    this.ed.commit("Object Lock");
+                    this.ed.commit(t("Object Lock"));
                     cx.notify();
                 }),
             ))
@@ -1214,14 +1222,14 @@ impl Workspace {
                     MouseButton::Left,
                     cx.listener(move |this, _, _, cx| {
                         this.ed.set_web_visible(!web_visible);
-                        this.ed.commit("Web Layer Visibility");
+                        this.ed.commit(t("Web Layer Visibility"));
                         cx.notify();
                     }),
                 ))
                 .child(Self::layer_cell())
                 .child(self.layer_triangle(WEB_LAYER, web_collapsed, cx))
                 .child(color_icon("folder", 14., true))
-                .child(div().flex_1().min_w_0().overflow_hidden().child("Web Layer"))
+                .child(div().flex_1().min_w_0().overflow_hidden().child(t("Web Layer")))
                 .into_any_element(),
         );
         if !web_collapsed {
@@ -1253,7 +1261,7 @@ impl Workspace {
                         cx.listener(move |this, _, _, cx| {
                             let layer = &mut this.ed.doc.page_mut().layers[li];
                             layer.visible = !layer.visible;
-                            this.ed.commit("Layer Visibility");
+                            this.ed.commit(t("Layer Visibility"));
                             cx.notify();
                         }),
                     ))
@@ -1262,7 +1270,7 @@ impl Workspace {
                         cx.listener(move |this, _, _, cx| {
                             let layer = &mut this.ed.doc.page_mut().layers[li];
                             layer.locked = !layer.locked;
-                            this.ed.commit("Layer Lock");
+                            this.ed.commit(t("Layer Lock"));
                             cx.notify();
                         }),
                     ))
@@ -1275,7 +1283,7 @@ impl Workspace {
                             let page = this.ed.doc.page_mut();
                             let shared = !page.layers[li].shared;
                             page.set_layer_shared(li, shared);
-                            this.ed.commit("Share Layer");
+                            this.ed.commit(t("Share Layer"));
                             cx.notify();
                         }),
                     ))
@@ -1301,21 +1309,21 @@ impl Workspace {
                     .flex_none()
                     .items_center()
                     .justify_between()
-                    .child(self.disabled_combo("Normal", 110.))
-                    .child(div().flex().items_center().gap_1().child(label("Opacity")).child(self.field(FieldId::Opacity, 40., cx)).child(label("%"))),
+                    .child(self.disabled_combo(t("Normal"), 110.))
+                    .child(div().flex().items_center().gap_1().child(label(t("Opacity"))).child(self.field(FieldId::Opacity, 40., cx)).child(label("%"))),
             )
             .child(div().id("layers").flex_1().min_h_0().flex().flex_col().overflow_y_scroll().bg(rgb(LIST)).border_t_1().border_color(rgb(LIST_BORDER)).children(rows))
             .child(self.panel_footer(
                 state,
                 |w| {
                     w.ed.add_layer();
-                    w.ed.commit("New Layer");
+                    w.ed.commit(t("New Layer"));
                 },
                 |w| {
                     if w.ed.delete_layer() {
-                        w.ed.commit("Delete Layer");
+                        w.ed.commit(t("Delete Layer"));
                     } else {
-                        w.status = "A page needs at least one layer".into();
+                        w.status = t("A page needs at least one layer").into();
                     }
                 },
                 cx,
@@ -1378,7 +1386,7 @@ impl Workspace {
                 )
             })
             .collect();
-        let hex = self.current_color(target).map_or("None".to_string(), Color::hex);
+        let hex = self.current_color(target).map_or(t("None").to_string(), Color::hex);
         Some(
             deferred(
                 anchored().position(position).snap_to_window().child(
@@ -1407,7 +1415,7 @@ impl Workspace {
                                             cx.notify();
                                         }),
                                     )
-                                    .child("None"),
+                                    .child(t("None")),
                             ),
                         )
                         .child(div().flex().flex_wrap().children(cells)),

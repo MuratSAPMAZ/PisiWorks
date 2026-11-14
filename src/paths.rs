@@ -6,6 +6,7 @@ use i_overlay::float::single::SingleFloatOverlay;
 use i_overlay::mesh::float::stroke::offset::StrokeOffset;
 use i_overlay::mesh::float::style::{LineCap, LineJoin, StrokeStyle};
 
+use crate::i18n::{t};
 use crate::model::{bridge, contours, v2, Editor, Object, Rect, Shape, Vec2};
 
 type Contour = Vec<[f64; 2]>;
@@ -34,16 +35,16 @@ pub enum PathOp {
 impl PathOp {
     pub fn label(self) -> &'static str {
         match self {
-            PathOp::Union => "Union",
-            PathOp::Intersect => "Intersect",
-            PathOp::Punch => "Punch",
-            PathOp::Crop => "Crop",
-            PathOp::Join => "Join",
-            PathOp::Split => "Split",
-            PathOp::Simplify => "Simplify",
-            PathOp::ExpandStroke => "Expand Stroke",
-            PathOp::Inset => "Inset",
-            PathOp::Outset => "Outset",
+            PathOp::Union => t("Union"),
+            PathOp::Intersect => t("Intersect"),
+            PathOp::Punch => t("Punch"),
+            PathOp::Crop => t("Crop"),
+            PathOp::Join => t("Join"),
+            PathOp::Split => t("Split"),
+            PathOp::Simplify => t("Simplify"),
+            PathOp::ExpandStroke => t("Expand Stroke"),
+            PathOp::Inset => t("Inset"),
+            PathOp::Outset => t("Outset"),
         }
     }
 
@@ -90,7 +91,7 @@ fn stroked(contours: &Contours, width: f64, closed: bool, join: LineJoin<f64>) -
 fn result_object(id: u64, template: &Object, points: Vec<Vec2>, closed: bool) -> Object {
     let mut object = template.clone();
     object.id = id;
-    object.name = "Path".into();
+    object.name = t("Path").into();
     object.shape = Shape::Path { closed };
     object.bounds = Rect::of_points(&points);
     object.points = points;
@@ -155,19 +156,19 @@ impl Editor {
     pub fn path_op(&mut self, op: PathOp, amount: f32) -> Result<usize, &'static str> {
         let selected: Vec<Object> = self.doc.page().objects().filter(|o| self.is_selected(o.id)).cloned().collect();
         if selected.is_empty() {
-            return Err("Select one or more vector shapes first");
+            return Err(t("Select one or more vector shapes first"));
         }
         if selected.iter().any(|o| !o.reshapable()) {
-            return Err("Path operations work on vector shapes, not text, bitmaps, symbols or web areas");
+            return Err(t("Path operations work on vector shapes, not text, bitmaps, symbols or web areas"));
         }
         if op.needs_two() && selected.len() < 2 {
-            return Err("Select at least two shapes to combine");
+            return Err(t("Select at least two shapes to combine"));
         }
         let results = self.path_results(op, &selected, amount as f64)?;
         if results.is_empty() {
             return Err(match op {
-                PathOp::Intersect | PathOp::Crop => "The shapes do not overlap",
-                _ => "That would leave nothing behind",
+                PathOp::Intersect | PathOp::Crop => t("The shapes do not overlap"),
+                _ => t("That would leave nothing behind"),
             });
         }
         let objects: Vec<Object> = results
@@ -225,7 +226,7 @@ impl Editor {
                     })
                     .collect();
                 if parts.len() == selected.len() {
-                    return Err("Only joined paths and shapes with holes can be split");
+                    return Err(t("Only joined paths and shapes with holes can be split"));
                 }
                 parts
             }
@@ -243,7 +244,7 @@ impl Editor {
                 let mut results = Vec::new();
                 for (i, object) in selected.iter().enumerate() {
                     let Some(stroke) = object.stroke.filter(|s| s.width > 0.0) else {
-                        return Err("Expand Stroke needs objects that have a stroke");
+                        return Err(t("Expand Stroke needs objects that have a stroke"));
                     };
                     let shapes = stroked(&contours_of(object), stroke.width as f64, object.is_closed(), LineJoin::Round(ROUND_STEP));
                     results.extend(filled(shapes, i));
@@ -254,7 +255,7 @@ impl Editor {
                 let mut results = Vec::new();
                 for (i, object) in selected.iter().enumerate() {
                     if !object.is_closed() {
-                        return Err("Inset and Outset work on closed shapes");
+                        return Err(t("Inset and Outset work on closed shapes"));
                     }
                     let shape = contours_of(object);
                     let ring = flatten(stroked(&shape, amount * 2.0, true, LineJoin::Miter(ROUND_STEP)));

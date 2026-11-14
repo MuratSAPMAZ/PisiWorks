@@ -4,6 +4,7 @@ use std::f32::consts::{PI, TAU};
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::{t};
 use crate::model::{bridge, v2, Rect, Vec2};
 
 /// Segments used per full turn of a curve.
@@ -63,18 +64,18 @@ impl AutoKind {
 
     pub fn label(self) -> &'static str {
         match self {
-            AutoKind::Arrow => "Arrow",
-            AutoKind::Chamfer => "Chamfer Rectangle",
-            AutoKind::Star => "Star",
-            AutoKind::Polygon => "Polygon",
-            AutoKind::Doughnut => "Doughnut",
-            AutoKind::Pie => "Pie",
-            AutoKind::Bubble => "Speech Bubble",
-            AutoKind::Gear => "Gear",
-            AutoKind::Frame => "Frame",
-            AutoKind::Cross => "Cross",
-            AutoKind::LShape => "L-Shape",
-            AutoKind::Spiral => "Spiral",
+            AutoKind::Arrow => t("Arrow"),
+            AutoKind::Chamfer => t("Chamfer Rectangle"),
+            AutoKind::Star => t("Star"),
+            AutoKind::Polygon => t("Polygon"),
+            AutoKind::Doughnut => t("Doughnut"),
+            AutoKind::Pie => t("Pie"),
+            AutoKind::Bubble => t("Speech Bubble"),
+            AutoKind::Gear => t("Gear"),
+            AutoKind::Frame => t("Frame"),
+            AutoKind::Cross => t("Cross"),
+            AutoKind::LShape => t("L-Shape"),
+            AutoKind::Spiral => t("Spiral"),
         }
     }
 
@@ -99,17 +100,17 @@ impl AutoKind {
     /// Editable settings as `[a, b, count]`.
     pub fn params(self) -> [Option<ParamInfo>; 3] {
         match self {
-            AutoKind::Arrow => [p("Head length", 0.05, 1.0), p("Shaft width", 0.05, 1.0), None],
-            AutoKind::Chamfer => [p("Corner", 0.0, 0.5), None, None],
-            AutoKind::Star => [p("Inner radius", 0.05, 1.0), None, p("Points", 3.0, 64.0)],
-            AutoKind::Polygon => [None, None, p("Sides", 3.0, 64.0)],
-            AutoKind::Doughnut => [p("Hole size", 0.05, 0.95), None, None],
-            AutoKind::Pie => [p("Sweep", 1.0, 360.0), p("Start angle", -360.0, 360.0), None],
-            AutoKind::Bubble => [p("Corner", 0.0, 0.5), p("Tail position", 0.1, 0.9), None],
-            AutoKind::Gear => [p("Tooth depth", 0.05, 0.6), None, p("Teeth", 3.0, 64.0)],
-            AutoKind::Frame => [p("Thickness", 0.02, 0.49), None, None],
-            AutoKind::Cross | AutoKind::LShape => [p("Thickness", 0.05, 0.95), None, None],
-            AutoKind::Spiral => [None, None, p("Turns", 1.0, 32.0)],
+            AutoKind::Arrow => [p(t("Head length"), 0.05, 1.0), p(t("Shaft width"), 0.05, 1.0), None],
+            AutoKind::Chamfer => [p(t("Corner"), 0.0, 0.5), None, None],
+            AutoKind::Star => [p(t("Inner radius"), 0.05, 1.0), None, p(t("Points"), 3.0, 64.0)],
+            AutoKind::Polygon => [None, None, p(t("Sides"), 3.0, 64.0)],
+            AutoKind::Doughnut => [p(t("Hole size"), 0.05, 0.95), None, None],
+            AutoKind::Pie => [p(t("Sweep"), 1.0, 360.0), p(t("Start angle"), -360.0, 360.0), None],
+            AutoKind::Bubble => [p(t("Corner"), 0.0, 0.5), p(t("Tail position"), 0.1, 0.9), None],
+            AutoKind::Gear => [p(t("Tooth depth"), 0.05, 0.6), None, p(t("Teeth"), 3.0, 64.0)],
+            AutoKind::Frame => [p(t("Thickness"), 0.02, 0.49), None, None],
+            AutoKind::Cross | AutoKind::LShape => [p(t("Thickness"), 0.05, 0.95), None, None],
+            AutoKind::Spiral => [None, None, p(t("Turns"), 1.0, 32.0)],
         }
     }
 

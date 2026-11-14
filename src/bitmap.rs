@@ -10,6 +10,7 @@ use image::{ImageFormat, RgbaImage};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
+use crate::i18n::{t, tf};
 use crate::model::{v2, Color, Vec2};
 
 pub const MAX_DIMENSION: u32 = 16000;
@@ -30,12 +31,12 @@ pub enum Filter {
 impl Filter {
     pub fn label(self) -> &'static str {
         match self {
-            Filter::Invert => "Invert",
-            Filter::Grayscale => "Grayscale",
-            Filter::Brighten => "Brighten",
-            Filter::Darken => "Darken",
-            Filter::Blur => "Blur",
-            Filter::Sharpen => "Sharpen",
+            Filter::Invert => t("Invert"),
+            Filter::Grayscale => t("Grayscale"),
+            Filter::Brighten => t("Brighten"),
+            Filter::Darken => t("Darken"),
+            Filter::Blur => t("Blur"),
+            Filter::Sharpen => t("Sharpen"),
         }
     }
 }
@@ -201,13 +202,13 @@ impl Bitmap {
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self> {
-        let decoded = image::load_from_memory(bytes).context("not a supported image")?.to_rgba8();
+        let decoded = image::load_from_memory(bytes).context(t("not a supported image"))?.to_rgba8();
         let (width, height) = decoded.dimensions();
         anyhow::ensure!(
             width <= MAX_DIMENSION && height <= MAX_DIMENSION,
-            "image is larger than {MAX_DIMENSION} pixels on a side"
+            tf("image is larger than {} pixels on a side", &[&MAX_DIMENSION])
         );
-        Self::from_rgba(width, height, decoded.into_raw()).ok_or_else(|| anyhow!("image has no pixels"))
+        Self::from_rgba(width, height, decoded.into_raw()).ok_or_else(|| anyhow!(t("image has no pixels")))
     }
 
     pub fn encode_png(&self) -> Result<Vec<u8>> {

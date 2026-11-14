@@ -5,6 +5,7 @@ mod bitmap;
 mod canvas_view;
 mod export;
 mod fonts;
+mod i18n;
 mod icons;
 mod library;
 mod menus;
@@ -12,6 +13,7 @@ mod model;
 mod optimize;
 mod panels;
 mod paths;
+mod settings;
 mod theme;
 mod ui;
 mod workspace;
@@ -23,6 +25,8 @@ use gpui::{
 use workspace::Workspace;
 
 fn main() {
+    // The user's choice wins. Without one, follow the desktop.
+    i18n::set_language(settings::Settings::load().language().unwrap_or_else(i18n::system_language));
     Application::new().with_assets(icons::Assets).run(|cx: &mut App| {
         workspace::app_quit_on_close(cx);
         let bounds = Bounds::centered(None, size(px(1360.), px(860.)), cx);

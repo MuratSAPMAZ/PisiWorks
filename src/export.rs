@@ -9,6 +9,7 @@ use tiny_skia::{
     PremultipliedColorU8, Stroke as SkStroke, Transform,
 };
 
+use crate::i18n::{t, tf};
 use crate::bitmap::Bitmap;
 use crate::model::{Color, Object, Page, Rect, Shape, Vec2, WebKind};
 
@@ -164,7 +165,7 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
 
 pub fn render_page(page: &Page) -> Result<Pixmap> {
     let mut pixmap = Pixmap::new(page.width.max(1), page.height.max(1))
-        .ok_or_else(|| anyhow!("canvas size {}x{} is too large", page.width, page.height))?;
+        .ok_or_else(|| anyhow!(tf("canvas size {}x{} is too large", &[&page.width, &page.height])))?;
     if let Some(c) = page.canvas {
         pixmap.fill(tiny_skia::Color::from_rgba8(c.r, c.g, c.b, c.a));
     }
@@ -214,7 +215,7 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
         let image = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
         let html = image_map(&image, page, hotspots.iter().map(|(object, _, url)| (object.bounds, object.name.as_str(), *url)));
         let target = path.with_file_name(format!("{stem}_map.html"));
-        std::fs::write(&target, html).with_context(|| format!("could not write {}", target.display()))?;
+        std::fs::write(&target, html).with_context(|| tf("could not write {}", &[&target.display()]))?;
         written += 1;
     }
     Ok(written)
@@ -250,7 +251,7 @@ fn image_map<'a>(image: &str, page: &Page, areas: impl Iterator<Item = (Rect, &'
 fn save_pixmap(pixmap: &Pixmap, path: &Path) -> Result<()> {
     let extension = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
     if extension == "png" {
-        return pixmap.save_png(path).with_context(|| format!("could not write {}", path.display()));
+        return pixmap.save_png(path).with_context(|| tf("could not write {}", &[&path.display()]));
     }
     let mut rgba = Vec::with_capacity(pixmap.data().len());
     for px in pixmap.pixels() {
@@ -258,13 +259,13 @@ fn save_pixmap(pixmap: &Pixmap, path: &Path) -> Result<()> {
         rgba.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
     }
     let image = image::RgbaImage::from_raw(pixmap.width(), pixmap.height(), rgba)
-        .ok_or_else(|| anyhow!("rendered image has an invalid size"))?;
+        .ok_or_else(|| anyhow!(t("rendered image has an invalid size")))?;
     let result = if matches!(extension.as_str(), "jpg" | "jpeg") {
         flatten_on_white(&image).save(path)
     } else {
         image.save(path)
     };
-    result.with_context(|| format!("could not write {}", path.display()))
+    result.with_context(|| tf("could not write {}", &[&path.display()]))
 }
 
 /// JPEG has no alpha channel, so transparency is composited over white.

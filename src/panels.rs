@@ -5,6 +5,7 @@ use gpui::{
     MouseButton, MouseDownEvent, SharedString, Stateful, Window,
 };
 
+use crate::i18n::{t, tf};
 use crate::autoshape::AutoKind;
 use crate::canvas_view::paint_thumbnail;
 use crate::library::common_items;
@@ -14,7 +15,7 @@ use crate::bitmap::Filter;
 use crate::optimize::{format_size, ExportFormat, PRESETS};
 use crate::paths::PathOp;
 use crate::theme::*;
-use crate::ui::{color_icon, color_u32, icon, label, tip};
+use crate::ui::{color_icon, color_u32, icon, label, label_width, tip};
 use crate::workspace::{ColorTarget, Combo, FieldId, FindMode, SizeDialogKind, Workspace};
 
 const TILE: f32 = 44.0;
@@ -99,6 +100,8 @@ fn to_hsv(color: Color) -> (f32, f32, f32) {
 }
 
 fn labelled_row(name: impl Into<SharedString>, width: f32, control: impl IntoElement) -> Div {
+    let name = name.into();
+    let width = label_width(&[&name], width);
     div().min_h(px(22.)).flex().flex_none().items_center().gap_1().child(div().w(px(width)).flex_none().child(label(name))).child(control)
 }
 
@@ -302,7 +305,7 @@ impl Workspace {
                     item(format.label().into(), settings.format == format, cx, Box::new(move |this, _, _| this.set_export(|s| s.format = format)))
                 })
                 .collect(),
-            Combo::Transparency => [("No Transparency", false), ("Index Transparency", true)]
+            Combo::Transparency => [(t("No Transparency"), false), (t("Index Transparency"), true)]
                 .into_iter()
                 .map(|(text, value)| item(text.into(), settings.transparent == value, cx, Box::new(move |this, _, _| this.set_export(|s| s.transparent = value))))
                 .collect(),
@@ -310,7 +313,7 @@ impl Workspace {
                 .iter()
                 .map(|(name, preset)| {
                     let preset = *preset;
-                    item((*name).into(), settings == preset, cx, Box::new(move |this, _, _| this.set_export(|s| *s = preset)))
+                    item(t(name).into(), settings == preset, cx, Box::new(move |this, _, _| this.set_export(|s| *s = preset)))
                 })
                 .collect(),
             Combo::Zoom => ZOOM_LEVELS
@@ -321,7 +324,7 @@ impl Workspace {
                     item(format!("{level}%").into(), current, cx, Box::new(move |this, window, cx| this.run(Cmd::ZoomTo(level), window, cx)))
                 })
                 .collect(),
-            Combo::WorkspaceMode => [("Expanded Mode", false), ("Collapsed Mode", true)]
+            Combo::WorkspaceMode => [(t("Expanded Mode"), false), (t("Collapsed Mode"), true)]
                 .into_iter()
                 .map(|(text, compact)| item(text.into(), self.compact_workspace == compact, cx, Box::new(move |this, _, _| this.set_compact_workspace(compact))))
                 .collect(),
@@ -343,7 +346,7 @@ impl Workspace {
                 .into_iter()
                 .map(|(text, op)| {
                     item(
-                        text.into(),
+                        t(text).into(),
                         false,
                         cx,
                         Box::new(move |this, window, cx| {
@@ -355,11 +358,11 @@ impl Workspace {
                 })
                 .collect(),
             Combo::PanelMenu(group) => {
-                let collapse = if self.groups[group].collapsed { "Expand Panel Group" } else { "Collapse Panel Group" };
+                let collapse = if self.groups[group].collapsed { t("Expand Panel Group") } else { t("Collapse Panel Group") };
                 vec![
                     item(collapse.into(), false, cx, Box::new(move |this, _, _| this.groups[group].collapsed = !this.groups[group].collapsed)),
                     item(
-                        "Close Panel Group".into(),
+                        t("Close Panel Group").into(),
                         false,
                         cx,
                         Box::new(move |this, _, _| {
@@ -389,14 +392,14 @@ impl Workspace {
         let format = settings.format;
         let size_text = match (&self.estimate, &self.estimate_error) {
             (_, Some(error)) => error.clone(),
-            (Some(bytes), _) => format!("Estimated size: {}", format_size(*bytes)),
-            _ => "Estimating size...".to_string(),
+            (Some(bytes), _) => tf("Estimated size: {}", &[&format_size(*bytes)]),
+            _ => t("Estimating size...").to_string(),
         };
         let animated_note = (format == ExportFormat::AnimatedGif).then(|| {
             let frames = self.ed.doc.page().states.iter().filter(|s| s.exported).count();
-            label(format!("{frames} frame(s) from the States panel"))
+            label(tf("{} frame(s) from the States panel", &[&frames]))
         });
-        let preset = PRESETS.iter().find(|(_, p)| *p == settings).map_or("Custom", |(name, _)| *name);
+        let preset = PRESETS.iter().find(|(_, p)| *p == settings).map_or(t("Custom"), |(name, _)| t(name));
         let greyed = |text: &'static str| div().text_color(rgb(TEXT_DISABLED)).child(text);
         let palette: Vec<_> = self.estimate_palette.iter().map(|color| Self::palette_chip(*color)).collect();
         let row = || div().min_h(px(23.)).flex().flex_none().items_center().gap_1();
@@ -411,20 +414,20 @@ impl Workspace {
                     .justify_between()
                     .child(self.combo(Combo::Format, format.label(), 140., cx))
                     .when(format != ExportFormat::Png32, |d| {
-                        d.child(div().flex().items_center().gap_1().child(label("Matte:")).child(self.swatch(ColorTarget::Matte, 18., cx)))
+                        d.child(div().flex().items_center().gap_1().child(label(t("Matte:"))).child(self.swatch(ColorTarget::Matte, 18., cx)))
                     }),
             )
             .when(format.is_indexed(), |d| {
                 d.child(
                     row()
                         .justify_between()
-                        .child(self.combo(Combo::Transparency, if settings.transparent { "Index Transparency" } else { "No Transparency" }, 140., cx))
-                        .child(div().flex().items_center().gap_1().child(label("Colors:")).child(self.field(FieldId::OptimizeColors, 44., cx))),
+                        .child(self.combo(Combo::Transparency, if settings.transparent { t("Index Transparency") } else { t("No Transparency") }, 140., cx))
+                        .child(div().flex().items_center().gap_1().child(label(t("Colors:"))).child(self.field(FieldId::OptimizeColors, 44., cx))),
                 )
             })
             .when(format == ExportFormat::Jpeg, |d| {
-                d.child(row().child(label("Quality:")).child(self.field(FieldId::OptimizeQuality, 44., cx)).child(label("%")))
-                    .child(row().justify_between().child(greyed("Selective quality: 90")).child(greyed("Smoothing: 0")))
+                d.child(row().child(label(t("Quality:"))).child(self.field(FieldId::OptimizeQuality, 44., cx)).child(label("%")))
+                    .child(row().justify_between().child(greyed(t("Selective quality: 90"))).child(greyed(t("Smoothing: 0"))))
             })
             .children(animated_note)
             .child(
@@ -442,14 +445,14 @@ impl Workspace {
             .child(
                 row()
                     .justify_between()
-                    .child(greyed("Sort by: None"))
-                    .child(label(if format.is_indexed() { format!("{} colors", self.estimate_palette.len()) } else { String::new() })),
+                    .child(greyed(t("Sort by: None")))
+                    .child(label(if format.is_indexed() { tf("{} colors", &[&self.estimate_palette.len()]) } else { String::new() })),
             )
             .child(
                 row()
                     .justify_between()
                     .child(label(size_text))
-                    .child(self.text_button("Export...", true, cx, |this, window, cx| this.run(Cmd::Export, window, cx))),
+                    .child(self.text_button(t("Export..."), true, cx, |this, window, cx| this.run(Cmd::Export, window, cx))),
             )
             .into_any_element()
     }
@@ -504,9 +507,9 @@ impl Workspace {
             .gap_1()
             .overflow_y_scroll()
             .child(div().w(px(PALETTE_CELL * PALETTE_HUES as f32 + 1.)).flex().flex_none().flex_wrap().children(grid))
-            .child(harmony("Complementary", &[0., 180.], cx))
-            .child(harmony("Analogous", &[-30., 0., 30.], cx))
-            .child(harmony("Triad", &[0., 120., 240.], cx))
+            .child(harmony(t("Complementary"), &[0., 180.], cx))
+            .child(harmony(t("Analogous"), &[-30., 0., 30.], cx))
+            .child(harmony(t("Triad"), &[0., 120., 240.], cx))
             .into_any_element()
     }
 
@@ -520,7 +523,7 @@ impl Workspace {
             _ => None,
         });
         let Some(symbol) = symbol.filter(|id| self.ed.doc.symbols.iter().any(|s| s.id == *id)) else {
-            return shell.child(label("Select a symbol copy to see its properties"));
+            return shell.child(label(t("Select a symbol copy to see its properties")));
         };
         let copies = self
             .ed
@@ -531,9 +534,9 @@ impl Workspace {
             .filter(|o| matches!(o.shape, Shape::Instance { symbol: placed, .. } if placed == symbol))
             .count();
         shell
-            .child(labelled_row("Symbol:", 46., self.field(FieldId::RenameSymbol(symbol), 150., cx)))
-            .child(div().h(px(22.)).flex().items_center().child(label(format!("{copies} cop{} in this document", if copies == 1 { "y" } else { "ies" }))))
-            .child(self.text_button("Break Apart", true, cx, |this, window, cx| this.run(Cmd::BreakApart, window, cx)))
+            .child(labelled_row(t("Symbol:"), 46., self.field(FieldId::RenameSymbol(symbol), 150., cx)))
+            .child(div().h(px(22.)).flex().items_center().child(label(tf(if copies == 1 { "{} copy in this document" } else { "{} copies in this document" }, &[&copies]))))
+            .child(self.text_button(t("Break Apart"), true, cx, |this, window, cx| this.run(Cmd::BreakApart, window, cx)))
     }
 
     // ---- Size dialog ----------------------------------------------------------------------
@@ -541,7 +544,8 @@ impl Workspace {
     pub(crate) fn size_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let dialog = self.size_dialog?;
         let is_image = dialog.kind == SizeDialogKind::Image;
-        let title = if is_image { "Image Size" } else { "Canvas Size" };
+        let title = if is_image { t("Image Size") } else { t("Canvas Size") };
+        let size_label_width = label_width(&[t("Width:"), t("Height:")], 50.);
         Some(
             deferred(
                 div()
@@ -565,8 +569,8 @@ impl Workspace {
                             .border_color(rgb(BORDER))
                             .shadow_lg()
                             .child(div().font_weight(FontWeight::BOLD).child(title))
-                            .child(labelled_row("Width:", 50., div().flex().items_center().gap_1().child(self.field(FieldId::DialogW, 70., cx)).child(label("pixels"))))
-                            .child(labelled_row("Height:", 50., div().flex().items_center().gap_1().child(self.field(FieldId::DialogH, 70., cx)).child(label("pixels"))))
+                            .child(labelled_row(t("Width:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogW, 70., cx)).child(label("pixels"))))
+                            .child(labelled_row(t("Height:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogH, 70., cx)).child(label("pixels"))))
                             .when(is_image, |d| {
                                 d.child(
                                     div()
@@ -594,7 +598,7 @@ impl Workspace {
                                                 .border_color(rgb(INPUT_BORDER))
                                                 .when(dialog.constrain, |d| d.child(icon("check", 9., TEXT))),
                                         )
-                                        .child("Constrain Proportions"),
+                                        .child(t("Constrain Proportions")),
                                 )
                             })
                             .child(
@@ -602,8 +606,8 @@ impl Workspace {
                                     .flex()
                                     .justify_end()
                                     .gap_1()
-                                    .child(self.text_button("OK", true, cx, |this, _, _| this.apply_size_dialog()))
-                                    .child(self.text_button("Cancel", true, cx, |this, _, _| {
+                                    .child(self.text_button(t("OK"), true, cx, |this, _, _| this.apply_size_dialog()))
+                                    .child(self.text_button(t("Cancel"), true, cx, |this, _, _| {
                                         this.field = None;
                                         this.size_dialog = None;
                                     })),
@@ -649,7 +653,7 @@ impl Workspace {
                         cx.listener(move |this, _, _, cx| {
                             let state = &mut this.ed.doc.page_mut().states[i];
                             state.exported = !state.exported;
-                            this.ed.commit("State Export");
+                            this.ed.commit(t("State Export"));
                             cx.notify();
                         }),
                     ))
@@ -666,27 +670,27 @@ impl Workspace {
             .child(div().id("states").flex_1().min_h_0().flex().flex_col().overflow_y_scroll().bg(rgb(LIST)).children(rows))
             .child(
                 Self::footer()
-                    .child(self.icon_button(if self.playing { "stop" } else { "play" }, "Play or stop the animation", self.playing, cx, |this, cx| this.toggle_play(cx)))
-                    .child(self.icon_button("onion", "Onion skinning: show neighbouring states", self.onion, cx, |this, _| this.onion = !this.onion))
-                    .child(self.icon_button("duplicate", "Duplicate State", false, cx, |this, _| {
+                    .child(self.icon_button(if self.playing { "stop" } else { "play" }, t("Play or stop the animation"), self.playing, cx, |this, cx| this.toggle_play(cx)))
+                    .child(self.icon_button("onion", t("Onion skinning: show neighbouring states"), self.onion, cx, |this, _| this.onion = !this.onion))
+                    .child(self.icon_button("duplicate", t("Duplicate State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
                         this.ed.doc.page_mut().duplicate_state();
-                        this.ed.commit("Duplicate State");
+                        this.ed.commit(t("Duplicate State"));
                     }))
-                    .child(self.icon_button("plus", "New State", false, cx, |this, _| {
+                    .child(self.icon_button("plus", t("New State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
                         this.ed.doc.page_mut().add_state();
-                        this.ed.commit("New State");
+                        this.ed.commit(t("New State"));
                     }))
-                    .child(self.icon_button("minus", "Delete State", false, cx, |this, _| {
+                    .child(self.icon_button("minus", t("Delete State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
                         if this.ed.doc.page_mut().delete_state() {
-                            this.ed.commit("Delete State");
+                            this.ed.commit(t("Delete State"));
                         } else {
-                            this.status = "A page needs at least one state".into();
+                            this.status = t("A page needs at least one state").into();
                         }
                     })),
             )
@@ -718,24 +722,24 @@ impl Workspace {
             .size_full()
             .flex()
             .flex_col()
-            .child(div().h(px(26.)).px_1().flex().flex_none().items_center().child(self.disabled_combo("Current Document", 256.)))
+            .child(div().h(px(26.)).px_1().flex().flex_none().items_center().child(self.disabled_combo(t("Current Document"), 256.)))
             .child(div().id("styles").flex_1().min_h_0().p_1().overflow_y_scroll().bg(rgb(INPUT)).border_t_1().border_color(rgb(LIST_BORDER)).child(div().w(px(252.)).flex().flex_wrap().children(tiles)))
             .child(
                 Self::footer()
-                    .child(self.icon_button("plus", "New Style from Selection", false, cx, |this, _| {
+                    .child(self.icon_button("plus", t("New Style from Selection"), false, cx, |this, _| {
                         if this.ed.add_style_from_selection() {
-                            this.ed.commit("New Style");
+                            this.ed.commit(t("New Style"));
                         } else {
-                            this.status = "Select a vector object to make a style from it".into();
+                            this.status = t("Select a vector object to make a style from it").into();
                         }
                     }))
-                    .child(self.icon_button("minus", "Delete Style", false, cx, |this, _| {
+                    .child(self.icon_button("minus", t("Delete Style"), false, cx, |this, _| {
                         match this.style_selection.take().filter(|i| *i < this.ed.doc.styles.len()) {
                             Some(index) => {
                                 this.ed.doc.styles.remove(index);
-                                this.ed.commit("Delete Style");
+                                this.ed.commit(t("Delete Style"));
                             }
-                            None => this.status = "Click a style first".into(),
+                            None => this.status = t("Click a style first").into(),
                         }
                     })),
             )
@@ -760,11 +764,11 @@ impl Workspace {
             .flex_col()
             .gap_1()
             .overflow_y_scroll()
-            .child(heading("Combine Paths"))
+            .child(heading(t("Combine Paths")))
             .child(group(self, &[PathOp::Union, PathOp::Intersect, PathOp::Punch, PathOp::Crop, PathOp::Join, PathOp::Split], cx))
-            .child(heading("Alter Paths"))
+            .child(heading(t("Alter Paths")))
             .child(group(self, &[PathOp::Simplify, PathOp::ExpandStroke, PathOp::Inset, PathOp::Outset], cx))
-            .child(labelled_row("Amount", 48., div().flex().items_center().gap_1().child(self.field(FieldId::PathAmount, 44., cx)).child(label("px"))))
+            .child(labelled_row(t("Amount"), 48., div().flex().items_center().gap_1().child(self.field(FieldId::PathAmount, 44., cx)).child(label("px"))))
             .into_any_element()
     }
 
@@ -787,7 +791,7 @@ impl Workspace {
             Shape::Auto { kind, .. } => Some(kind),
             _ => None,
         }) else {
-            return div().size_full().flex().items_center().justify_center().child(label("Select an auto shape")).into_any_element();
+            return div().size_full().flex().items_center().justify_center().child(label(t("Select an auto shape"))).into_any_element();
         };
         let rows: Vec<_> = kind
             .params()
@@ -805,13 +809,13 @@ impl Workspace {
             .flex_col()
             .child(div().pb_1().font_weight(FontWeight::BOLD).child(kind.label()))
             .children(rows)
-            .child(div().pt_1().child(self.text_button("Convert to Path", true, cx, |this, _, _| {
+            .child(div().pt_1().child(self.text_button(t("Convert to Path"), true, cx, |this, _, _| {
                 this.ed.for_selected(|o| {
                     if matches!(o.shape, Shape::Auto { .. }) {
                         o.to_path();
                     }
                 });
-                this.ed.commit("Convert to Path");
+                this.ed.commit(t("Convert to Path"));
             })))
             .into_any_element()
     }
@@ -844,7 +848,7 @@ impl Workspace {
             .collect();
         let has_selection = !self.ed.selection.is_empty();
         let grid = if tiles.is_empty() {
-            div().size_full().flex().items_center().justify_center().child(label("Select objects, then press New")).into_any_element()
+            div().size_full().flex().items_center().justify_center().child(label(t("Select objects, then press New"))).into_any_element()
         } else {
             div().w(px(252.)).flex().flex_wrap().children(tiles).into_any_element()
         };
@@ -853,28 +857,28 @@ impl Workspace {
             .flex()
             .flex_col()
             .child(div().id("doc-library").flex_1().min_h_0().p_1().overflow_y_scroll().child(grid))
-            .when_some(picked, |d, id| d.child(div().px_1().child(labelled_row("Name", 34., self.field(FieldId::RenameSymbol(id), 200., cx)))))
+            .when_some(picked, |d, id| d.child(div().px_1().child(labelled_row(t("Name"), 34., self.field(FieldId::RenameSymbol(id), 200., cx)))))
             .child(
                 Self::footer()
-                    .child(self.text_button("New", has_selection, cx, |this, window, cx| this.run(Cmd::ConvertToSymbol, window, cx)))
-                    .child(self.text_button("Insert", picked.is_some(), cx, move |this, _, _| {
+                    .child(self.text_button(t("New"), has_selection, cx, |this, window, cx| this.run(Cmd::ConvertToSymbol, window, cx)))
+                    .child(self.text_button(t("Insert"), picked.is_some(), cx, move |this, _, _| {
                         if let Some(id) = picked {
                             this.place_symbol(id);
                         }
                     }))
-                    .child(self.text_button("Update", picked.is_some() && has_selection, cx, move |this, _, _| {
+                    .child(self.text_button(t("Update"), picked.is_some() && has_selection, cx, move |this, _, _| {
                         let Some(id) = picked else { return };
                         if this.ed.redefine_symbol(id) {
-                            this.ed.commit("Update Symbol");
+                            this.ed.commit(t("Update Symbol"));
                         } else {
-                            this.status = "A symbol cannot contain a copy of itself".into();
+                            this.status = t("A symbol cannot contain a copy of itself").into();
                         }
                     }))
-                    .child(self.text_button("Delete", picked.is_some(), cx, move |this, _, _| {
+                    .child(self.text_button(t("Delete"), picked.is_some(), cx, move |this, _, _| {
                         if let Some(id) = picked {
                             this.ed.delete_symbol(id);
                             this.symbol_selection = None;
-                            this.ed.commit("Delete Symbol");
+                            this.ed.commit(t("Delete Symbol"));
                         }
                     })),
             )
@@ -894,11 +898,11 @@ impl Workspace {
             if item.category != category {
                 flush(&mut children, &mut tiles);
                 category = item.category;
-                children.push(heading(category).into_any_element());
+                children.push(heading(t(category)).into_any_element());
             }
             let objects = item.objects().iter().flat_map(Object::leaves).collect();
             tiles.push(
-                self.captioned_tile(format!("common-{}", item.name), item.name.into(), objects, cx, Box::new(move |this, _, _, _| this.insert_common(index)))
+                self.captioned_tile(format!("common-{}", item.name), t(item.name).into(), objects, cx, Box::new(move |this, _, _, _| this.insert_common(index)))
                     .into_any_element(),
             );
         }
@@ -982,10 +986,10 @@ impl Workspace {
                     .flex()
                     .items_center()
                     .gap_1()
-                    .child(chip(self, "Fill", ColorTarget::Fill, cx))
-                    .child(chip(self, "Stroke", ColorTarget::Stroke, cx))
+                    .child(chip(self, t("Fill"), ColorTarget::Fill, cx))
+                    .child(chip(self, t("Stroke"), ColorTarget::Stroke, cx))
                     .child(div().ml_auto().child(self.swatch(self.mixer_target, 20., cx)))
-                    .child(label(current.map_or("None".to_string(), Color::hex))),
+                    .child(label(current.map_or(t("None").to_string(), Color::hex))),
             )
             .children(channels)
             .into_any_element()
@@ -1004,8 +1008,8 @@ impl Workspace {
             .flex_col()
             .child(row("X", format!("{:.0}", p.x)))
             .child(row("Y", format!("{:.0}", p.y)))
-            .child(row("Color", color.map_or("None".to_string(), |c| format!("{}  (R{} G{} B{})", c.hex(), c.r, c.g, c.b))))
-            .child(row("Selection", bounds.map_or("None".to_string(), |b| format!("{:.0} x {:.0} at {:.0}, {:.0}", b.w, b.h, b.x, b.y))))
+            .child(row(t("Color"), color.map_or(t("None").to_string(), |c| format!("{}  (R{} G{} B{})", c.hex(), c.r, c.g, c.b))))
+            .child(row(t("Selection"), bounds.map_or(t("None").to_string(), |b| tf("{} x {} at {}, {}", &[&b.w.round(), &b.h.round(), &b.x.round(), &b.y.round()]))))
             .into_any_element()
     }
 
@@ -1038,15 +1042,15 @@ impl Workspace {
             .size_full()
             .flex()
             .flex_col()
-            .child(div().p_1().flex_none().child(labelled_row("Add", 26., self.field(FieldId::NewUrl, 220., cx))))
+            .child(div().p_1().flex_none().child(labelled_row(t("Add"), 26., self.field(FieldId::NewUrl, 220., cx))))
             .child(div().id("urls").flex_1().min_h_0().flex().flex_col().overflow_y_scroll().children(rows))
-            .child(Self::footer().child(self.icon_button("minus", "Delete URL", false, cx, |this, _| {
+            .child(Self::footer().child(self.icon_button("minus", t("Delete URL"), false, cx, |this, _| {
                 match this.url_selection.take().filter(|i| *i < this.ed.doc.urls.len()) {
                     Some(index) => {
                         this.ed.doc.urls.remove(index);
-                        this.ed.commit("Delete URL");
+                        this.ed.commit(t("Delete URL"));
                     }
-                    None => this.status = "Click a URL first".into(),
+                    None => this.status = t("Click a URL first").into(),
                 }
             })))
             .into_any_element()
@@ -1059,6 +1063,7 @@ impl Workspace {
             this.text_button(text, true, cx, move |this, _, _| action(this)).when(on, |d| d.bg(rgb(ACCENT)))
         };
         let text_mode = self.find_mode == FindMode::Text;
+        let find_label_width = label_width(&[t("Find"), t("Change")], 44.);
         div()
             .p_2()
             .flex()
@@ -1067,19 +1072,19 @@ impl Workspace {
                 div()
                     .flex()
                     .gap_1()
-                    .child(chip(self, "Text", text_mode, cx, |w| w.find_mode = FindMode::Text))
-                    .child(chip(self, "Color", !text_mode, cx, |w| w.find_mode = FindMode::Color))
-                    .child(div().ml_auto().child(chip(self, "All Pages", self.find_all_pages, cx, |w| w.find_all_pages = !w.find_all_pages))),
+                    .child(chip(self, t("Text"), text_mode, cx, |w| w.find_mode = FindMode::Text))
+                    .child(chip(self, t("Color"), !text_mode, cx, |w| w.find_mode = FindMode::Color))
+                    .child(div().ml_auto().child(chip(self, t("All Pages"), self.find_all_pages, cx, |w| w.find_all_pages = !w.find_all_pages))),
             )
-            .child(labelled_row("Find", 44., self.field(FieldId::FindText, 190., cx)))
-            .child(labelled_row("Change", 44., self.field(FieldId::ReplaceText, 190., cx)))
+            .child(labelled_row(t("Find"), find_label_width, self.field(FieldId::FindText, 190., cx)))
+            .child(labelled_row(t("Change"), find_label_width, self.field(FieldId::ReplaceText, 190., cx)))
             .child(
                 div()
                     .pt_1()
                     .flex()
                     .gap_1()
-                    .child(self.text_button("Find", true, cx, |this, _, _| this.run_find(false)))
-                    .child(self.text_button("Replace All", true, cx, |this, _, _| this.run_find(true))),
+                    .child(self.text_button(t("Find"), true, cx, |this, _, _| this.run_find(false)))
+                    .child(self.text_button(t("Replace All"), true, cx, |this, _, _| this.run_find(true))),
             )
             .into_any_element()
     }
@@ -1135,7 +1140,7 @@ impl Workspace {
             .gap_1()
             .overflow_y_scroll()
             .child(div().flex().flex_wrap().children(slots))
-            .child(heading("Filters"))
+            .child(heading(t("Filters")))
             .child(div().flex().flex_wrap().gap_1().children(buttons))
             .into_any_element()
     }

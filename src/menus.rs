@@ -1,5 +1,6 @@
 //! Tool palette and menu definitions. An entry with no command is shown disabled.
 
+use crate::i18n::{t, Language};
 use crate::bitmap::Filter;
 use crate::paths::PathOp;
 use crate::model::{Align, Arrange};
@@ -162,6 +163,7 @@ pub enum Cmd {
     LastState,
     PlayStates,
     Close,
+    Language(Language),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -200,31 +202,58 @@ pub enum Panel {
 }
 
 impl Panel {
+    #[cfg(test)]
+    pub const ALL: [Panel; 23] = [
+        Panel::Toolbar,
+        Panel::Tools,
+        Panel::Properties,
+        Panel::Optimize,
+        Panel::History,
+        Panel::Align,
+        Panel::Pages,
+        Panel::States,
+        Panel::Layers,
+        Panel::Styles,
+        Panel::Path,
+        Panel::ColorPalette,
+        Panel::Swatches,
+        Panel::AutoShapeProperties,
+        Panel::AutoShapes,
+        Panel::DocumentLibrary,
+        Panel::CommonLibrary,
+        Panel::Mixer,
+        Panel::Info,
+        Panel::Url,
+        Panel::Find,
+        Panel::SpecialCharacters,
+        Panel::ImageEditing,
+    ];
+
     pub fn title(self) -> &'static str {
         match self {
-            Panel::Toolbar => "Main Toolbar",
-            Panel::Tools => "Tools",
-            Panel::Properties => "Properties",
-            Panel::Optimize => "Optimize",
-            Panel::History => "History",
-            Panel::Align => "Align",
-            Panel::Pages => "Pages",
-            Panel::States => "States",
-            Panel::Layers => "Layers",
-            Panel::Styles => "Styles",
-            Panel::Path => "Path",
-            Panel::ColorPalette => "Color Palette",
-            Panel::Swatches => "Swatches",
-            Panel::AutoShapeProperties => "Auto Shape Properties",
-            Panel::AutoShapes => "Auto Shapes",
-            Panel::DocumentLibrary => "Document Library",
-            Panel::CommonLibrary => "Common Library",
-            Panel::Mixer => "Color Mixer",
-            Panel::Info => "Info",
+            Panel::Toolbar => t("Main Toolbar"),
+            Panel::Tools => t("Tools"),
+            Panel::Properties => t("Properties"),
+            Panel::Optimize => t("Optimize"),
+            Panel::History => t("History"),
+            Panel::Align => t("Align"),
+            Panel::Pages => t("Pages"),
+            Panel::States => t("States"),
+            Panel::Layers => t("Layers"),
+            Panel::Styles => t("Styles"),
+            Panel::Path => t("Path"),
+            Panel::ColorPalette => t("Color Palette"),
+            Panel::Swatches => t("Swatches"),
+            Panel::AutoShapeProperties => t("Auto Shape Properties"),
+            Panel::AutoShapes => t("Auto Shapes"),
+            Panel::DocumentLibrary => t("Document Library"),
+            Panel::CommonLibrary => t("Common Library"),
+            Panel::Mixer => t("Color Mixer"),
+            Panel::Info => t("Info"),
             Panel::Url => "URL",
-            Panel::Find => "Find",
-            Panel::SpecialCharacters => "Special Characters",
-            Panel::ImageEditing => "Image Editing",
+            Panel::Find => t("Find"),
+            Panel::SpecialCharacters => t("Special Characters"),
+            Panel::ImageEditing => t("Image Editing"),
         }
     }
 }
@@ -342,6 +371,15 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             na("Preferences..."),
             na("Keyboard Shortcuts..."),
+            Sep,
+            // Each language is listed under its own name, so it can be found from any language.
+            Sub(
+                "Language",
+                &[
+                    cmd("English", "", Cmd::Language(Language::English)),
+                    cmd("Türkçe", "", Cmd::Language(Language::Turkish)),
+                ],
+            ),
         ],
     ),
     (

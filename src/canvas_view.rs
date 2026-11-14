@@ -10,6 +10,7 @@ use gpui::{
 use image::imageops::{self, FilterType};
 use image::Frame;
 
+use crate::i18n::{t};
 use crate::bitmap::Bitmap;
 use crate::export::{measure_text, LINE_HEIGHT};
 use crate::menus::Tool;
@@ -264,10 +265,10 @@ impl Scene {
             let preview = index.checked_sub(has_original as usize).and_then(|i| self.previews.get(i));
             let caption = if has_original && index == 0 {
                 self.paint_artwork(pane, false, window, cx);
-                "Original".to_string()
+                t("Original").to_string()
             } else {
                 self.paint_preview(pane, preview, window);
-                preview.map_or("Working...".to_string(), |p| p.caption.clone())
+                preview.map_or(t("Working...").to_string(), |p| p.caption.clone())
             };
             paint_caption(pane, caption, window, cx);
         }

@@ -10,6 +10,7 @@ use image::{ExtendedColorType, ImageEncoder};
 use serde::{Deserialize, Serialize};
 use tiny_skia::Pixmap;
 
+use crate::i18n::{t, tf};
 use crate::export::{export_image, render_page};
 use crate::model::{Color, Page};
 
@@ -43,7 +44,7 @@ impl ExportFormat {
     pub fn label(self) -> &'static str {
         match self {
             ExportFormat::Gif => "GIF",
-            ExportFormat::AnimatedGif => "Animated GIF",
+            ExportFormat::AnimatedGif => t("Animated GIF"),
             ExportFormat::Jpeg => "JPEG",
             ExportFormat::Png8 => "PNG 8",
             ExportFormat::Png24 => "PNG 24",
@@ -107,7 +108,7 @@ pub fn comparison_settings(current: ExportSettings) -> [ExportSettings; 3] {
 pub fn settings_label(settings: &ExportSettings) -> String {
     match settings.format {
         ExportFormat::Jpeg => format!("JPEG {}%", settings.quality),
-        format if format.is_indexed() => format!("{} {} colors", format.label(), settings.colors),
+        format if format.is_indexed() => tf("{} {} colors", &[&format.label(), &settings.colors]),
         format => format.label().to_string(),
     }
 }
@@ -309,14 +310,14 @@ fn gif_frame(pixmap: &Pixmap, settings: &ExportSettings, delay_ms: u32) -> gif::
 }
 
 fn encode_gif(page: &Page, settings: &ExportSettings) -> Result<Vec<u8>> {
-    ensure!(page.width <= MAX_GIF_SIZE && page.height <= MAX_GIF_SIZE, "GIF images cannot be larger than {MAX_GIF_SIZE} pixels");
+    ensure!(page.width <= MAX_GIF_SIZE && page.height <= MAX_GIF_SIZE, tf("GIF images cannot be larger than {} pixels", &[&MAX_GIF_SIZE]));
     let animated = settings.format == ExportFormat::AnimatedGif;
     let states: Vec<usize> = if animated {
         (0..page.states.len()).filter(|i| page.states[*i].exported).collect()
     } else {
         vec![page.active_state]
     };
-    ensure!(!states.is_empty(), "Every state is switched off in the States panel");
+    ensure!(!states.is_empty(), t("Every state is switched off in the States panel"));
     let mut out = Vec::new();
     {
         let mut encoder = gif::Encoder::new(&mut out, page.width as u16, page.height as u16, &[])?;
@@ -376,7 +377,7 @@ pub fn export_page(page: &Page, path: &Path) -> Result<()> {
     match settings_for_path(&page.export, path) {
         Some(settings) => {
             let bytes = encode(page, &settings)?;
-            std::fs::write(path, bytes).with_context(|| format!("could not write {}", path.display()))
+            std::fs::write(path, bytes).with_context(|| tf("could not write {}", &[&path.display()]))
         }
         None => export_image(page, path),
     }

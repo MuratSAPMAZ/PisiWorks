@@ -3823,6 +3823,7 @@ dependencies = [
  "ab_glyph",
  "anyhow",
  "base64",
+ "dirs 5.0.1",
  "fontdb 0.23.0",
  "gif",
  "gpui",
@@ -3831,6 +3832,7 @@ dependencies = [
  "png 0.18.1",
  "serde",
  "serde_json",
+ "sys-locale",
  "tiny-skia",
 ]
 

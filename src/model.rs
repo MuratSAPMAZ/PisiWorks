@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::{t, tc, tf};
 use crate::autoshape::{self, AutoKind, AutoParams};
 use crate::bitmap::{Bitmap, Filter, Mask};
 use crate::optimize::ExportSettings;
@@ -218,8 +219,8 @@ impl Object {
         Self {
             id,
             name: match kind {
-                WebKind::Hotspot => "Hotspot".into(),
-                WebKind::Slice => "Slice".into(),
+                WebKind::Hotspot => t("Hotspot").into(),
+                WebKind::Slice => t("Slice").into(),
             },
             bounds,
             shape: Shape::Web { kind, url: String::new() },
@@ -768,7 +769,7 @@ impl State {
 }
 
 fn default_states() -> Vec<State> {
-    vec![State::new("State 1")]
+    vec![State::new(tf("State {}", &[&1]))]
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -796,7 +797,7 @@ impl Page {
             width,
             height,
             canvas: Some(Color::WHITE),
-            layers: vec![Layer::new("Layer 1")],
+            layers: vec![Layer::new(tf("Layer {}", &[&1]))],
             active_layer: 0,
             states: default_states(),
             active_state: 0,
@@ -835,14 +836,14 @@ impl Page {
 
     /// Adds an empty state after the current one and moves to it.
     pub fn add_state(&mut self) {
-        let mut state = State::new(format!("State {}", self.states.len() + 1));
+        let mut state = State::new(tf("State {}", &[&(self.states.len() + 1)]));
         state.objects = vec![Vec::new(); self.layers.len()];
         self.insert_state(state);
     }
 
     /// Copies the current state after itself and moves to the copy.
     pub fn duplicate_state(&mut self) {
-        let mut state = State::new(format!("State {}", self.states.len() + 1));
+        let mut state = State::new(tf("State {}", &[&(self.states.len() + 1)]));
         state.delay_ms = self.states[self.active_state].delay_ms;
         state.objects = self.layers.iter().map(|l| if l.shared { Vec::new() } else { l.objects.clone() }).collect();
         self.insert_state(state);
@@ -990,18 +991,18 @@ pub fn default_styles() -> Vec<Style> {
     let amber = Color::rgb(0xf0, 0xa8, 0x20);
     let gray = Color::rgb(0xcc, 0xcc, 0xcc);
     vec![
-        style("Solid Ink", Some(ink), None, 1.0),
-        style("Solid Blue", Some(blue), None, 1.0),
-        style("Solid Red", Some(red), None, 1.0),
-        style("Solid Green", Some(green), None, 1.0),
-        style("Solid Amber", Some(amber), None, 1.0),
-        style("Paper", Some(Color::WHITE), Some((gray, 1.0)), 1.0),
-        style("Outline Ink", None, Some((ink, 2.0)), 1.0),
-        style("Outline Blue", None, Some((blue, 2.0)), 1.0),
-        style("Heavy Outline", None, Some((ink, 6.0)), 1.0),
-        style("Tint Blue", Some(blue), None, 0.35),
-        style("Tint Red", Some(red), None, 0.35),
-        style("Blue Panel", Some(Color::rgb(0xdc, 0xeb, 0xfa)), Some((blue, 1.0)), 1.0),
+        style(t("Solid Ink"), Some(ink), None, 1.0),
+        style(t("Solid Blue"), Some(blue), None, 1.0),
+        style(t("Solid Red"), Some(red), None, 1.0),
+        style(t("Solid Green"), Some(green), None, 1.0),
+        style(t("Solid Amber"), Some(amber), None, 1.0),
+        style(t("Paper"), Some(Color::WHITE), Some((gray, 1.0)), 1.0),
+        style(t("Outline Ink"), None, Some((ink, 2.0)), 1.0),
+        style(t("Outline Blue"), None, Some((blue, 2.0)), 1.0),
+        style(t("Heavy Outline"), None, Some((ink, 6.0)), 1.0),
+        style(t("Tint Blue"), Some(blue), None, 0.35),
+        style(t("Tint Red"), Some(red), None, 0.35),
+        style(t("Blue Panel"), Some(Color::rgb(0xdc, 0xeb, 0xfa)), Some((blue, 1.0)), 1.0),
     ]
 }
 
@@ -1093,7 +1094,7 @@ fn normalized(objects: &[Object]) -> Vec<Object> {
 impl Document {
     pub fn new(width: u32, height: u32) -> Self {
         Self {
-            pages: vec![Page::new("Page 1", width, height)],
+            pages: vec![Page::new(tf("Page {}", &[&1]), width, height)],
             active_page: 0,
             next_id: 1,
             styles: default_styles(),
@@ -1106,9 +1107,9 @@ impl Document {
     pub fn from_bitmap(name: impl Into<String>, bitmap: Bitmap) -> Self {
         let mut doc = Self::new(bitmap.width(), bitmap.height());
         doc.pages[0].canvas = None;
-        doc.pages[0].layers[0].name = "Background".into();
+        doc.pages[0].layers[0].name = t("Background").into();
         doc.pages[0].layers[0].objects.push(Object::new_bitmap(1, name, bitmap, 0.0, 0.0));
-        doc.pages[0].layers.push(Layer::new("Layer 1"));
+        doc.pages[0].layers.push(Layer::new(tf("Layer {}", &[&1])));
         doc.next_id = 2;
         doc
     }
@@ -1157,14 +1158,14 @@ pub fn document_to_json(doc: &Document) -> anyhow::Result<String> {
 }
 
 pub fn document_from_json(text: &str) -> anyhow::Result<Document> {
-    let file: FileEnvelope = anyhow::Context::context(serde_json::from_str(text), "not an Emberframe document")?;
-    anyhow::ensure!(file.format == FILE_FORMAT, "not an Emberframe document");
-    anyhow::ensure!(file.version <= FILE_VERSION, "file was saved by a newer version");
-    anyhow::ensure!(!file.document.pages.is_empty(), "document has no pages");
+    let file: FileEnvelope = anyhow::Context::context(serde_json::from_str(text), t("not an Emberframe document"))?;
+    anyhow::ensure!(file.format == FILE_FORMAT, t("not an Emberframe document"));
+    anyhow::ensure!(file.version <= FILE_VERSION, t("file was saved by a newer version"));
+    anyhow::ensure!(!file.document.pages.is_empty(), t("document has no pages"));
     let mut doc = file.document;
     doc.active_page = doc.active_page.min(doc.pages.len() - 1);
     for page in &mut doc.pages {
-        anyhow::ensure!(!page.layers.is_empty(), "page has no layers");
+        anyhow::ensure!(!page.layers.is_empty(), t("page has no layers"));
         page.active_layer = page.active_layer.min(page.layers.len() - 1);
         if page.states.is_empty() {
             page.states = default_states();
@@ -1214,7 +1215,7 @@ pub struct Editor {
 impl Editor {
     pub fn new(doc: Document) -> Self {
         Self {
-            history: vec![("New Document".into(), doc.clone())],
+            history: vec![(t("New Document").into(), doc.clone())],
             history_pos: 0,
             revision: 0,
             saved_doc: doc.clone(),
@@ -1572,7 +1573,7 @@ impl Editor {
 
     pub fn add_layer(&mut self) {
         let page = self.doc.page_mut();
-        let name = format!("Layer {}", page.layers.len() + 1);
+        let name = tf("Layer {}", &[&(page.layers.len() + 1)]);
         let at = page.active_layer + 1;
         page.layers.insert(at, Layer::new(name));
         page.active_layer = at;
@@ -1602,7 +1603,7 @@ impl Editor {
             let p = self.doc.page();
             (p.width, p.height, p.canvas)
         };
-        let mut page = Page::new(format!("Page {}", self.doc.pages.len() + 1), w, h);
+        let mut page = Page::new(tf("Page {}", &[&(self.doc.pages.len() + 1)]), w, h);
         page.canvas = canvas;
         self.doc.pages.push(page);
         self.doc.active_page = self.doc.pages.len() - 1;
@@ -1667,7 +1668,7 @@ impl Editor {
     /// Saves the first selected vector object's look as a new style.
     pub fn add_style_from_selection(&mut self) -> bool {
         let Some(source) = self.selected().into_iter().find(|o| o.takes_color()).cloned() else { return false };
-        let name = format!("Style {}", self.doc.styles.len() + 1);
+        let name = tf("Style {}", &[&(self.doc.styles.len() + 1)]);
         self.doc.styles.push(Style { name, fill: source.fill, stroke: source.stroke, opacity: source.opacity });
         true
     }
@@ -1683,7 +1684,7 @@ impl Editor {
     }
 
     fn new_instance(&mut self, symbol: u64, bounds: Rect) -> Object {
-        let name = self.doc.symbols.iter().find(|s| s.id == symbol).map_or("Symbol".to_string(), |s| s.name.clone());
+        let name = self.doc.symbols.iter().find(|s| s.id == symbol).map_or(t("Symbol").to_string(), |s| s.name.clone());
         let objects = resolve_symbol(&self.doc.symbols, symbol, 0);
         Object {
             id: self.alloc_id(),
@@ -1715,7 +1716,7 @@ impl Editor {
         let bounds = objects.iter().map(|o| o.bounds).reduce(Rect::union)?;
         self.selection = objects.iter().map(|o| o.id).collect();
         let id = self.alloc_id();
-        let name = format!("Symbol {}", self.doc.symbols.len() + 1);
+        let name = tf("Symbol {}", &[&(self.doc.symbols.len() + 1)]);
         self.doc.symbols.push(Symbol { id, name, objects: normalized(&objects) });
         let instance = self.new_instance(id, bounds);
         self.replace_selected(vec![instance]);
@@ -1767,7 +1768,7 @@ impl Editor {
         };
         let group = Object {
             id: self.alloc_id(),
-            name: "Group".into(),
+            name: tc("object", "Group").into(),
             shape: Shape::Group { objects: Arc::new(objects) },
             bounds,
             points: Vec::new(),
