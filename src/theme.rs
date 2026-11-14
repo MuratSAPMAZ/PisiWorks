@@ -2,8 +2,8 @@
 //!
 //! The grays and list colors were sampled from a screenshot of the reference workspace.
 
-pub const APP_NAME: &str = "Emberframe";
-pub const APP_MARK: &str = "Ef";
+pub const APP_NAME: &str = "PisiWorks";
+pub const APP_MARK: &str = "Pw";
 pub const FILE_EXTENSION: &str = "ember";
 
 pub const PANEL: u32 = 0xd6d6d6;

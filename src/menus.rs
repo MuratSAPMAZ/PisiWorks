@@ -534,5 +534,5 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Image Editing", "", Cmd::Panel(Panel::ImageEditing)),
         ],
     ),
-    ("Help", &[cmd("About Emberframe", "", Cmd::About)]),
+    ("Help", &[cmd("About PisiWorks", "", Cmd::About)]),
 ];

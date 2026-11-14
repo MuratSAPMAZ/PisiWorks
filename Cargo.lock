@@ -1458,24 +1458,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "emberframe"
-version = "0.1.0"
-dependencies = [
- "ab_glyph",
- "anyhow",
- "base64",
- "fontdb 0.23.0",
- "gif",
- "gpui",
- "i_overlay",
- "image",
- "png 0.18.1",
- "serde",
- "serde_json",
- "tiny-skia",
-]
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3832,6 +3814,24 @@ dependencies = [
  "atomic-waker",
  "fastrand 2.5.0",
  "futures-io",
+]
+
+[[package]]
+name = "pisiworks"
+version = "0.1.0"
+dependencies = [
+ "ab_glyph",
+ "anyhow",
+ "base64",
+ "fontdb 0.23.0",
+ "gif",
+ "gpui",
+ "i_overlay",
+ "image",
+ "png 0.18.1",
+ "serde",
+ "serde_json",
+ "tiny-skia",
 ]
 
 [[package]]
