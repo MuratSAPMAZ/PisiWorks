@@ -954,7 +954,7 @@ impl Object {
     }
 
     /// Pixels per document unit on each axis.
-    fn pixel_scale(&self) -> Option<(f32, f32)> {
+    pub fn pixel_scale(&self) -> Option<(f32, f32)> {
         let bitmap = self.bitmap()?;
         let b = self.bounds;
         (b.w > 0.0 && b.h > 0.0).then(|| (bitmap.width() as f32 / b.w, bitmap.height() as f32 / b.h))
@@ -2364,8 +2364,19 @@ impl Editor {
     }
 
     /// Places a symbol at its natural size, centered on the canvas.
+    #[cfg(test)]
     pub fn place_symbol(&mut self, symbol: u64) -> bool {
-        let center = self.doc.page().rect().center();
+        self.place_symbol_at(symbol, self.doc.page().rect().center())
+    }
+
+    /// The size a copy of the symbol has when it is placed.
+    pub fn symbol_size(&self, symbol: u64) -> Option<(f32, f32)> {
+        let bounds = self.doc.symbols.iter().find(|s| s.id == symbol)?.objects.iter().map(|o| o.bounds).reduce(Rect::union)?;
+        Some((bounds.w, bounds.h))
+    }
+
+    /// Places a copy of the symbol with its middle at `center`.
+    pub fn place_symbol_at(&mut self, symbol: u64, center: Vec2) -> bool {
         let size = self.doc.symbols.iter().find(|s| s.id == symbol).and_then(|s| s.objects.iter().map(|o| o.bounds).reduce(Rect::union));
         let Some(size) = size else { return false };
         let bounds = Rect { x: (center.x - size.w / 2.0).round(), y: (center.y - size.h / 2.0).round(), w: size.w, h: size.h };

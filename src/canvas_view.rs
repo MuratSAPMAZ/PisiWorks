@@ -218,6 +218,14 @@ impl Scene {
                 }
             }
         }
+        // A panel item in hand shows the box it will fill where it is dropped.
+        if let Some((item, _)) = w.panel_drag {
+            if w.canvas_bounds.get().contains(&w.cursor_screen) {
+                let (width, height) = w.panel_item_size(item);
+                let at = w.cursor_doc;
+                marquee = Some(Rect { x: (at.x - width / 2.0).round(), y: (at.y - height / 2.0).round(), w: width, h: height });
+            }
+        }
         let mut handle_guides = Vec::new();
         let mut guide = |anchor: Vec2, handles: Handles| {
             for offset in [handles.before, handles.after] {

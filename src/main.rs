@@ -72,6 +72,21 @@ fn main() {
         };
         cx.open_window(options, |window, cx| {
             let view = cx.new(Workspace::new);
+            // A file named on the command line is opened, which is how the desktop starts
+            // the application when a document is double-clicked.
+            // It waits for the first frame, because fitting the page needs the size of the canvas.
+            if let Some(path) = std::env::args_os().nth(1).map(std::path::PathBuf::from) {
+                let path = std::fs::canonicalize(&path).unwrap_or(path);
+                let opener = view.downgrade();
+                window.on_next_frame(move |_, cx| {
+                    opener
+                        .update(cx, |workspace, cx| {
+                            workspace.open_file(path);
+                            cx.notify();
+                        })
+                        .ok();
+                });
+            }
             window.focus(&view.read(cx).focus);
             let handle = view.downgrade();
             window.on_window_should_close(cx, move |window, cx| {

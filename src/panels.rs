@@ -16,7 +16,7 @@ use crate::optimize::{format_size, ExportFormat, PRESETS};
 use crate::paths::PathOp;
 use crate::theme::*;
 use crate::ui::{color_icon, color_u32, icon, label, label_width, tip};
-use crate::workspace::{ColorTarget, Combo, FieldId, FindMode, NumericDialog, NumericMode, SizeDialogKind, Workspace};
+use crate::workspace::{ColorTarget, Combo, FieldId, FindMode, NumericDialog, NumericMode, PanelItem, SizeDialogKind, Workspace};
 
 const TILE: f32 = 44.0;
 /// Width of a tile with its name underneath.
@@ -896,7 +896,7 @@ impl Workspace {
             .iter()
             .map(|kind| {
                 let kind = *kind;
-                self.captioned_tile(format!("auto-{}", kind.label()), kind.label().into(), vec![auto_preview(kind)], cx, Box::new(move |this, _, _, _| this.insert_auto_shape(kind)))
+                self.captioned_tile(format!("auto-{}", kind.label()), kind.label().into(), vec![auto_preview(kind)], cx, Box::new(move |this, ev, _, _| this.begin_panel_drag(PanelItem::AutoShape(kind), ev.position)))
             })
             .collect();
         div().id("auto-shapes").size_full().p_1().overflow_y_scroll().bg(rgb(INPUT)).child(div().w(px(252.)).flex().flex_wrap().children(tiles)).into_any_element()
@@ -958,6 +958,8 @@ impl Workspace {
                         this.symbol_selection = Some(id);
                         if ev.click_count >= 2 {
                             this.place_symbol(id);
+                        } else {
+                            this.begin_panel_drag(PanelItem::Symbol(id), ev.position);
                         }
                     }),
                 )
@@ -1019,7 +1021,7 @@ impl Workspace {
             }
             let objects = item.objects().iter().flat_map(Object::leaves).collect();
             tiles.push(
-                self.captioned_tile(format!("common-{}", item.name), t(item.name).into(), objects, cx, Box::new(move |this, _, _, _| this.insert_common(index)))
+                self.captioned_tile(format!("common-{}", item.name), t(item.name).into(), objects, cx, Box::new(move |this, ev, _, _| this.begin_panel_drag(PanelItem::Common(index), ev.position)))
                     .into_any_element(),
             );
         }

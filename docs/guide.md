@@ -22,7 +22,7 @@ Drag with Crop, then press Enter or double-click to apply. Esc cancels.
 
 Save never overwrites the opened image. It creates an `.ember` document that keeps your objects, and File > Export writes a flat image.
 
-Marquee (M), Lasso (L) and Magic Wand (W) select pixels on a bitmap. Hold Shift to add to the selection, or Alt to subtract. Painting, filling and filters stay inside the selection. Cut, Copy and Delete act on the selected pixels, and Paste adds them as a new bitmap. Ctrl+D or Esc drops the selection.
+Marquee (M), Lasso (L) and Magic Wand (W) select pixels on a bitmap. Hold Shift to add to the selection, or Alt to subtract. Painting, filling and filters stay inside the selection. Cut, Copy and Delete act on the selected pixels, and Paste adds them as a new bitmap. Drag inside the selection with the Pointer, or press the arrow keys, to move the selected pixels; hold Alt to leave a copy behind. Dragging inside it with Marquee or Lasso moves only the selection border, and with Ctrl held it moves the pixels. Ctrl+D or Esc drops the selection.
 
 Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
 
@@ -57,9 +57,9 @@ The Window menu opens and closes every panel, and F4 hides or restores them all.
 - **Optimize**: pick GIF, Animated GIF, JPEG, PNG 8, PNG 24 or PNG 32. The panel estimates the file size, and Export Page uses these settings.
 - **Styles**: click a style to apply it, or to set the colors for the next shape. Styles hold fill, stroke and opacity.
 - **Path**: Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset.
-- **Auto Shapes**: click a tile to insert it, then adjust it in Auto Shape Properties.
+- **Auto Shapes**: drag a tile onto the canvas, or click it to place the shape in the middle of the page, then adjust it in Auto Shape Properties.
 - **Document Library**: New makes a symbol from the selection. Insert places it, Update redefines it from the selection, and Delete removes it.
-- **Common Library**: click an item to add it to the document as a symbol.
+- **Common Library**: drag an item onto the canvas, or click it, to add it to the document as a symbol. Symbols of the Document Library can be dragged onto the canvas too.
 - **Find**: replace text or colors on this page or on all pages.
 - **Color Palette**: click a color to fill with it, or Shift+click for the stroke. It also suggests complementary, analogous and triad colors for the current fill.
 - **Symbol Properties**: rename the selected symbol, see how many copies exist, and break it apart.

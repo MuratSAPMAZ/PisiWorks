@@ -216,6 +216,19 @@ pub struct FieldEdit {
     pub fresh: bool,
 }
 
+/// Something being dragged out of a panel to be dropped on the canvas.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PanelItem {
+    AutoShape(AutoKind),
+    /// An entry of the Common Library, by its place in the list.
+    Common(usize),
+    /// A symbol of the Document Library.
+    Symbol(u64),
+}
+
+/// Screen pixels the pointer may wander during a press that still counts as a click.
+const CLICK_SLOP: f32 = 4.0;
+
 /// What a drag does with the Scale, Skew and Distort tools.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransformKind {
@@ -323,6 +336,11 @@ pub enum Drag {
     /// `pen` marks a press of the Pen on a vertex, which acts as a click if nothing is pulled.
     Handle { id: u64, index: usize, after: bool, fresh: bool, moved: bool, pen: bool },
     Pan { last: Point<Pixels> },
+    /// Dragging a pixel selection. With `pixels` the selected pixels travel with the
+    /// marquee, leaving a hole unless `copy` is set; without it only the marquee moves.
+    /// `before` is the bitmap as the drag found it, `piece` the selected pixels and
+    /// `at` where they sat.
+    Pixels { target: u64, before: Arc<Bitmap>, piece: Bitmap, at: (i64, i64), mask: Arc<Mask>, start: Vec2, pixels: bool, copy: bool },
 }
 
 /// Selected pixels of one bitmap. Edits to that bitmap stay inside the mask.
@@ -369,6 +387,8 @@ pub struct Workspace {
     pub point_selection: Vec<(u64, usize)>,
     /// The open path the Pen is carrying on, which `pen` then holds a copy of.
     pen_resume: Option<u64>,
+    /// A panel item picked up with the mouse, and where it was pressed.
+    pub panel_drag: Option<(PanelItem, Point<Pixels>)>,
     /// A question is on screen. Its buttons sit over the canvas, and a click on one
     /// must not also act on the artwork behind it.
     awaiting_answer: bool,
@@ -378,6 +398,8 @@ pub struct Workspace {
     /// Counts presses of that button, so a hold that ended is not mistaken for one still held.
     tool_hold: u64,
     pub cursor_doc: Vec2,
+    /// Where the pointer is in the window.
+    pub cursor_screen: Point<Pixels>,
     pub focus: FocusHandle,
     pub canvas_bounds: Rc<Cell<Bounds<Pixels>>>,
     pub path: Option<PathBuf>,
@@ -572,10 +594,12 @@ impl Workspace {
             point_selection: Vec::new(),
             pen_resume: None,
             awaiting_answer: false,
+            panel_drag: None,
             transform: None,
             transform_tool: Tool::Scale,
             tool_hold: 0,
             cursor_doc: Vec2::default(),
+            cursor_screen: Point::default(),
             focus: cx.focus_handle(),
             canvas_bounds: Rc::new(Cell::new(Bounds::default())),
             path: None,
@@ -1139,9 +1163,56 @@ impl Workspace {
         }
     }
 
-    pub fn insert_auto_shape(&mut self, kind: AutoKind) {
+    /// Picks up a panel item. It is placed when the mouse is let go: where it is
+    /// dropped on the canvas, or in the middle of the page after a plain click.
+    pub fn begin_panel_drag(&mut self, item: PanelItem, at: Point<Pixels>) {
+        self.panel_drag = Some((item, at));
+    }
+
+    /// The size the item will have on the canvas, for the outline shown while it is dragged.
+    pub fn panel_item_size(&self, item: PanelItem) -> (f32, f32) {
+        match item {
+            PanelItem::AutoShape(_) => (AUTO_SHAPE_SIZE, AUTO_SHAPE_SIZE),
+            PanelItem::Common(index) => common_items()
+                .get(index)
+                .and_then(|entry| entry.objects().iter().map(|o| o.bounds).reduce(Rect::union))
+                .map_or((0.0, 0.0), |b| (b.w, b.h)),
+            PanelItem::Symbol(id) => self.ed.symbol_size(id).unwrap_or((0.0, 0.0)),
+        }
+    }
+
+    /// Whether the pointer is over the canvas with a panel item in hand, and where in the document.
+    pub fn panel_drop_point(&self, at: Point<Pixels>) -> Option<Vec2> {
+        let (_, pressed) = self.panel_drag?;
+        let moved = f32::from(at.x - pressed.x).abs().max(f32::from(at.y - pressed.y).abs()) > CLICK_SLOP;
+        (moved && self.canvas_bounds.get().contains(&at)).then(|| snap(self.view_map().to_doc(at)))
+    }
+
+    /// Lets go of a panel item.
+    fn finish_panel_drag(&mut self, at: Point<Pixels>) {
+        let drop = self.panel_drop_point(at);
+        let Some((item, pressed)) = self.panel_drag.take() else { return };
+        let clicked = f32::from(at.x - pressed.x).abs().max(f32::from(at.y - pressed.y).abs()) <= CLICK_SLOP;
+        let center = match (drop, clicked, item) {
+            (Some(point), _, _) => point,
+            // A click on a symbol of the Document Library only picks it; Insert places it.
+            (None, true, PanelItem::AutoShape(_) | PanelItem::Common(_)) => self.ed.doc.page().rect().center(),
+            _ => return,
+        };
+        match item {
+            PanelItem::AutoShape(kind) => self.insert_auto_shape_at(kind, center),
+            PanelItem::Common(index) => {
+                let Some(entry) = common_items().get(index) else { return };
+                let id = self.ed.add_library_symbol(t(entry.name), &entry.objects());
+                self.symbol_selection = Some(id);
+                self.place_symbol_at(id, center);
+            }
+            PanelItem::Symbol(id) => self.place_symbol_at(id, center),
+        }
+    }
+
+    fn insert_auto_shape_at(&mut self, kind: AutoKind, center: Vec2) {
         let d = kind.defaults();
-        let center = self.ed.doc.page().rect().center();
         let bounds = Rect {
             x: (center.x - AUTO_SHAPE_SIZE / 2.0).round(),
             y: (center.y - AUTO_SHAPE_SIZE / 2.0).round(),
@@ -1153,18 +1224,15 @@ impl Workspace {
     }
 
     pub fn place_symbol(&mut self, id: u64) {
-        if self.ed.place_symbol(id) {
+        self.place_symbol_at(id, self.ed.doc.page().rect().center());
+    }
+
+    fn place_symbol_at(&mut self, id: u64, center: Vec2) {
+        if self.ed.place_symbol_at(id, center) {
             self.ed.commit(t("Insert Symbol"));
         } else {
             self.status = t("All layers are locked").into();
         }
-    }
-
-    pub fn insert_common(&mut self, index: usize) {
-        let Some(item) = common_items().get(index) else { return };
-        let id = self.ed.add_library_symbol(t(item.name), &item.objects());
-        self.symbol_selection = Some(id);
-        self.place_symbol(id);
     }
 
     fn make_symbol(&mut self) {
@@ -1607,7 +1675,7 @@ impl Workspace {
         .detach();
     }
 
-    fn open_file(&mut self, path: PathBuf) {
+    pub fn open_file(&mut self, path: PathBuf) {
         let opened = std::fs::read(&path).map_err(anyhow::Error::from).and_then(|bytes| parse_file(&bytes));
         match opened {
             Ok(Opened::Document(doc)) => {
@@ -1807,6 +1875,9 @@ impl Workspace {
             Tool::Pointer => self.pointer_down(ev, p),
             Tool::Scale | Tool::Skew | Tool::Distort => self.transform_down(ev, p),
             Tool::Subselect => self.subselect_down(p, ev.modifiers.alt, ev.modifiers.shift, window, cx),
+            // A press inside the selection drags the marquee, and with Ctrl the pixels in it.
+            Tool::Marquee | Tool::Lasso
+                if !ev.modifiers.shift && !ev.modifiers.alt && self.pixel_drag_down(p, ev.modifiers.control, false) => {}
             Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
                     self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: selection_mode(ev.modifiers) });
@@ -1854,7 +1925,42 @@ impl Workspace {
         3.0 / self.zoom
     }
 
+    /// Starts dragging the pixel selection if `p` is inside it.
+    fn pixel_drag_down(&mut self, p: Vec2, pixels: bool, copy: bool) -> bool {
+        let Some(selection) = self.active_pixels() else { return false };
+        let (target, mask) = (selection.object, selection.mask.clone());
+        let Some(object) = self.ed.object(target) else { return false };
+        let Shape::Image { bitmap } = &object.shape else { return false };
+        if !object.pixel_at(p).is_some_and(|(x, y)| mask.is_set(x, y)) {
+            return false;
+        }
+        let Some((piece, left, top)) = bitmap.extract(&mask) else { return false };
+        self.drag = Some(Drag::Pixels { target, before: bitmap.clone(), piece, at: (left as i64, top as i64), mask, start: p, pixels, copy });
+        true
+    }
+
+    /// Moves the pixel selection, and the pixels in it if `pixels` is set, by whole pixels of its bitmap.
+    #[allow(clippy::too_many_arguments)]
+    fn move_pixel_selection(&mut self, target: u64, before: &Arc<Bitmap>, piece: &Bitmap, at: (i64, i64), mask: &Arc<Mask>, by: (i64, i64), pixels: bool, copy: bool) {
+        if pixels {
+            let mut moved = (**before).clone();
+            if !copy {
+                moved.clear(mask);
+            }
+            moved.overlay(piece, at.0 + by.0, at.1 + by.1);
+            if let Some(object) = self.ed.object_mut(target) {
+                object.shape = Shape::Image { bitmap: Arc::new(moved) };
+            }
+        }
+        let shifted = mask.shifted(by.0, by.1);
+        self.pixel_sel = Some(PixelSelection { object: target, edges: Arc::new(shifted.edges()), mask: Arc::new(shifted) });
+    }
+
     fn pointer_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        // Inside a pixel selection the Pointer moves the pixels, and Alt leaves a copy behind.
+        if self.tool == Tool::Pointer && self.pixel_drag_down(p, true, ev.modifiers.alt) {
+            return;
+        }
         if let Some(bounds) = self.ed.selection_bounds() {
             if self.ed.selection.len() == 1 {
                 let map = self.view_map();
@@ -2443,8 +2549,9 @@ impl Workspace {
         let map = self.view_map();
         let p = map.to_doc(ev.position);
         self.cursor_doc = p;
+        self.cursor_screen = ev.position;
         let Some(drag) = self.drag.as_mut() else {
-            if !self.pen.is_empty() || self.panel_showing(Panel::Info) {
+            if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() {
                 cx.notify();
             }
             return;
@@ -2582,6 +2689,13 @@ impl Workspace {
                     object.refit_to_points();
                 }
             }
+            Drag::Pixels { target, before, piece, at, mask, start, pixels, copy } => {
+                let (target, at, pixels, copy) = (*target, *at, *pixels, *copy);
+                let scale = self.ed.object(target).and_then(|o| o.pixel_scale()).unwrap_or((1.0, 1.0));
+                let by = (((p.x - start.x) * scale.0).round() as i64, ((p.y - start.y) * scale.1).round() as i64);
+                let (before, piece, mask) = (before.clone(), piece.clone(), mask.clone());
+                self.move_pixel_selection(target, &before, &piece, at, &mask, by, pixels, copy);
+            }
             Drag::PenHandle => {
                 if let (Some(anchor), Some(handles)) = (self.pen.last(), self.pen_handles.last_mut()) {
                     let pull = v2(p.x - anchor.x, p.y - anchor.y);
@@ -2631,13 +2745,23 @@ impl Workspace {
         cx.notify();
     }
 
-    pub fn mouse_up(&mut self, _: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+    pub fn mouse_up(&mut self, ev: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if self.panel_drag.is_some() {
+            self.finish_panel_drag(ev.position);
+            cx.notify();
+            return;
+        }
         let Some(drag) = self.drag.take() else { return };
         match drag {
             Drag::Move { .. } => self.ed.commit(t("Move")),
             Drag::Resize { .. } => self.ed.commit(t("Scale")),
             Drag::Vertex { .. } => self.ed.commit(t("Edit Path")),
             Drag::PenHandle => {}
+            Drag::Pixels { pixels, .. } => {
+                if pixels {
+                    self.ed.commit(t("Move"));
+                }
+            }
             Drag::Handle { id, index, moved: false, pen: true, .. } => self.pen_point_click(id, index),
             Drag::Handle { id, index, fresh, moved, .. } => {
                 // Alt+click without a drag turns the vertex back into a corner.
@@ -2925,6 +3049,19 @@ impl Workspace {
     }
 
     fn nudge(&mut self, dx: f32, dy: f32) {
+        // With a pixel selection the arrow keys move the selected pixels, not the whole bitmap.
+        if let Some(selection) = self.active_pixels() {
+            let (target, mask) = (selection.object, selection.mask.clone());
+            let bitmap = self.ed.object(target).and_then(|o| match &o.shape {
+                Shape::Image { bitmap } => Some(bitmap.clone()),
+                _ => None,
+            });
+            if let Some((before, (piece, left, top))) = bitmap.and_then(|b| b.extract(&mask).map(|piece| (b, piece))) {
+                self.move_pixel_selection(target, &before, &piece, (left as i64, top as i64), &mask, (dx as i64, dy as i64), true, false);
+                self.ed.commit(t("Move"));
+                return;
+            }
+        }
         if !self.ed.selection.is_empty() {
             self.ed.for_selected(|o| o.translate(dx, dy));
             self.ed.commit(t("Move"));

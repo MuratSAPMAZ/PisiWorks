@@ -99,6 +99,19 @@ impl Mask {
         mask
     }
 
+    /// The mask moved by whole pixels. What is pushed past an edge is lost.
+    pub fn shifted(&self, dx: i64, dy: i64) -> Mask {
+        let mut moved = Self::empty(self.width, self.height);
+        for y in 0..self.height as i64 {
+            for x in 0..self.width as i64 {
+                if self.get(x - dx, y - dy) {
+                    moved.cells[y as usize * self.width as usize + x as usize] = true;
+                }
+            }
+        }
+        moved
+    }
+
     pub fn fits(&self, bitmap: &Bitmap) -> bool {
         self.width == bitmap.width && self.height == bitmap.height
     }
@@ -417,6 +430,33 @@ impl Bitmap {
         if mask.fits(self) {
             for (px, _) in self.rgba.chunks_exact_mut(4).zip(&mask.cells).filter(|(_, set)| **set) {
                 px.fill(0);
+            }
+        }
+    }
+
+    /// Lays `piece` over this bitmap with its top-left corner at (`x`, `y`). The
+    /// part of it that falls outside is dropped, and its transparent pixels show
+    /// what is underneath.
+    pub fn overlay(&mut self, piece: &Bitmap, x: i64, y: i64) {
+        for py in 0..piece.height as i64 {
+            for px in 0..piece.width as i64 {
+                let (tx, ty) = (x + px, y + py);
+                if tx < 0 || ty < 0 || tx >= self.width as i64 || ty >= self.height as i64 {
+                    continue;
+                }
+                let from = (py as usize * piece.width as usize + px as usize) * 4;
+                let alpha = piece.rgba[from + 3] as f32 / 255.0;
+                if alpha <= 0.0 {
+                    continue;
+                }
+                let to = self.index(tx as u32, ty as u32);
+                let under = self.rgba[to + 3] as f32 / 255.0;
+                let out = alpha + under * (1.0 - alpha);
+                for channel in 0..3 {
+                    let mixed = (piece.rgba[from + channel] as f32 * alpha + self.rgba[to + channel] as f32 * under * (1.0 - alpha)) / out;
+                    self.rgba[to + channel] = mixed.round() as u8;
+                }
+                self.rgba[to + 3] = (out * 255.0).round() as u8;
             }
         }
     }
@@ -811,6 +851,31 @@ mod tests {
         b.apply_filter(Filter::Grayscale);
         let p = b.pixel(0, 0).unwrap();
         assert!(p[0] == p[1] && p[1] == p[2] && p[3] == 77);
+    }
+
+    #[test]
+    fn a_mask_moves_by_whole_pixels_and_loses_what_leaves_the_image() {
+        let mask = Mask::rect(4, 4, v2(0.0, 0.0), v2(2.0, 2.0));
+        let moved = mask.shifted(1, 2);
+        assert!(moved.is_set(1, 2) && moved.is_set(2, 3) && !moved.is_set(0, 0) && !moved.is_set(3, 3));
+        assert!(mask.shifted(3, 0).is_set(3, 1) && !mask.shifted(3, 0).is_set(2, 1));
+        assert!(mask.shifted(-5, 0).is_empty());
+    }
+
+    #[test]
+    fn overlay_blends_over_what_is_there_and_ignores_what_falls_outside() {
+        let mut base = Bitmap::from_rgba(2, 1, vec![0, 0, 255, 255, 0, 0, 0, 0]).unwrap();
+        // An opaque red pixel and a transparent one, placed one pixel to the right.
+        let piece = Bitmap::from_rgba(2, 1, vec![255, 0, 0, 255, 9, 9, 9, 0]).unwrap();
+        base.overlay(&piece, 1, 0);
+        assert_eq!(base.pixel(0, 0), Some([0, 0, 255, 255]));
+        assert_eq!(base.pixel(1, 0), Some([255, 0, 0, 255]));
+        // Half-transparent white over opaque blue is a lighter blue, still opaque.
+        let mut base = Bitmap::from_rgba(1, 1, vec![0, 0, 255, 255]).unwrap();
+        base.overlay(&Bitmap::from_rgba(1, 1, vec![255, 255, 255, 128]).unwrap(), 0, 0);
+        let [r, g, b, a] = base.pixel(0, 0).unwrap();
+        assert!((r as i32 - 128).abs() <= 1 && r == g && b == 255 && a == 255, "{r} {g} {b} {a}");
+        base.overlay(&piece, -5, 3);
     }
 
     #[test]

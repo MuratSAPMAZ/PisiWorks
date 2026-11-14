@@ -24,7 +24,7 @@ Kırp aracıyla sürükleyin, ardından uygulamak için Enter'a basın veya çif
 
 Kaydet, açılan görüntünün üzerine hiçbir zaman yazmaz. Nesnelerinizi koruyan bir `.ember` belgesi oluşturur; Dosya > Dışa Aktar ise düz bir görüntü yazar.
 
-Seçim Çerçevesi (M), Kement (L) ve Sihirli Değnek (W) bir bitmap üzerinde piksel seçer. Seçime eklemek için Shift'i, seçimden çıkarmak için Alt'ı basılı tutun. Boyama, doldurma ve filtreler seçimin içinde kalır. Kes, Kopyala ve Sil seçili piksellere uygulanır; Yapıştır bunları yeni bir bitmap olarak ekler. Ctrl+D veya Esc seçimi kaldırır.
+Seçim Çerçevesi (M), Kement (L) ve Sihirli Değnek (W) bir bitmap üzerinde piksel seçer. Seçime eklemek için Shift'i, seçimden çıkarmak için Alt'ı basılı tutun. Boyama, doldurma ve filtreler seçimin içinde kalır. Kes, Kopyala ve Sil seçili piksellere uygulanır; Yapıştır bunları yeni bir bitmap olarak ekler. Seçili pikselleri taşımak için İşaretçi ile seçimin içinden sürükleyin veya ok tuşlarına basın; geride bir kopya bırakmak için Alt'ı basılı tutun. Seçim Çerçevesi veya Kement ile seçimin içinden sürüklemek yalnızca seçim sınırını taşır; Ctrl basılıyken pikselleri taşır. Ctrl+D veya Esc seçimi kaldırır.
 
 Lastik Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından oradan klonlamak için sürükleyin.
 
@@ -59,9 +59,9 @@ Pencere menüsü her paneli açıp kapatır; F4 hepsini gizler veya geri getirir
 - **En İyileştir**: GIF, Animasyonlu GIF, JPEG, PNG 8, PNG 24 veya PNG 32 seçin. Panel dosya boyutunu tahmin eder; dışa aktarma bu ayarları kullanır.
 - **Stiller**: uygulamak veya sonraki şeklin renklerini ayarlamak için bir stile tıklayın. Stiller dolgu, kontur ve opaklık bilgisini tutar.
 - **Yol**: Topla, Kesiştir, Zımbala, Kırp, Birleştir, Böl, Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet.
-- **Otomatik Şekiller**: eklemek için bir kutucuğa tıklayın, ardından Otomatik Şekil Özellikleri panelinde ayarlayın.
+- **Otomatik Şekiller**: bir kutucuğu tuvale sürükleyin veya şekli sayfanın ortasına yerleştirmek için tıklayın; ardından Otomatik Şekil Özellikleri panelinde ayarlayın.
 - **Belge Kitaplığı**: Yeni, seçimden bir sembol oluşturur. Ekle sembolü yerleştirir, Güncelle onu seçimden yeniden tanımlar, Sil kaldırır.
-- **Ortak Kitaplık**: bir öğeyi belgeye sembol olarak eklemek için tıklayın.
+- **Ortak Kitaplık**: bir öğeyi belgeye sembol olarak eklemek için tuvale sürükleyin veya tıklayın. Belge Kitaplığı'ndaki semboller de tuvale sürüklenebilir.
 - **Bul**: bu sayfada veya tüm sayfalarda metin ya da renk değiştirin.
 - **Renk Paleti**: bir renkle doldurmak için tıklayın, kontur için Shift+tıklayın. Geçerli dolgu için tamamlayıcı, benzeşik ve üçlü renkler de önerir.
 - **Sembol Özellikleri**: seçili sembolü yeniden adlandırın, kaç kopyası olduğunu görün ve sembolü ayırın.
