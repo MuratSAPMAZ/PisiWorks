@@ -30,9 +30,14 @@ Klonlama Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından orad
 
 Ölçekle (Q), seçili her şeyi tutamaçlarından yeniden boyutlandırır. Shift'i basılı tutmadığınız sürece köşeler oranları korur.
 
-Aynı araç döndürür, eğer ve çarpıtır. Döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun. Eğmek için bir kenar tutamacını, tek bir köşeyi oynatmak için bir köşe tutamacını Ctrl ile sürükleyin. Değiştir > Dönüştür > Serbest Dönüştürme (Ctrl+T) bu aracı seçer.
+Eğ ve Çarpıt araçları Ölçekle'nin yanındadır; Q'ya yeniden basmak üçü arasında sırayla geçer. Üçünde de döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun.
 
-Dikdörtgenler ve elipsler bu şekilde dönüştürüldüğünde yola çevrilir, bitmap'ler yeniden çizilir. Metin harflerinin yollarına dönüşür; bu yüzden önce metni düzenlemeyi bitirin. Metin > Yollara Dönüştür aynı işi tek başına yapar. Semboller ve web alanları olduğu gibi kalır: sembol için önce Değiştir > Sembol > Ayır komutunu kullanın.
+- **Eğ**: seçimi yatırmak için bir kenar tutamacını, perspektif için bir köşe tutamacını sürükleyin; perspektifte köşe ile komşusu birbirinden uzaklaşır veya birbirine yaklaşır.
+- **Çarpıt**: yalnızca bir köşeyi oynatmak için köşe tutamacını, bütün bir kenarı taşımak için kenar tutamacını sürükleyin.
+
+Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Dönüşüm, fareyi bıraktığınızda uygulanır.
+
+Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol de kitaplığa bağlı kalır. Değiştir > Dönüştür > Dönüşümleri Kaldır ikisini de yeniden dik hale getirir. Dikdörtgenler ve elipsler yola çevrilir, bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
 
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 

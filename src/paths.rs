@@ -283,6 +283,7 @@ mod tests {
             bounds: Rect { x, y, w, h },
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: Some(Color::rgb(10, 20, 30)),
             stroke: Some(Stroke { color: Color::BLACK, width: 4.0 }),
             opacity: 1.0,

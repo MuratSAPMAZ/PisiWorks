@@ -190,6 +190,9 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
     if !object.visible || object.is_web() {
         return;
     }
+    if let Some(paths) = object.placed_text_paths() {
+        return draw_object(pixmap, &paths);
+    }
     if object.is_instance() {
         for part in object.instance_parts() {
             draw_object(pixmap, &part);
@@ -362,6 +365,7 @@ mod tests {
             bounds: Rect { x, y: 0.0, w, h: 40.0 },
             points: vec![],
             handles: Vec::new(),
+            placement: None,
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
             opacity: 1.0,

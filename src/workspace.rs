@@ -167,31 +167,33 @@ pub struct FieldEdit {
     pub fresh: bool,
 }
 
-/// The free transforms of the Scale tool.
+/// What dragging does with the Scale, Skew and Distort tools.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WarpKind {
-    /// Dragging outside the selection box turns it around its center.
+    /// Any of the three tools, dragging outside the selection box: turn around its center.
     Rotate,
-    /// Ctrl+dragging a side handle slides that side along itself.
+    /// Skew tool, a side handle: that side slides along itself.
     Skew,
-    /// Ctrl+dragging a corner handle moves that corner alone.
+    /// Skew tool, a corner handle: the corner and its neighbour move apart or together.
+    Perspective,
+    /// Distort tool, a corner handle: that corner moves alone.
     Distort,
+    /// Distort tool, a side handle: both corners of that side move.
+    DistortSide,
 }
 
 impl WarpKind {
     fn label(self) -> &'static str {
         match self {
             WarpKind::Rotate => t("Rotate"),
-            WarpKind::Skew => t("Skew"),
-            WarpKind::Distort => t("Distort"),
+            WarpKind::Skew | WarpKind::Perspective => t("Skew"),
+            WarpKind::Distort | WarpKind::DistortSide => t("Distort"),
         }
     }
 }
 
 /// Rotation with Shift held snaps to steps of this many degrees.
 const ROTATE_STEP_DEGREES: f32 = 15.0;
-const SCALE_TOOL_HINT: &str =
-    "Drag a handle to scale, or outside the box to rotate. Ctrl+drag a side to skew, a corner to distort.";
 
 pub enum Drag {
     Move { last: Vec2 },
@@ -204,9 +206,9 @@ pub enum Drag {
     /// A Marquee or Lasso drag. Marquee keeps just the two corners.
     PixelArea { target: u64, points: Vec<Vec2>, mode: MaskMode },
     Scale { handle: usize, origin: Rect, originals: Vec<Object> },
-    /// `originals` are the objects as the drag found them, with text already turned
-    /// into paths, so every move starts again from the untouched artwork.
-    Warp { kind: WarpKind, handle: usize, start: Vec2, origin: Rect, originals: Vec<Object>, text: bool, moved: bool },
+    /// `originals` are the objects as the drag found them, so every move starts
+    /// again from the untouched artwork.
+    Warp { kind: WarpKind, handle: usize, start: Vec2, origin: Rect, originals: Vec<Object>, moved: bool },
     Freeform { id: u64, start: Vec2, base: Vec<Vec2>, radius: f32 },
     Vertex { id: u64, index: usize },
     /// Pulling the curve handles out of the vertex the Pen just placed.
@@ -385,9 +387,12 @@ fn scale_object(original: &Object, origin: Rect, target: Rect) -> Object {
         w: b.w * sx,
         h: b.h * sy,
     });
-    if let Shape::Text { content, size } = &mut object.shape {
-        *size = (*size * sy).max(1.0);
-        (object.bounds.w, object.bounds.h) = measure_text(content, *size);
+    // Transformed text is scaled through its placement, which set_bounds has already done.
+    if object.placement.is_none() {
+        if let Shape::Text { size, .. } = &mut object.shape {
+            *size = (*size * sy).max(1.0);
+            object.refit_text();
+        }
     }
     object
 }
@@ -578,8 +583,14 @@ impl Workspace {
         self.finish_pending();
         self.crop_area = None;
         self.tool = tool;
-        if tool == Tool::Scale {
-            self.status = t(SCALE_TOOL_HINT).into();
+        let hint = match tool {
+            Tool::Scale => Some(t("Drag a handle to scale, or outside the box to rotate.")),
+            Tool::Skew => Some(t("Drag a side to skew or a corner for perspective, or outside the box to rotate.")),
+            Tool::Distort => Some(t("Drag a handle to distort, or outside the box to rotate.")),
+            _ => None,
+        };
+        if let Some(hint) = hint {
+            self.status = hint.into();
         }
     }
 
@@ -1012,9 +1023,9 @@ impl Workspace {
                     if let Some(stroke) = object.stroke.as_mut().filter(|s| s.color == from) {
                         stroke.color = to;
                     }
-                } else if let Shape::Text { content, size } = &mut object.shape {
+                } else if let Shape::Text { content, .. } = &mut object.shape {
                     *content = content.replace(&find, &change);
-                    (object.bounds.w, object.bounds.h) = measure_text(content, *size);
+                    object.refit_text();
                 }
             }
         }
@@ -1031,9 +1042,9 @@ impl Workspace {
         }
         let mut changed = false;
         self.ed.for_selected(|o| {
-            if let Shape::Text { content, size } = &mut o.shape {
+            if let Shape::Text { content, .. } = &mut o.shape {
                 content.push(ch);
-                (o.bounds.w, o.bounds.h) = measure_text(content, *size);
+                o.refit_text();
                 changed = true;
             }
         });
@@ -1070,6 +1081,8 @@ impl Workspace {
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
+            Cmd::Rotate180 => has_selection,
+            Cmd::RemoveTransform => self.ed.selected().iter().any(|o| o.placement.is_some()),
             Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
@@ -1195,12 +1208,23 @@ impl Workspace {
                 self.ed.commit(t("Ungroup"));
             }
             Cmd::Rotate { clockwise } => {
-                let text = self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. }));
                 let skipped = self.ed.rotate_selected(clockwise);
                 self.ed.commit(t("Rotate"));
-                self.report_transform(skipped, text);
+                self.report_transform(skipped);
+            }
+            Cmd::Rotate180 => {
+                let skipped = self.ed.rotate_selected(true).max(self.ed.rotate_selected(true));
+                self.ed.commit(t("Rotate"));
+                self.report_transform(skipped);
+            }
+            Cmd::RemoveTransform => {
+                self.ed.for_selected(|o| {
+                    o.remove_transform();
+                });
+                self.ed.commit(t("Remove Transformations"));
             }
             Cmd::FreeTransform => self.set_tool(Tool::Scale),
+            Cmd::SelectTool(tool) => self.set_tool(tool),
             Cmd::TextToPaths => {
                 self.ed.for_selected(|o| {
                     o.text_to_paths();
@@ -1519,7 +1543,7 @@ impl Workspace {
         }
         match tool {
             Tool::Pointer => self.pointer_down(ev, p),
-            Tool::Scale => self.scale_down(ev, p),
+            Tool::Scale | Tool::Skew | Tool::Distort => self.scale_down(ev, p),
             Tool::Subselect => self.subselect_down(p, ev.modifiers.alt),
             Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
@@ -1605,13 +1629,15 @@ impl Workspace {
         if let Some(origin) = self.ed.selection_bounds() {
             let map = self.view_map();
             if let Some(handle) = handle_rects(origin, map).iter().position(|r| r.contains(&ev.position)) {
-                if ev.modifiers.control {
-                    // Handles run clockwise from the top-left, so the corners are the even ones.
-                    let kind = if handle % 2 == 0 { WarpKind::Distort } else { WarpKind::Skew };
-                    self.begin_warp(kind, handle, p, origin);
-                } else {
-                    let originals = self.ed.selected().into_iter().cloned().collect();
-                    self.drag = Some(Drag::Scale { handle, origin, originals });
+                // Handles run clockwise from the top-left, so the corners are the even ones.
+                let corner = handle % 2 == 0;
+                match self.tool {
+                    Tool::Skew => self.begin_warp(if corner { WarpKind::Perspective } else { WarpKind::Skew }, handle, p, origin),
+                    Tool::Distort => self.begin_warp(if corner { WarpKind::Distort } else { WarpKind::DistortSide }, handle, p, origin),
+                    _ => {
+                        let originals = self.ed.selected().into_iter().cloned().collect();
+                        self.drag = Some(Drag::Scale { handle, origin, originals });
+                    }
                 }
                 return;
             }
@@ -1625,29 +1651,14 @@ impl Workspace {
     }
 
     fn begin_warp(&mut self, kind: WarpKind, handle: usize, start: Vec2, origin: Rect) {
-        let mut text = false;
-        let originals = self
-            .ed
-            .selected()
-            .into_iter()
-            .map(|object| {
-                let mut object = object.clone();
-                // Done once here, not on every move of the pointer.
-                if matches!(object.shape, Shape::Text { .. }) {
-                    text |= object.text_to_paths();
-                }
-                object
-            })
-            .collect();
-        self.drag = Some(Drag::Warp { kind, handle, start, origin, originals, text, moved: false });
+        let originals = self.ed.selected().into_iter().cloned().collect();
+        self.drag = Some(Drag::Warp { kind, handle, start, origin, originals, moved: false });
     }
 
-    /// Tells the user what a transform left alone or had to change to do its work.
-    fn report_transform(&mut self, skipped: usize, text: bool) {
+    /// Tells the user what a transform had to leave alone.
+    fn report_transform(&mut self, skipped: usize) {
         if skipped > 0 {
-            self.status = tf("{} symbol or web object(s) could not be transformed", &[&skipped]);
-        } else if text {
-            self.status = t("Text was converted to paths so it could be transformed").into();
+            self.status = tf("{} web object(s) could not be transformed", &[&skipped]);
         }
     }
 
@@ -1825,6 +1836,7 @@ impl Workspace {
             bounds,
             points,
             handles: Vec::new(),
+            placement: None,
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
             opacity: 1.0,
@@ -1894,11 +1906,9 @@ impl Workspace {
     fn edit_text(&mut self, edit: impl FnOnce(&mut String)) {
         let Some(id) = self.text_edit else { return };
         let Some(object) = self.ed.object_mut(id) else { return };
-        if let Shape::Text { content, size } = &mut object.shape {
+        if let Shape::Text { content, .. } = &mut object.shape {
             edit(content);
-            let (w, h) = measure_text(content, *size);
-            object.bounds.w = w;
-            object.bounds.h = h;
+            object.refit_text();
         }
     }
 
@@ -1975,10 +1985,30 @@ impl Workspace {
                         3 => (origin.w > 0.0).then(|| Warp::shear_y(origin.x, (p.y - start.y) / origin.w)),
                         _ => (origin.w > 0.0).then(|| Warp::shear_y(origin.right(), (p.y - start.y) / -origin.w)),
                     },
-                    WarpKind::Distort => {
+                    WarpKind::Perspective | WarpKind::Distort | WarpKind::DistortSide => {
+                        // Corners run clockwise from the top-left, as the handles do.
                         let mut corners =
                             [v2(origin.x, origin.y), v2(origin.right(), origin.y), v2(origin.right(), origin.bottom()), v2(origin.x, origin.bottom())];
-                        corners[*handle / 2] = p;
+                        let (dx, dy) = (p.x - start.x, p.y - start.y);
+                        let corner = *handle / 2;
+                        match kind {
+                            WarpKind::Distort => corners[corner] = p,
+                            WarpKind::DistortSide => {
+                                for index in [corner, (corner + 1) % 4] {
+                                    corners[index] = v2(corners[index].x + dx, corners[index].y + dy);
+                                }
+                            }
+                            // The neighbour along the dragged direction mirrors the corner,
+                            // so that side of the box grows or shrinks about its middle.
+                            _ if dx.abs() >= dy.abs() => {
+                                corners[corner].x += dx;
+                                corners[[1, 0, 3, 2][corner]].x -= dx;
+                            }
+                            _ => {
+                                corners[corner].y += dy;
+                                corners[[3, 2, 1, 0][corner]].y -= dy;
+                            }
+                        }
                         Warp::quad(origin, corners)
                     }
                 };
@@ -2097,11 +2127,11 @@ impl Workspace {
             Drag::Crop { start, current } => self.finish_crop_drag(start, current),
             Drag::PixelArea { target, points, mode } => self.finish_pixel_area(target, points, mode),
             Drag::Scale { .. } => self.ed.commit(t("Scale")),
-            Drag::Warp { kind, originals, text, moved, .. } => {
+            Drag::Warp { kind, originals, moved, .. } => {
                 if moved {
                     self.ed.commit(kind.label());
                     let skipped = originals.iter().filter(|o| !o.warpable()).count();
-                    self.report_transform(skipped, text);
+                    self.report_transform(skipped);
                 }
             }
             Drag::Freeform { .. } => self.ed.commit(t("Freeform")),
@@ -2295,7 +2325,12 @@ impl Workspace {
             "r" => Some(if self.tool == Tool::Rect { Tool::Blur } else { Tool::Rect }),
             "e" => Some(Tool::Eraser),
             "c" => Some(Tool::Crop),
-            "q" => Some(Tool::Scale),
+            // Q walks through the three transform tools, as it does in Fireworks.
+            "q" => Some(match self.tool {
+                Tool::Scale => Tool::Skew,
+                Tool::Skew => Tool::Distort,
+                _ => Tool::Scale,
+            }),
             "m" => Some(Tool::Marquee),
             "l" => Some(Tool::Lasso),
             "w" => Some(Tool::Wand),
@@ -2505,11 +2540,9 @@ impl Workspace {
             FieldId::TextSize => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
                 self.ed.for_selected(|o| {
-                    if let Shape::Text { content, size } = &mut o.shape {
+                    if let Shape::Text { size, .. } = &mut o.shape {
                         *size = v;
-                        let (w, h) = measure_text(content, v);
-                        o.bounds.w = w;
-                        o.bounds.h = h;
+                        o.refit_text();
                     }
                 });
                 self.ed.commit(t("Text Size"));

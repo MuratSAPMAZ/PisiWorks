@@ -85,13 +85,68 @@ impl Handles {
 
 /// A projective map of the plane. Turning, slanting and pulling one corner of a box are
 /// all cases of it, so one type carries every free transform.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Warp {
     /// A 3x3 matrix, row by row.
     m: [f32; 9],
 }
 
+/// How a text or symbol object that has been freely transformed is drawn. The object
+/// itself is unchanged, so text stays text and a symbol stays linked to its library entry.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Placement {
+    /// The box the object is laid out in, as it was before any transform.
+    pub frame: Rect,
+    /// Carries that box, and everything drawn in it, to where it shows in the document.
+    pub warp: Warp,
+}
+
+impl Placement {
+    /// The upright box around the transformed frame, which is the object's `bounds`.
+    pub fn bounds(&self) -> Rect {
+        let f = self.frame;
+        Rect::of_points(&[v2(f.x, f.y), v2(f.right(), f.y), v2(f.right(), f.bottom()), v2(f.x, f.bottom())].map(|p| self.warp.apply(p)))
+    }
+}
+
 impl Warp {
+    pub fn identity() -> Self {
+        Self { m: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] }
+    }
+
+    pub fn translation(dx: f32, dy: f32) -> Self {
+        Self { m: [1.0, 0.0, dx, 0.0, 1.0, dy, 0.0, 0.0, 1.0] }
+    }
+
+    /// Moves and stretches the rectangle `from` onto `to`. A side of no length is left unscaled.
+    pub fn fit(from: Rect, to: Rect) -> Self {
+        let sx = if from.w > 0.0 { to.w / from.w } else { 1.0 };
+        let sy = if from.h > 0.0 { to.h / from.h } else { 1.0 };
+        Self { m: [sx, 0.0, to.x - from.x * sx, 0.0, sy, to.y - from.y * sy, 0.0, 0.0, 1.0] }
+    }
+
+    /// An exact quarter turn around `center`, with none of the rounding a turn by an angle has.
+    pub fn quarter_turn(center: Vec2, clockwise: bool) -> Self {
+        let (cx, cy) = (center.x, center.y);
+        if clockwise {
+            Self { m: [0.0, -1.0, cx + cy, 1.0, 0.0, cy - cx, 0.0, 0.0, 1.0] }
+        } else {
+            Self { m: [0.0, 1.0, cx - cy, -1.0, 0.0, cy + cx, 0.0, 0.0, 1.0] }
+        }
+    }
+
+    /// This map followed by `next`.
+    pub fn then(&self, next: &Warp) -> Self {
+        let (a, b) = (&next.m, &self.m);
+        let mut m = [0.0; 9];
+        for row in 0..3 {
+            for column in 0..3 {
+                m[row * 3 + column] = (0..3).map(|k| a[row * 3 + k] * b[k * 3 + column]).sum();
+            }
+        }
+        Self { m }
+    }
+
     /// Turns around `center`. Positive angles turn clockwise on screen, where y grows downward.
     pub fn rotation(center: Vec2, radians: f32) -> Self {
         let (s, c) = radians.sin_cos();
@@ -346,6 +401,10 @@ pub struct Object {
     /// is also how files written before curves existed read.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub handles: Vec<Handles>,
+    /// Set on text and symbols that have been rotated, skewed or distorted. `bounds`
+    /// is then the upright box around the result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<Placement>,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     /// 0.0 to 1.0.
@@ -375,6 +434,7 @@ impl Object {
             shape: Shape::Image { bitmap: Arc::new(bitmap) },
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -394,6 +454,7 @@ impl Object {
             shape: Shape::Web { kind, url: String::new() },
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -428,25 +489,34 @@ impl Object {
     pub fn instance_parts(&self) -> Vec<Object> {
         let (Shape::Instance { objects, .. } | Shape::Group { objects }) = &self.shape else { return Vec::new() };
         let Some(natural) = objects.iter().map(|o| o.bounds).reduce(Rect::union) else { return Vec::new() };
-        let sx = if natural.w > 0.0 { self.bounds.w / natural.w } else { 1.0 };
-        let sy = if natural.h > 0.0 { self.bounds.h / natural.h } else { 1.0 };
+        // A transformed symbol is fitted to its untouched frame, then its parts are transformed.
+        let frame = self.placement.map_or(self.bounds, |p| p.frame);
+        let sx = if natural.w > 0.0 { frame.w / natural.w } else { 1.0 };
+        let sy = if natural.h > 0.0 { frame.h / natural.h } else { 1.0 };
         objects
             .iter()
             .map(|part| {
                 let mut part = part.clone();
                 let b = part.bounds;
+                // Text that carries a placement is scaled through it, not through its size.
+                let plain_text = part.placement.is_none();
                 part.set_bounds(Rect {
-                    x: self.bounds.x + (b.x - natural.x) * sx,
-                    y: self.bounds.y + (b.y - natural.y) * sy,
+                    x: frame.x + (b.x - natural.x) * sx,
+                    y: frame.y + (b.y - natural.y) * sy,
                     w: b.w * sx,
                     h: b.h * sy,
                 });
                 part.opacity *= self.opacity;
                 if let Shape::Text { size, .. } = &mut part.shape {
-                    *size *= sy;
+                    if plain_text {
+                        *size *= sy;
+                    }
                 }
                 if let Some(stroke) = &mut part.stroke {
                     stroke.width *= (sx + sy) / 2.0;
+                }
+                if let Some(placement) = &self.placement {
+                    part.warp(&placement.warp);
                 }
                 part
             })
@@ -544,7 +614,8 @@ impl Object {
     /// reshaped like any other artwork. Returns false if the text draws nothing.
     pub fn text_to_paths(&mut self) -> bool {
         let Shape::Text { content, size } = &self.shape else { return false };
-        let glyphs = crate::export::glyph_outlines(content, *size, v2(self.bounds.x, self.bounds.y));
+        let frame = self.placement.map_or(self.bounds, |p| p.frame);
+        let glyphs = crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y));
         let parts: Vec<Object> = glyphs
             .into_iter()
             .filter_map(|mut rings| {
@@ -560,6 +631,7 @@ impl Object {
                     bounds: Rect::of_points(&points),
                     points,
                     handles: Vec::new(),
+                    placement: None,
                     fill: self.fill,
                     stroke: None,
                     opacity: 1.0,
@@ -571,27 +643,69 @@ impl Object {
         let Some(bounds) = parts.iter().map(|part| part.bounds).reduce(Rect::union) else { return false };
         self.bounds = bounds;
         self.shape = Shape::Group { objects: Arc::new(parts) };
+        // The letters were laid out upright, so a transform the text carried is applied to them now.
+        match self.placement.take() {
+            Some(placement) => self.warp(&placement.warp),
+            None => true,
+        }
+    }
+
+    /// Transformed text as the paths that draw it, or `None` for text that is still upright.
+    pub fn placed_text_paths(&self) -> Option<Object> {
+        if self.placement.is_none() || !matches!(self.shape, Shape::Text { .. }) {
+            return None;
+        }
+        let mut paths = self.clone();
+        paths.text_to_paths().then_some(paths)
+    }
+
+    /// Sizes a text object to its content, after the text or its size has changed.
+    pub fn refit_text(&mut self) {
+        let Shape::Text { content, size } = &self.shape else { return };
+        let (w, h) = crate::export::measure_text(content, *size);
+        match &mut self.placement {
+            Some(placement) => {
+                (placement.frame.w, placement.frame.h) = (w, h);
+                self.bounds = placement.bounds();
+            }
+            None => (self.bounds.w, self.bounds.h) = (w, h),
+        }
+    }
+
+    /// Undoes every rotation, skew and distortion of a text or symbol object,
+    /// leaving it upright around the same center.
+    pub fn remove_transform(&mut self) -> bool {
+        let Some(placement) = self.placement.take() else { return false };
+        let (center, frame) = (self.bounds.center(), placement.frame);
+        self.bounds = Rect { x: center.x - frame.w / 2.0, y: center.y - frame.h / 2.0, ..frame };
         true
     }
 
-    /// Whether a free transform can reshape this object. Symbols and web areas cannot take one.
+    /// Whether a free transform can reshape this object. Web areas cannot take one.
     pub fn warpable(&self) -> bool {
         match &self.shape {
-            Shape::Instance { .. } | Shape::Web { .. } => false,
+            Shape::Web { .. } => false,
             Shape::Group { objects } => objects.iter().all(Object::warpable),
             _ => true,
         }
     }
 
     /// Applies a free transform: a rotation, a skew or a distortion. Shapes become
-    /// paths, bitmaps are redrawn and text becomes paths. Returns false, leaving the
-    /// object as it was, when it cannot be transformed.
+    /// paths and bitmaps are redrawn. Text and symbols only record the transform, so
+    /// text can still be edited and a symbol still follows its library entry. Returns
+    /// false, leaving the object as it was, when it cannot be transformed.
     pub fn warp(&mut self, warp: &Warp) -> bool {
         if !self.warpable() {
             return false;
         }
         match &self.shape {
-            Shape::Text { .. } => return self.text_to_paths() && self.warp(warp),
+            Shape::Text { .. } | Shape::Instance { .. } => {
+                let mut placement = self.placement.unwrap_or(Placement { frame: self.bounds, warp: Warp::identity() });
+                placement.warp = placement.warp.then(warp);
+                self.bounds = placement.bounds();
+                self.placement = Some(placement);
+                return true;
+            }
             Shape::Group { .. } => {
                 let mut parts = self.instance_parts();
                 if !parts.iter_mut().all(|part| part.warp(warp)) {
@@ -795,6 +909,9 @@ impl Object {
             p.x += dx;
             p.y += dy;
         }
+        if let Some(placement) = &mut self.placement {
+            placement.warp = placement.warp.then(&Warp::translation(dx, dy));
+        }
     }
 
     /// Moves or scales the object into `target`, carrying its vertices along.
@@ -808,6 +925,9 @@ impl Object {
         }
         for h in &mut self.handles {
             *h = h.map(|v| v2(v.x * sx, v.y * sy));
+        }
+        if let Some(placement) = &mut self.placement {
+            placement.warp = placement.warp.then(&Warp::fit(old, target));
         }
         self.bounds = target;
     }
@@ -839,9 +959,7 @@ impl Object {
             if clockwise { v2(center.x - dy, center.y + dx) } else { v2(center.x + dy, center.y - dx) }
         };
         match self.shape {
-            Shape::Instance { .. } => return false,
-            // Text cannot be drawn turned, so it turns as the paths of its letters.
-            Shape::Text { .. } => return self.text_to_paths() && self.rotate90(clockwise, center),
+            Shape::Text { .. } | Shape::Instance { .. } => return self.warp(&Warp::quarter_turn(center, clockwise)),
             Shape::Group { .. } => {
                 let mut parts = self.instance_parts();
                 if !parts.iter_mut().all(|part| part.rotate90(clockwise, center)) {
@@ -2054,6 +2172,7 @@ impl Editor {
             bounds,
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2135,6 +2254,7 @@ impl Editor {
             bounds,
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2284,13 +2404,14 @@ mod tests {
     }
 
     #[test]
-    fn empty_text_does_not_rotate() {
-        // Text turns as the paths of its letters, and blank text has none.
-        let mut text = rect(1, 0.0, 0.0, 10.0, 10.0);
-        text.shape = Shape::Text { content: " ".into(), size: 12.0 };
-        let before = text.clone();
-        assert!(!text.rotate90(true, v2(0.0, 0.0)));
-        assert_eq!(text, before);
+    fn text_stays_text_when_it_turns() {
+        let mut text = rect(1, 0.0, 0.0, 40.0, 10.0);
+        text.shape = Shape::Text { content: "a".into(), size: 12.0 };
+        assert!(text.rotate90(true, v2(0.0, 0.0)));
+        assert!(matches!(&text.shape, Shape::Text { content, .. } if content == "a"));
+        // A quarter turn clockwise around the origin stands the box on its end, left of the origin.
+        assert_eq!(text.bounds, Rect { x: -10.0, y: 0.0, w: 10.0, h: 40.0 });
+        assert_eq!(text.placement.unwrap().frame, Rect { x: 0.0, y: 0.0, w: 40.0, h: 10.0 });
     }
 
     #[test]
@@ -2336,6 +2457,7 @@ mod tests {
             bounds: Rect { x, y, w, h },
             points: vec![],
             handles: Vec::new(),
+            placement: None,
             fill: Some(Color::BLACK),
             stroke: None,
             opacity: 1.0,
@@ -3105,12 +3227,115 @@ mod tests {
         assert_eq!(contours(&parts[0].outline()).len(), 2, "an outer ring and the hole");
         let center = parts[0].bounds.center();
         assert!(!parts[0].hit(center, 0.5), "the middle of the letter is empty");
-        // Paths can turn, which text could not.
-        let mut turned = rect(2, 10.0, 10.0, 60.0, 120.0);
-        turned.shape = Shape::Text { content: "o".into(), size: 100.0 };
-        turned.fill = Some(Color::BLACK);
-        assert!(turned.rotate90(true, v2(0.0, 0.0)));
-        assert!(matches!(turned.shape, Shape::Group { .. }));
+    }
+
+    fn label(content: &str) -> Object {
+        let mut o = rect(1, 10.0, 20.0, 80.0, 30.0);
+        o.shape = Shape::Text { content: content.into(), size: 24.0 };
+        o.fill = Some(Color::BLACK);
+        o
+    }
+
+    fn same_rect(a: Rect, b: Rect) -> bool {
+        (a.x - b.x).abs() < 0.01 && (a.y - b.y).abs() < 0.01 && (a.w - b.w).abs() < 0.01 && (a.h - b.h).abs() < 0.01
+    }
+
+    #[test]
+    fn a_placement_follows_moving_and_scaling() {
+        let mut o = label("Pardus");
+        assert!(o.warp(&Warp::rotation(o.bounds.center(), 0.6)));
+        let turned = o.bounds;
+        assert!(turned.h > 30.0, "a turned label is taller than it was");
+
+        o.translate(5.0, -3.0);
+        assert!(same_rect(o.bounds, Rect { x: turned.x + 5.0, y: turned.y - 3.0, ..turned }));
+        assert!(same_rect(o.placement.unwrap().bounds(), o.bounds), "the placement moved with the box");
+
+        let doubled = Rect { w: o.bounds.w * 2.0, h: o.bounds.h * 2.0, ..o.bounds };
+        o.set_bounds(doubled);
+        assert!(same_rect(o.placement.unwrap().bounds(), doubled), "and grew with it");
+        // The text itself was never touched.
+        assert!(matches!(&o.shape, Shape::Text { content, size } if content == "Pardus" && *size == 24.0));
+        assert_eq!(o.placement.unwrap().frame, Rect { x: 10.0, y: 20.0, w: 80.0, h: 30.0 });
+    }
+
+    #[test]
+    fn removing_a_transform_stands_the_object_up_where_it_was() {
+        let mut o = label("Pardus");
+        let center = o.bounds.center();
+        assert!(!o.remove_transform(), "nothing to remove yet");
+        o.warp(&Warp::rotation(center, 1.0));
+        assert!(o.remove_transform());
+        assert!(o.placement.is_none());
+        assert!(same_rect(o.bounds, Rect { x: 10.0, y: 20.0, w: 80.0, h: 30.0 }));
+    }
+
+    #[test]
+    fn editing_turned_text_resizes_its_frame_not_its_box() {
+        let mut o = label("Pardus");
+        o.refit_text();
+        let upright = o.bounds;
+        o.warp(&Warp::quarter_turn(upright.center(), true));
+        if let Shape::Text { content, .. } = &mut o.shape {
+            content.push_str(" 25");
+        }
+        o.refit_text();
+        let frame = o.placement.unwrap().frame;
+        // Without an installed font text is measured by a rule of thumb, which still grows with its length.
+        assert!(frame.w > upright.w, "the upright frame got wider");
+        assert!((o.bounds.h - frame.w).abs() < 0.01, "so the turned box got taller");
+        assert!((o.bounds.w - frame.h).abs() < 0.01);
+    }
+
+    #[test]
+    fn turned_text_is_drawn_and_converted_where_it_shows() {
+        let mut o = label("o");
+        o.refit_text();
+        assert!(o.placed_text_paths().is_none(), "upright text is drawn as text");
+        o.warp(&Warp::rotation(o.bounds.center(), 0.7));
+        // Without an installed font there are no outlines to draw.
+        let Some(paths) = o.placed_text_paths() else { return };
+        assert!(matches!(paths.shape, Shape::Group { .. }) && paths.placement.is_none());
+        let (drawn, shown) = (paths.bounds, o.bounds);
+        assert!(drawn.x >= shown.x - 0.5 && drawn.right() <= shown.right() + 0.5, "{drawn:?} is not inside {shown:?}");
+        assert!(drawn.y >= shown.y - 0.5 && drawn.bottom() <= shown.bottom() + 0.5, "{drawn:?} is not inside {shown:?}");
+        // Converting to paths keeps the letters where they were drawn.
+        let mut converted = o.clone();
+        assert!(converted.text_to_paths());
+        assert!(same_rect(converted.bounds, drawn));
+    }
+
+    #[test]
+    fn a_symbol_turns_and_stays_a_symbol() {
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 0.0, 0.0, 40.0, 20.0));
+        e.selection = vec![1];
+        let symbol = e.make_symbol().unwrap();
+        let mut copy = e.selected()[0].clone();
+        assert!(matches!(copy.shape, Shape::Instance { .. }));
+        let center = copy.bounds.center();
+        assert!(copy.warp(&Warp::quarter_turn(center, true)));
+        assert!(matches!(copy.shape, Shape::Instance { symbol: placed, .. } if placed == symbol), "still linked to the library");
+        assert!(same_rect(copy.bounds, Rect { x: 10.0, y: -10.0, w: 20.0, h: 40.0 }));
+        // What is drawn, and what Break Apart would leave behind, is the turned artwork.
+        let parts = copy.instance_parts();
+        assert_eq!(parts.len(), 1);
+        assert!(same_rect(parts[0].bounds, copy.bounds));
+    }
+
+    #[test]
+    fn placements_survive_saving() {
+        let mut e = Editor::new(Document::new(100, 100));
+        let mut o = label("Pardus");
+        o.warp(&Warp::rotation(v2(50.0, 50.0), 0.3));
+        e.add_object(o);
+        let json = document_to_json(&e.doc).unwrap();
+        assert!(json.contains("placement"));
+        assert_eq!(document_from_json(&json).unwrap(), e.doc);
+        // Upright objects are written as they always were.
+        let mut e = Editor::new(Document::new(100, 100));
+        e.add_object(label("Pardus"));
+        assert!(!document_to_json(&e.doc).unwrap().contains("placement"));
     }
 
     /// An open path from (0,0) to (100,0) that bulges upward: both handles point to y = -60.

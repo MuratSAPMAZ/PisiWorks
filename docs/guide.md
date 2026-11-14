@@ -28,9 +28,14 @@ Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
 
 Scale (Q) resizes everything selected from its handles. Corners keep proportions unless you hold Shift.
 
-The same tool rotates, skews and distorts. Drag outside the selection box to rotate; hold Shift to turn in steps of 15 degrees. Ctrl+drag a side handle to skew, and Ctrl+drag a corner handle to move that corner alone. Modify > Transform > Free Transform (Ctrl+T) picks the tool.
+Skew and Distort sit beside Scale, and pressing Q again steps through the three. With any of them, drag outside the selection box to rotate; hold Shift to turn in steps of 15 degrees.
 
-Rectangles and ellipses become paths when they are transformed this way, and bitmaps are redrawn. Text becomes the paths of its letters, so finish editing it first; Text > Convert to Paths does the same on its own. Symbols and web areas are left as they are: use Modify > Symbol > Break Apart on a symbol first.
+- **Skew**: drag a side handle to slant the selection, or a corner handle for perspective, where the corner and its neighbour move apart or together.
+- **Distort**: drag a corner handle to move that corner alone, or a side handle to move the whole side.
+
+Modify > Transform lists the same tools, with Rotate 180, Rotate 90 and the two flips. A transform is applied when you release the mouse.
+
+Text stays text when it is transformed, so you can still edit it and change its size, and a symbol stays linked to the library. Modify > Transform > Remove Transformations stands either one upright again. Rectangles and ellipses become paths, and bitmaps are redrawn. Web areas are not transformed. Text > Convert to Paths turns text into the outlines of its letters.
 
 Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again from Pencil) cuts selected vectors along a dragged line. With nothing selected, Knife cuts every vector it crosses. Both turn rectangles and ellipses into paths.
 

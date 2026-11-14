@@ -557,7 +557,7 @@ impl Workspace {
             CursorStyle::OpenHand
         } else {
             match self.active_tool() {
-                crate::menus::Tool::Pointer | crate::menus::Tool::Subselect | crate::menus::Tool::Scale => CursorStyle::Arrow,
+                crate::menus::Tool::Pointer | crate::menus::Tool::Subselect | crate::menus::Tool::Scale | crate::menus::Tool::Skew | crate::menus::Tool::Distort => CursorStyle::Arrow,
                 crate::menus::Tool::Hand => CursorStyle::OpenHand,
                 crate::menus::Tool::Text => CursorStyle::IBeam,
                 _ => CursorStyle::Crosshair,
@@ -764,6 +764,7 @@ impl Workspace {
             bounds: Rect { x: 0.0, y: 0.0, w: page.width as f32, h: page.height as f32 },
             points: Vec::new(),
             handles: Vec::new(),
+            placement: None,
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
             opacity: 1.0,

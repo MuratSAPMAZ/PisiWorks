@@ -37,6 +37,14 @@ pub fn colored(name: &str) -> Option<&'static [Layer]> {
             (SKY, r#"<rect x="3" y="5" width="8" height="8" fill="black" stroke="none"/>"#),
             (INK, r#"<rect x="3" y="5" width="8" height="8"/><path d="M8.500 7.500L14 2M10.500 2H14v3.500"/>"#),
         ],
+        "skew" => &[
+            (SKY, r#"<path fill="black" stroke="none" d="M5.500 4H14l-3.500 8.500H2z"/>"#),
+            (INK, r#"<path d="M5.500 4H14l-3.500 8.500H2z"/>"#),
+        ],
+        "distort" => &[
+            (SKY, r#"<path fill="black" stroke="none" d="M3 3.500l10.500 2.500-2 7L2 10.500z"/>"#),
+            (INK, r#"<path d="M3 3.500l10.500 2.500-2 7L2 10.500z"/>"#),
+        ],
         "crop" => &[(INK, r#"<path stroke-width="1.700" d="M4.500 1v10.500H15M1 4.500h10.500V15"/>"#)],
         "marquee" => &[(INK, r#"<rect x="2.500" y="3.500" width="11" height="9" stroke-dasharray="2 1.600"/>"#)],
         "lasso" => &[

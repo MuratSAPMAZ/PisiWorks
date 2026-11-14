@@ -242,7 +242,10 @@ impl Scene {
                 let last = content.rsplit('\n').next().unwrap_or("");
                 let lines = content.split('\n').count() as f32;
                 let width = if last.is_empty() { 0.0 } else { measure_text(last, *size).0 };
-                Some((Vec2 { x: o.bounds.x + width, y: o.bounds.y + (lines - 1.0) * size * LINE_HEIGHT }, *size))
+                // The caret is found in the upright frame, then follows the text's transform.
+                let frame = o.placement.map_or(o.bounds, |p| p.frame);
+                let at = Vec2 { x: frame.x + width, y: frame.y + (lines - 1.0) * size * LINE_HEIGHT };
+                Some((o.placement.map_or(at, |p| p.warp.apply(at)), *size))
             }
             _ => None,
         });
@@ -270,7 +273,7 @@ impl Scene {
             crop,
             ants,
             stamp_mark,
-            all_handles: w.tool == Tool::Scale,
+            all_handles: matches!(w.tool, Tool::Scale | Tool::Skew | Tool::Distort),
             caret,
             show_rulers: w.show_rulers,
             show_grid: w.show_grid,
@@ -512,6 +515,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         bounds,
         points: Vec::new(),
         handles: Vec::new(),
+        placement: None,
         fill: None,
         stroke: None,
         opacity: 1.0,
@@ -532,6 +536,10 @@ fn paint_web(object: &Object, map: ViewMap, window: &mut Window) {
 }
 
 pub fn paint_object(object: &Object, textures: &Textures, map: ViewMap, window: &mut Window, cx: &mut App) {
+    // Text that has been rotated, skewed or distorted is drawn from the outlines of its letters.
+    if let Some(paths) = object.placed_text_paths() {
+        return paint_object(&paths, textures, map, window, cx);
+    }
     if object.is_instance() {
         for part in object.instance_parts().iter().filter(|p| p.visible && !p.is_web()) {
             paint_object(part, textures, map, window, cx);
