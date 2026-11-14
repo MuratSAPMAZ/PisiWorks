@@ -780,6 +780,7 @@ impl Workspace {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
             opacity: 1.0,
@@ -918,7 +919,14 @@ impl Workspace {
                 )
             })
             .when(!is_web, |d| {
-                d.child(div().flex().items_center().gap_1().h(px(20.)).child(label(t("Opacity:"))).child(self.field(FieldId::Opacity, 44., cx)).child(label("%")))
+                d.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .child(div().flex().items_center().gap_1().h(px(20.)).child(label(t("Opacity:"))).child(self.field(FieldId::Opacity, 44., cx)).child(label("%")))
+                        .child(self.combo(Combo::Blend, self.current_blend().label(), 120., cx).bg(rgb(PANEL_RAISED))),
+                )
             })
             .child(extra)
             .children(brush_size)
@@ -1326,7 +1334,7 @@ impl Workspace {
                     .flex_none()
                     .items_center()
                     .justify_between()
-                    .child(self.disabled_combo(t("Normal"), 110.))
+                    .child(self.combo(Combo::Blend, self.current_blend().label(), 110., cx).bg(rgb(PANEL_RAISED)))
                     .child(div().flex().items_center().gap_1().child(label(t("Opacity"))).child(self.field(FieldId::Opacity, 40., cx)).child(label("%"))),
             )
             .child(div().id("layers").flex_1().min_h_0().flex().flex_col().overflow_y_scroll().bg(rgb(LIST)).border_t_1().border_color(rgb(LIST_BORDER)).children(rows))

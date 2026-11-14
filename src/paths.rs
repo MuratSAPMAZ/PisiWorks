@@ -286,6 +286,7 @@ mod tests {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: Some(Color::rgb(10, 20, 30)),
             stroke: Some(Stroke { color: Color::BLACK, width: 4.0 }),
             opacity: 1.0,

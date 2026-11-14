@@ -37,6 +37,9 @@ const ALIGN_ITEMS: [(&str, Align); 6] = [
     ("Bottom", Align::Bottom),
 ];
 
+/// The tallest a drop-down list grows before it scrolls.
+const COMBO_MAX_HEIGHT: f32 = 420.0;
+
 type Action = dyn Fn(&mut Workspace, &MouseDownEvent, &mut Window, &mut Context<Workspace>);
 
 fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> Object {
@@ -48,6 +51,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         points: Vec::new(),
         handles: Vec::new(),
         placement: None,
+        blend: crate::blend::BlendMode::Normal,
         fill,
         stroke,
         opacity,
@@ -360,6 +364,10 @@ impl Workspace {
                     )
                 })
                 .collect(),
+            Combo::Blend => crate::blend::BlendMode::ALL
+                .into_iter()
+                .map(|mode| item(mode.label().into(), self.current_blend() == mode, cx, Box::new(move |this, _, _| this.set_blend(mode))))
+                .collect(),
             Combo::SymbolKind(symbol) => SymbolKind::ALL
                 .into_iter()
                 .map(|kind| {
@@ -432,7 +440,21 @@ impl Workspace {
         Some(
             deferred(
                 anchored().position(position).snap_to_window().child(
-                    div().occlude().w(px(170.)).py_1().flex().flex_col().bg(rgb(PANEL_RAISED)).border_1().border_color(rgb(BORDER)).shadow_md().children(items),
+                    // A long list, such as the blend modes, scrolls inside the window.
+                    div()
+                        .id("combo-popup")
+                        .occlude()
+                        .w(px(170.))
+                        .max_h(px(COMBO_MAX_HEIGHT))
+                        .overflow_y_scroll()
+                        .py_1()
+                        .flex()
+                        .flex_col()
+                        .bg(rgb(PANEL_RAISED))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_md()
+                        .children(items),
                 ),
             )
             .with_priority(2)

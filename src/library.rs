@@ -33,6 +33,7 @@ fn base(shape: Shape, name: &str, bounds: Rect, fill: Option<Color>, stroke: Opt
         points: Vec::new(),
         handles: Vec::new(),
         placement: None,
+        blend: crate::blend::BlendMode::Normal,
         fill,
         stroke: stroke.map(|color| Stroke { color, width: 1.0 }),
         opacity: 1.0,

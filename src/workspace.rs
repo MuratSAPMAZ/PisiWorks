@@ -16,6 +16,7 @@ use gpui::{
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::blend::BlendMode;
 use crate::i18n::{t, tc, tf};
 use crate::settings::Settings;
 use crate::bitmap::{Bitmap, Mask, MaskMode, FILL_TOLERANCE};
@@ -77,6 +78,8 @@ pub enum Combo {
     State,
     Align,
     PanelMenu(usize),
+    /// The blend mode of the selection.
+    Blend,
     /// Whether a symbol, given by its id, is a graphic or a button.
     SymbolKind(u64),
     /// What the Numeric Transform dialog changes.
@@ -428,6 +431,8 @@ pub struct Workspace {
     pub previews: Vec<PreviewPane>,
     previews_key: Option<(u64, ViewMode)>,
     stale_previews: Vec<Arc<RenderImage>>,
+    /// The rendered page shown on the canvas while it has blend modes, with the revision it was rendered at.
+    pub page_raster: Option<(u64, Arc<RenderImage>)>,
     pub size_dialog: Option<SizeDialog>,
     pub numeric_dialog: Option<NumericDialog>,
     /// The Selective JPEG Settings dialog, holding the settings to go back to on Cancel.
@@ -638,6 +643,7 @@ impl Workspace {
             previews: Vec::new(),
             previews_key: None,
             stale_previews: Vec::new(),
+            page_raster: None,
             size_dialog: None,
             numeric_dialog: None,
             jpeg_dialog: None,
@@ -731,9 +737,35 @@ impl Workspace {
         for (_, (_, image)) in std::mem::replace(&mut self.textures, current).drain() {
             cx.drop_image(image, Some(window));
         }
+        // A page with blend modes is rendered whole, as it will export. It is rendered
+        // again when the document changes, and on every frame of an edit in progress.
+        let editing = self.drag.is_some() || self.transform.is_some() || self.text_edit.is_some() || self.field.is_some();
+        let wanted = self.ed.needs_compositing();
+        let stale = self.page_raster.as_ref().is_none_or(|(revision, _)| *revision != self.ed.revision || editing);
+        if !wanted || stale {
+            if let Some((_, image)) = self.page_raster.take() {
+                self.stale_previews.push(image);
+            }
+        }
+        if wanted && self.page_raster.is_none() {
+            self.page_raster = crate::export::render_page(self.ed.doc.page())
+                .ok()
+                .and_then(|pixmap| crate::canvas_view::pixmap_texture(&pixmap))
+                .map(|image| (self.ed.revision, image));
+        }
         for image in self.stale_previews.drain(..) {
             cx.drop_image(image, Some(window));
         }
+    }
+
+    /// The blend mode the selection has, or Normal with nothing selected.
+    pub fn current_blend(&self) -> BlendMode {
+        self.ed.selected().first().map_or(BlendMode::Normal, |o| o.blend)
+    }
+
+    pub fn set_blend(&mut self, mode: BlendMode) {
+        self.ed.for_selected(|o| o.blend = mode);
+        self.ed.commit(t("Blend Mode"));
     }
 
     pub fn view_map(&self) -> ViewMap {
@@ -2530,6 +2562,7 @@ impl Workspace {
             points,
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
             opacity: 1.0,

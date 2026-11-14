@@ -2,6 +2,7 @@
 
 mod autoshape;
 mod bitmap;
+mod blend;
 mod canvas_view;
 mod export;
 mod fit;

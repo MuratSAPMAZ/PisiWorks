@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+use crate::blend::BlendMode;
 use crate::i18n::{t, tc, tf};
 use crate::autoshape::{self, AutoKind, AutoParams};
 use crate::bitmap::{Bitmap, Filter, Mask};
@@ -419,6 +420,9 @@ pub struct Object {
     /// is then the upright box around the result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placement: Option<Placement>,
+    /// How the object's colors mix with the artwork under it.
+    #[serde(default, skip_serializing_if = "BlendMode::is_normal")]
+    pub blend: BlendMode,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     /// 0.0 to 1.0.
@@ -449,6 +453,7 @@ impl Object {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -469,6 +474,7 @@ impl Object {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -698,6 +704,7 @@ impl Object {
                     points,
                     handles: Vec::new(),
                     placement: None,
+                    blend: crate::blend::BlendMode::Normal,
                     fill: self.fill,
                     stroke: None,
                     opacity: 1.0,
@@ -2005,6 +2012,15 @@ impl Editor {
     }
 
     /// The current page as the exporter needs it, knowing which of its symbols are buttons.
+    /// Whether the page has anything the screen cannot draw object by object, so that
+    /// it has to be shown as the exporter renders it.
+    pub fn needs_compositing(&self) -> bool {
+        fn special(object: &Object) -> bool {
+            !object.blend.is_normal() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+        }
+        self.doc.page().objects().any(|o| o.visible && special(o))
+    }
+
     pub fn export_page(&self) -> Page {
         let mut page = self.doc.page().clone();
         page.button_symbols = self.doc.symbols.iter().filter(|s| s.kind == SymbolKind::Button).map(|s| s.id).collect();
@@ -2396,6 +2412,7 @@ impl Editor {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2489,6 +2506,7 @@ impl Editor {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2692,6 +2710,7 @@ mod tests {
             points: vec![],
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: Some(Color::BLACK),
             stroke: None,
             opacity: 1.0,

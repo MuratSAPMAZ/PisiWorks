@@ -190,6 +190,15 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
     if !object.visible || object.is_web() {
         return;
     }
+    // An object with a blend mode is drawn on a layer of its own, which is then mixed into the page.
+    if !object.blend.is_normal() {
+        let Some(mut layer) = Pixmap::new(pixmap.width(), pixmap.height()) else { return };
+        let mut plain = object.clone();
+        plain.blend = crate::blend::BlendMode::Normal;
+        draw_object(&mut layer, &plain);
+        crate::blend::composite(pixmap, &layer, object.blend);
+        return;
+    }
     if let Some(paths) = object.placed_text_paths() {
         return draw_object(pixmap, &paths);
     }
@@ -366,6 +375,7 @@ mod tests {
             points: vec![],
             handles: Vec::new(),
             placement: None,
+            blend: crate::blend::BlendMode::Normal,
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
             opacity: 1.0,
@@ -425,6 +435,36 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn a_blend_mode_mixes_an_object_with_what_is_under_it() {
+        use crate::blend::BlendMode;
+        let mut p = page();
+        // A red box, and over its right half a box of pure green.
+        p.layers[0].objects.push(red_box(0.0, 40.0));
+        let mut over = red_box(20.0, 20.0);
+        over.fill = Some(Color::rgb(0, 255, 0));
+        over.blend = BlendMode::Multiply;
+        p.layers[0].objects.push(over.clone());
+        let img = render_page(&p).unwrap();
+        // Red times green is black; outside the green box the red is untouched.
+        assert_eq!(rgba(&img, 30, 10), (0, 0, 0, 255));
+        assert_eq!(rgba(&img, 10, 10), (255, 0, 0, 255));
+        // Screen adds them to yellow, and Normal just covers.
+        p.layers[0].objects[1].blend = BlendMode::Screen;
+        assert_eq!(rgba(&render_page(&p).unwrap(), 30, 10), (255, 255, 0, 255));
+        p.layers[0].objects[1].blend = BlendMode::Normal;
+        assert_eq!(rgba(&render_page(&p).unwrap(), 30, 10), (0, 255, 0, 255));
+        // Erase cuts through to the canvas.
+        p.layers[0].objects[1].blend = BlendMode::Erase;
+        p.canvas = None;
+        assert_eq!(rgba(&render_page(&p).unwrap(), 30, 10).3, 0);
+        // The mode is saved with the object, and a normal object is written as before.
+        let text = serde_json::to_string(&over).unwrap();
+        assert!(text.contains("Multiply"));
+        assert_eq!(serde_json::from_str::<Object>(&text).unwrap().blend, BlendMode::Multiply);
+        assert!(!serde_json::to_string(&red_box(0.0, 1.0)).unwrap().contains("blend"));
     }
 
     #[test]

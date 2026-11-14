@@ -61,6 +61,17 @@ pub fn make_texture(bitmap: &Bitmap, opacity: f32) -> Arc<RenderImage> {
 }
 
 /// Decodes an encoded image into a GPU image.
+/// The GPU image of a rendered page.
+pub fn pixmap_texture(pixmap: &tiny_skia::Pixmap) -> Option<Arc<RenderImage>> {
+    let mut bgra = Vec::with_capacity(pixmap.pixels().len() * 4);
+    for px in pixmap.pixels() {
+        let c = px.demultiply();
+        bgra.extend_from_slice(&[c.blue(), c.green(), c.red(), c.alpha()]);
+    }
+    let buffer = image::RgbaImage::from_raw(pixmap.width(), pixmap.height(), bgra)?;
+    Some(Arc::new(RenderImage::new([Frame::new(buffer)])))
+}
+
 pub fn encoded_texture(bytes: &[u8]) -> Option<Arc<RenderImage>> {
     let mut buffer = image::load_from_memory(bytes).ok()?.to_rgba8();
     for px in buffer.chunks_exact_mut(4) {
@@ -169,6 +180,9 @@ pub struct Scene {
     ghosts: Vec<Object>,
     view_mode: ViewMode,
     previews: Vec<PreviewPane>,
+    /// The page as the exporter renders it, shown in place of the objects when the
+    /// page has blend modes the screen cannot draw one object at a time.
+    raster: Option<Arc<RenderImage>>,
 }
 
 impl Scene {
@@ -299,6 +313,7 @@ impl Scene {
             ghosts: w.onion_ghosts(),
             view_mode: w.view_mode,
             previews: w.previews.clone(),
+            raster: w.page_raster.as_ref().map(|(_, image)| image.clone()),
         }
     }
 
@@ -346,9 +361,16 @@ impl Scene {
                 for object in &self.ghosts {
                     paint_object(object, &self.textures, map, window, cx);
                 }
-                for layer in self.page.layers.iter().filter(|l| l.visible) {
-                    for object in layer.objects.iter().filter(|o| o.visible && !o.is_web()) {
-                        paint_object(object, &self.textures, map, window, cx);
+                match &self.raster {
+                    Some(image) => {
+                        let _ = window.paint_image(page_bounds, Corners::default(), image.clone(), 0, false);
+                    }
+                    None => {
+                        for layer in self.page.layers.iter().filter(|l| l.visible) {
+                            for object in layer.objects.iter().filter(|o| o.visible && !o.is_web()) {
+                                paint_object(object, &self.textures, map, window, cx);
+                            }
+                        }
                     }
                 }
                 if self.show_grid && overlays {
@@ -566,6 +588,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         points: Vec::new(),
         handles: Vec::new(),
         placement: None,
+        blend: crate::blend::BlendMode::Normal,
         fill: None,
         stroke: None,
         opacity: 1.0,
