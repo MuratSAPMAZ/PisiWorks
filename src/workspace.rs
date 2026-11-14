@@ -27,11 +27,13 @@ use crate::menus::{panel_shortcut, Cmd, Panel, ScreenMode, Tool, DOCK_GROUPS, ZO
 use crate::optimize::{comparison_settings, encode, encoded_palette, export_page, format_size, settings_label, ExportSettings, MAX_COLORS, MIN_COLORS};
 use crate::paths::PathOp;
 use crate::model::{
-    document_from_json, document_to_json, pull_points, subdivide, v2, Color, Document, Editor, Object, PixelStroke,
-    Rect, Shape, Stroke, Vec2, WebKind,
+    document_from_json, document_to_json, flatten_curve, pull_points, subdivide, v2, Color, Document, Editor, Handles,
+    Object, PixelStroke, Rect, Shape, Stroke, Vec2, WebKind,
 };
 use crate::theme::{APP_NAME, FILE_EXTENSION};
 
+/// Screen pixels the pointer must travel before a press counts as pulling a curve handle.
+const HANDLE_DRAG_START: f32 = 3.0;
 const DEFAULT_WIDTH: u32 = 660;
 const DEFAULT_HEIGHT: u32 = 500;
 const PASTE_OFFSET: f32 = 10.0;
@@ -178,6 +180,11 @@ pub enum Drag {
     Scale { handle: usize, origin: Rect, originals: Vec<Object> },
     Freeform { id: u64, start: Vec2, base: Vec<Vec2>, radius: f32 },
     Vertex { id: u64, index: usize },
+    /// Pulling the curve handles out of the vertex the Pen just placed.
+    PenHandle,
+    /// Dragging one curve handle of a vertex with Subselection. `fresh` pulls a new
+    /// pair out of a corner, and leaves a corner behind if the pointer never moves.
+    Handle { id: u64, index: usize, after: bool, fresh: bool, moved: bool },
     Pan { last: Point<Pixels> },
 }
 
@@ -219,6 +226,8 @@ pub struct Workspace {
     pub text_edit: Option<u64>,
     pub drag: Option<Drag>,
     pub pen: Vec<Vec2>,
+    /// Curve handles of the vertices in `pen`, one each.
+    pub pen_handles: Vec<Handles>,
     pub cursor_doc: Vec2,
     pub focus: FocusHandle,
     pub canvas_bounds: Rc<Cell<Bounds<Pixels>>>,
@@ -406,6 +415,7 @@ impl Workspace {
             text_edit: None,
             drag: None,
             pen: Vec::new(),
+            pen_handles: Vec::new(),
             cursor_doc: Vec2::default(),
             focus: cx.focus_handle(),
             canvas_bounds: Rc::new(Cell::new(Bounds::default())),
@@ -1238,6 +1248,7 @@ impl Workspace {
         self.pan = Vec2::default();
         self.zoom = 1.0;
         self.pen.clear();
+        self.pen_handles.clear();
         self.text_edit = None;
         self.drag = None;
         self.playing = false;
@@ -1470,7 +1481,7 @@ impl Workspace {
         match tool {
             Tool::Pointer => self.pointer_down(ev, p),
             Tool::Scale => self.scale_down(ev, p),
-            Tool::Subselect => self.subselect_down(p),
+            Tool::Subselect => self.subselect_down(p, ev.modifiers.alt),
             Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
                     self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: selection_mode(ev.modifiers) });
@@ -1647,21 +1658,38 @@ impl Workspace {
         if !object.to_path() {
             return;
         }
+        object.flatten();
         let base = subdivide(&object.points, object.is_closed(), (radius * FREEFORM_DETAIL).max(1.0));
         object.points = base.clone();
         self.ed.selection = vec![id];
         self.drag = Some(Drag::Freeform { id, start: p, base, radius });
     }
 
-    fn subselect_down(&mut self, p: Vec2) {
+    /// Starts dragging a curve handle or a vertex of a selected path. Alt on a vertex
+    /// pulls a new pair of handles out of it.
+    fn subselect_down(&mut self, p: Vec2, alt: bool) {
         let reach = 5.0 / self.zoom;
-        for object in self.ed.selected() {
-            if !matches!(object.shape, Shape::Line | Shape::Path { .. }) {
-                continue;
+        let near = |v: Vec2| ((v.x - p.x).powi(2) + (v.y - p.y).powi(2)).sqrt() <= reach;
+        let paths = || self.ed.selected().into_iter().filter(|o| matches!(o.shape, Shape::Line | Shape::Path { .. }));
+        // Handles first: a short one sits almost on top of its vertex.
+        for object in paths() {
+            for (index, anchor) in object.points.iter().enumerate() {
+                let handles = object.handles_at(index);
+                for (after, offset) in [(false, handles.before), (true, handles.after)] {
+                    if offset != Vec2::default() && near(v2(anchor.x + offset.x, anchor.y + offset.y)) {
+                        self.drag = Some(Drag::Handle { id: object.id, index, after, fresh: false, moved: false });
+                        return;
+                    }
+                }
             }
-            let near = |v: &Vec2| ((v.x - p.x).powi(2) + (v.y - p.y).powi(2)).sqrt() <= reach;
-            if let Some(index) = object.points.iter().position(near) {
-                self.drag = Some(Drag::Vertex { id: object.id, index });
+        }
+        for object in paths() {
+            if let Some(index) = object.points.iter().position(|v| near(*v)) {
+                self.drag = Some(if alt {
+                    Drag::Handle { id: object.id, index, after: true, fresh: true, moved: false }
+                } else {
+                    Drag::Vertex { id: object.id, index }
+                });
                 return;
             }
         }
@@ -1719,6 +1747,7 @@ impl Workspace {
             shape,
             bounds,
             points,
+            handles: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
             opacity: 1.0,
@@ -1750,15 +1779,23 @@ impl Workspace {
             return;
         }
         self.pen.push(p);
+        self.pen_handles.push(Handles::default());
+        // Dragging before the button is released turns the corner into a curve.
+        self.drag = Some(Drag::PenHandle);
     }
 
     pub fn finish_pen(&mut self, closed: bool) {
         let points = std::mem::take(&mut self.pen);
+        let handles = std::mem::take(&mut self.pen_handles);
         if points.len() < 2 {
             return;
         }
-        let bounds = Rect::of_points(&points);
-        let object = self.new_object(t("Path"), Shape::Path { closed }, bounds, points);
+        let bounds = Rect::of_points(&flatten_curve(&points, &handles, closed));
+        let mut object = self.new_object(t("Path"), Shape::Path { closed }, bounds, points);
+        object.handles = handles;
+        if !object.is_curved() {
+            object.handles.clear();
+        }
         self.add_new(object, t("Pen"));
     }
 
@@ -1871,6 +1908,46 @@ impl Workspace {
                     object.refit_to_points();
                 }
             }
+            Drag::PenHandle => {
+                if let (Some(anchor), Some(handles)) = (self.pen.last(), self.pen_handles.last_mut()) {
+                    let pull = v2(p.x - anchor.x, p.y - anchor.y);
+                    // A click always wobbles a little, and that must stay a corner.
+                    let dragged = (pull.x.powi(2) + pull.y.powi(2)).sqrt() * self.zoom >= HANDLE_DRAG_START;
+                    *handles = if dragged { Handles::smooth(pull) } else { Handles::default() };
+                }
+            }
+            Drag::Handle { id, index, after, fresh, moved } => {
+                let (id, index, after) = (*id, *index, *after);
+                let Some(object) = self.ed.object_mut(id) else { return };
+                let Some(anchor) = object.points.get(index).copied() else { return };
+                let pull = v2(p.x - anchor.x, p.y - anchor.y);
+                let length = |v: Vec2| (v.x.powi(2) + v.y.powi(2)).sqrt();
+                if !*moved && length(pull) * self.zoom < HANDLE_DRAG_START {
+                    return;
+                }
+                *moved = true;
+                // A line has no room for handles until it is a path.
+                object.to_path();
+                let mut handles = object.handles_at(index);
+                if *fresh {
+                    handles = Handles::smooth(pull);
+                } else {
+                    let (dragged, other) =
+                        if after { (&mut handles.after, &mut handles.before) } else { (&mut handles.before, &mut handles.after) };
+                    // A smooth vertex stays smooth: the far handle keeps its length and
+                    // turns to face away. Alt lets the two sides part into a cusp.
+                    let cross = dragged.x * other.y - dragged.y * other.x;
+                    let dot = dragged.x * other.x + dragged.y * other.y;
+                    let was_smooth = dot < 0.0 && cross.abs() <= 0.02 * length(*dragged) * length(*other);
+                    *dragged = pull;
+                    if was_smooth && !ev.modifiers.alt && length(pull) > 0.0 {
+                        let scale = -length(*other) / length(pull);
+                        *other = v2(pull.x * scale, pull.y * scale);
+                    }
+                }
+                object.set_handles(index, handles);
+                object.refit_to_points();
+            }
             Drag::Pan { last } => {
                 self.pan.x += f32::from(ev.position.x - last.x);
                 self.pan.y += f32::from(ev.position.y - last.y);
@@ -1886,6 +1963,17 @@ impl Workspace {
             Drag::Move { .. } => self.ed.commit(t("Move")),
             Drag::Resize { .. } => self.ed.commit(t("Scale")),
             Drag::Vertex { .. } => self.ed.commit(t("Edit Path")),
+            Drag::PenHandle => {}
+            Drag::Handle { id, index, fresh, moved, .. } => {
+                // Alt+click without a drag turns the vertex back into a corner.
+                if fresh && !moved {
+                    if let Some(object) = self.ed.object_mut(id) {
+                        object.set_handles(index, Handles::default());
+                        object.refit_to_points();
+                    }
+                }
+                self.ed.commit(t("Edit Path"));
+            }
             Drag::Marquee { start, current } => self.ed.select_in_rect(Rect::from_corners(start, current)),
             Drag::Create { start, current } => self.finish_create(start, current),
             Drag::Freehand { points, target } => self.finish_freehand(points, target),
@@ -2116,6 +2204,7 @@ impl Workspace {
             "enter" => self.finish_pen(false),
             "escape" => {
                 self.pen.clear();
+                self.pen_handles.clear();
                 self.crop_area = None;
                 self.pixel_sel = None;
                 if self.drag.take().is_some() {

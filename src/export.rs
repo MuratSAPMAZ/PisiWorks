@@ -300,6 +300,7 @@ mod tests {
             shape: Shape::Rect { radius: 0.0 },
             bounds: Rect { x, y: 0.0, w, h: 40.0 },
             points: vec![],
+            handles: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
             opacity: 1.0,
@@ -359,6 +360,27 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn curved_path_is_exported_along_its_curve() {
+        use crate::model::{v2, Handles};
+        let mut p = page();
+        let mut o = red_box(0.0, 40.0);
+        o.shape = Shape::Path { closed: false };
+        o.fill = None;
+        // From (0,30) to (40,30), pulled up so the middle of the curve passes y = 7.5.
+        o.points = vec![v2(0.0, 30.0), v2(40.0, 30.0)];
+        o.handles = vec![
+            Handles { before: v2(0.0, 0.0), after: v2(0.0, -30.0) },
+            Handles { before: v2(0.0, -30.0), after: v2(0.0, 0.0) },
+        ];
+        o.stroke = Some(Stroke { color: Color::BLACK, width: 4.0 });
+        p.layers[0].objects.push(o);
+        let img = render_page(&p).unwrap();
+        assert_eq!(rgba(&img, 20, 7), (0, 0, 0, 255));
+        // Nothing is drawn on the straight line between the two ends.
+        assert_eq!(rgba(&img, 20, 30), (255, 255, 255, 255));
     }
 
     #[test]

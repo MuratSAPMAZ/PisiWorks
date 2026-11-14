@@ -763,6 +763,7 @@ impl Workspace {
             shape: Shape::Rect { radius: 0.0 },
             bounds: Rect { x: 0.0, y: 0.0, w: page.width as f32, h: page.height as f32 },
             points: Vec::new(),
+            handles: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
             opacity: 1.0,

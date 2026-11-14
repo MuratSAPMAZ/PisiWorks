@@ -2,6 +2,14 @@
 
 Şekilleri ve çizgileri kısıtlamak için çizerken Shift'i basılı tutun. Tuvali kaydırmak için Boşluk tuşunu basılı tutun. Ctrl+kaydırma yakınlaştırır. Kalem yolunu bitirmek için Enter'a basın, kapatmak için ilk noktasına tıklayın.
 
+## Eğriler
+
+Kalem (P) ile köşe noktası koymak için tıklayın. Yumuşak nokta koymak için basıp sürükleyin: çektiğiniz iki tutamaç, yolu noktanın iki yanında büker.
+
+Alt Seçim (A) ile bir yolu seçtiğinizde noktaları ve tutamaçları görünür. Noktayı taşımak için noktayı, eğriyi yeniden biçimlendirmek için tutamacı sürükleyin. Karşı tutamaç da onunla birlikte döner ve nokta yumuşak kalır; tutamaçlardan yalnızca birini oynatıp sivri bir köşe yapmak için Alt'ı basılı tutun. Bir köşeden tutamaç çekmek için Alt+sürükleyin, bir noktayı yeniden köşeye çevirmek için Alt+tıklayın.
+
+Serbest Biçim, Bıçak ve Yol paneli düz parçalar üzerinde çalışır; bu yüzden eğriyi çok sayıda kısa parçaya dönüştürürler.
+
 Arayüz dili masaüstünüzün diline göre seçilir. Değiştirmek için Düzen > Dil menüsünü kullanın.
 
 ## Görüntüleri düzenleme

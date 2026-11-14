@@ -58,6 +58,75 @@ pub const fn v2(x: f32, y: f32) -> Vec2 {
     Vec2 { x, y }
 }
 
+/// The two Bezier control handles of a path vertex, as offsets from the vertex.
+/// A zero handle leaves that side of the vertex straight.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Handles {
+    /// Shapes the segment that arrives at the vertex.
+    pub before: Vec2,
+    /// Shapes the segment that leaves it.
+    pub after: Vec2,
+}
+
+impl Handles {
+    /// A smooth vertex: both handles lie on one line, the same distance out.
+    pub fn smooth(after: Vec2) -> Self {
+        Self { before: v2(-after.x, -after.y), after }
+    }
+
+    pub fn is_corner(self) -> bool {
+        self == Self::default()
+    }
+
+    fn map(self, f: impl Fn(Vec2) -> Vec2) -> Self {
+        Self { before: f(self.before), after: f(self.after) }
+    }
+}
+
+/// Curve segments are cut into pieces about this long, in document units.
+const CURVE_STEP: f32 = 3.0;
+const CURVE_MIN_STEPS: usize = 8;
+const CURVE_MAX_STEPS: usize = 64;
+
+fn distance(a: Vec2, b: Vec2) -> f32 {
+    ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+/// Turns vertices and their handles into the polyline that is drawn, filled and hit-tested.
+/// Every vertex is kept, with the points of each curved segment after it.
+pub fn flatten_curve(points: &[Vec2], handles: &[Handles], closed: bool) -> Vec<Vec2> {
+    let count = points.len();
+    if handles.iter().all(|h| h.is_corner()) || count < 2 {
+        return points.to_vec();
+    }
+    let handle = |i: usize| handles.get(i).copied().unwrap_or_default();
+    let segments = if closed { count } else { count - 1 };
+    let mut out = Vec::with_capacity(count * CURVE_MIN_STEPS);
+    for i in 0..segments {
+        let j = (i + 1) % count;
+        let (p0, p3) = (points[i], points[j]);
+        let (out_handle, in_handle) = (handle(i).after, handle(j).before);
+        out.push(p0);
+        if out_handle == Vec2::default() && in_handle == Vec2::default() {
+            continue;
+        }
+        let p1 = v2(p0.x + out_handle.x, p0.y + out_handle.y);
+        let p2 = v2(p3.x + in_handle.x, p3.y + in_handle.y);
+        let length = distance(p0, p1) + distance(p1, p2) + distance(p2, p3);
+        let steps = ((length / CURVE_STEP).ceil() as usize).clamp(CURVE_MIN_STEPS, CURVE_MAX_STEPS);
+        for step in 1..steps {
+            let t = step as f32 / steps as f32;
+            let u = 1.0 - t;
+            let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+            out.push(v2(a * p0.x + b * p1.x + c * p2.x + d * p3.x, a * p0.y + b * p1.y + c * p2.y + d * p3.y));
+        }
+    }
+    if !closed {
+        out.push(points[count - 1]);
+    }
+    out
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub x: f32,
@@ -179,6 +248,10 @@ pub struct Object {
     pub bounds: Rect,
     /// Absolute vertices; only used by `Line` and `Path`.
     pub points: Vec<Vec2>,
+    /// Curve handles, one per vertex. Empty when every segment is straight, which
+    /// is also how files written before curves existed read.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handles: Vec<Handles>,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     /// 0.0 to 1.0.
@@ -207,6 +280,7 @@ impl Object {
             bounds: Rect { x, y, w: bitmap.width() as f32, h: bitmap.height() as f32 },
             shape: Shape::Image { bitmap: Arc::new(bitmap) },
             points: Vec::new(),
+            handles: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -225,6 +299,7 @@ impl Object {
             bounds,
             shape: Shape::Web { kind, url: String::new() },
             points: Vec::new(),
+            handles: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -307,10 +382,44 @@ impl Object {
         if !self.reshapable() {
             return false;
         }
+        if matches!(self.shape, Shape::Path { .. }) {
+            return true;
+        }
         let closed = self.is_closed();
         self.points = self.outline();
+        self.handles.clear();
         self.shape = Shape::Path { closed };
         true
+    }
+
+    pub fn is_curved(&self) -> bool {
+        self.handles.iter().any(|h| !h.is_corner())
+    }
+
+    /// The handles of vertex `index`, which are zero for a corner.
+    pub fn handles_at(&self, index: usize) -> Handles {
+        self.handles.get(index).copied().unwrap_or_default()
+    }
+
+    /// Sets the handles of one vertex, keeping `handles` empty while the path is all corners.
+    pub fn set_handles(&mut self, index: usize, handles: Handles) {
+        if index >= self.points.len() {
+            return;
+        }
+        self.handles.resize(self.points.len(), Handles::default());
+        self.handles[index] = handles;
+        if !self.is_curved() {
+            self.handles.clear();
+        }
+    }
+
+    /// Replaces curves with the straight pieces they are drawn as, for tools that
+    /// work on plain vertices.
+    pub fn flatten(&mut self) {
+        if self.is_curved() {
+            self.points = self.outline();
+        }
+        self.handles.clear();
     }
 
     fn distance_to(&self, p: Vec2) -> f32 {
@@ -426,7 +535,7 @@ impl Object {
                     })
                     .collect()
             }
-            Shape::Line | Shape::Path { .. } => self.points.clone(),
+            Shape::Line | Shape::Path { .. } => flatten_curve(&self.points, &self.handles, self.is_closed()),
             Shape::Auto { kind, a, b: second, count } => {
                 autoshape::outline(*kind, AutoParams { a: *a, b: *second, count: *count }, b)
             }
@@ -457,6 +566,9 @@ impl Object {
             p.x = target.x + (p.x - old.x) * sx;
             p.y = target.y + (p.y - old.y) * sy;
         }
+        for h in &mut self.handles {
+            *h = h.map(|v| v2(v.x * sx, v.y * sy));
+        }
         self.bounds = target;
     }
 
@@ -474,6 +586,9 @@ impl Object {
             } else {
                 p.y = b.y + b.bottom() - p.y;
             }
+        }
+        for h in &mut self.handles {
+            *h = h.map(|v| if horizontal { v2(-v.x, v.y) } else { v2(v.x, -v.y) });
         }
     }
 
@@ -509,13 +624,16 @@ impl Object {
         for point in &mut self.points {
             *point = turn(*point);
         }
+        for h in &mut self.handles {
+            *h = h.map(|v| if clockwise { v2(-v.y, v.x) } else { v2(v.y, -v.x) });
+        }
         true
     }
 
     /// Recomputes `bounds` from the vertices after a vertex edit.
     pub fn refit_to_points(&mut self) {
         if !self.points.is_empty() {
-            self.bounds = Rect::of_points(&self.points);
+            self.bounds = Rect::of_points(&self.outline());
         }
     }
 
@@ -1522,6 +1640,7 @@ impl Editor {
                     && (selection.is_empty() || selection.contains(&object.id));
                 let mut path = object.clone();
                 let pieces = if eligible && path.to_path() {
+                    path.flatten();
                     split_path(&path.points, path.is_closed(), a, b).filter(|pieces| !pieces.is_empty())
                 } else {
                     None
@@ -1692,6 +1811,7 @@ impl Editor {
             shape: Shape::Instance { symbol, objects },
             bounds,
             points: Vec::new(),
+            handles: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -1772,6 +1892,7 @@ impl Editor {
             shape: Shape::Group { objects: Arc::new(objects) },
             bounds,
             points: Vec::new(),
+            handles: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -1969,6 +2090,7 @@ mod tests {
             shape: Shape::Rect { radius: 0.0 },
             bounds: Rect { x, y, w, h },
             points: vec![],
+            handles: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,
             opacity: 1.0,
@@ -2573,5 +2695,121 @@ mod tests {
     fn plain_outlines_are_one_ring() {
         let square = vec![v2(0.0, 0.0), v2(1.0, 0.0), v2(1.0, 1.0), v2(0.0, 1.0)];
         assert_eq!(contours(&square), vec![square]);
+    }
+
+    /// An open path from (0,0) to (100,0) that bulges upward: both handles point to y = -60.
+    fn arch() -> Object {
+        let mut o = rect(1, 0.0, 0.0, 100.0, 0.0);
+        o.shape = Shape::Path { closed: false };
+        o.fill = None;
+        o.points = vec![v2(0.0, 0.0), v2(100.0, 0.0)];
+        o.handles = vec![
+            Handles { before: v2(0.0, 0.0), after: v2(0.0, -60.0) },
+            Handles { before: v2(0.0, -60.0), after: v2(0.0, 0.0) },
+        ];
+        o.refit_to_points();
+        o
+    }
+
+    #[test]
+    fn corners_flatten_to_the_vertices_themselves() {
+        let points = vec![v2(0.0, 0.0), v2(10.0, 0.0), v2(10.0, 10.0)];
+        assert_eq!(flatten_curve(&points, &[], true), points);
+        assert_eq!(flatten_curve(&points, &[Handles::default(); 3], false), points);
+    }
+
+    #[test]
+    fn a_curve_keeps_its_ends_and_bulges_toward_its_handles() {
+        let o = arch();
+        let outline = o.outline();
+        assert_eq!(outline.first(), Some(&v2(0.0, 0.0)));
+        assert_eq!(outline.last(), Some(&v2(100.0, 0.0)));
+        assert!(outline.len() > 8);
+        // The top of this curve is three quarters of the way to the handles.
+        let top = outline.iter().map(|p| p.y).fold(0.0, f32::min);
+        assert!((top + 45.0).abs() < 0.5, "top was {top}");
+        // The bounds follow the curve, not just its two vertices.
+        assert!((o.bounds.y + 45.0).abs() < 0.5 && (o.bounds.h - 45.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn a_curve_is_hit_along_the_curve_not_along_the_chord() {
+        let o = arch();
+        assert!(o.hit(v2(50.0, -45.0), 1.5));
+        assert!(!o.hit(v2(50.0, 0.0), 1.5));
+    }
+
+    #[test]
+    fn only_the_curved_side_of_a_vertex_bends() {
+        // A triangle whose first side alone is curved.
+        let points = vec![v2(0.0, 0.0), v2(100.0, 0.0), v2(50.0, 80.0)];
+        let handles = vec![Handles { before: v2(0.0, 0.0), after: v2(30.0, -30.0) }, Handles::default(), Handles::default()];
+        let outline = flatten_curve(&points, &handles, true);
+        let first_side = outline.iter().position(|p| *p == points[1]).unwrap();
+        assert!(first_side > 2, "the curved side has points between its vertices");
+        assert_eq!(&outline[first_side..], &points[1..], "the straight sides have none");
+    }
+
+    #[test]
+    fn handles_follow_scaling_flipping_and_turning() {
+        let mut o = arch();
+        let b = o.bounds;
+        o.set_bounds(Rect { x: b.x, y: b.y * 2.0, w: b.w * 2.0, h: b.h * 2.0 });
+        assert_eq!(o.handles[0].after, v2(0.0, -120.0));
+
+        let mut o = arch();
+        o.flip(false);
+        assert_eq!(o.handles[0].after, v2(0.0, 60.0));
+        let lowest = o.outline().iter().map(|p| p.y).fold(f32::MIN, f32::max);
+        assert!(lowest > o.points[0].y, "the arch now hangs below its ends");
+
+        let mut o = arch();
+        assert!(o.rotate90(true, v2(0.0, 0.0)));
+        // Up becomes right when turning clockwise.
+        assert_eq!(o.handles[0].after, v2(60.0, 0.0));
+        let moved = arch();
+        let mut translated = moved.clone();
+        translated.translate(7.0, 9.0);
+        assert_eq!(translated.handles, moved.handles);
+    }
+
+    #[test]
+    fn handles_are_dropped_once_every_vertex_is_a_corner() {
+        let mut o = arch();
+        o.set_handles(0, Handles::default());
+        assert!(o.is_curved());
+        o.set_handles(1, Handles::default());
+        assert!(o.handles.is_empty());
+        o.set_handles(1, Handles::smooth(v2(10.0, 0.0)));
+        assert_eq!(o.handles.len(), 2);
+        assert_eq!(o.handles_at(1).before, v2(-10.0, 0.0));
+        assert_eq!(o.handles_at(5), Handles::default());
+    }
+
+    #[test]
+    fn flattening_keeps_the_shape_and_drops_the_handles() {
+        let mut o = arch();
+        let outline = o.outline();
+        o.flatten();
+        assert!(o.handles.is_empty());
+        assert_eq!(o.points, outline);
+        assert_eq!(o.outline(), outline);
+    }
+
+    #[test]
+    fn curves_survive_saving_and_old_files_still_open() {
+        let mut e = Editor::new(Document::new(100, 100));
+        e.add_object(arch());
+        let json = document_to_json(&e.doc).unwrap();
+        assert_eq!(document_from_json(&json).unwrap(), e.doc);
+
+        // A straight path writes no "handles" at all, as before curves existed.
+        let mut straight = arch();
+        straight.handles.clear();
+        let mut e = Editor::new(Document::new(100, 100));
+        e.add_object(straight);
+        let json = document_to_json(&e.doc).unwrap();
+        assert!(!json.contains("handles"));
+        assert_eq!(document_from_json(&json).unwrap(), e.doc);
     }
 }

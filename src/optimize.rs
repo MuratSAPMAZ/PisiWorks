@@ -408,6 +408,7 @@ mod tests {
             shape: Shape::Rect { radius: 0.0 },
             bounds: Rect { x: 5.0, y: 5.0, w: 10.0, h: 10.0 },
             points: Vec::new(),
+            handles: Vec::new(),
             fill: Some(Color::rgb(200, 10, 10)),
             stroke: None,
             opacity: 1.0,

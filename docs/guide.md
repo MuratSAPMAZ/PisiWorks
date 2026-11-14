@@ -2,6 +2,14 @@
 
 Hold Shift while drawing to constrain shapes and lines. Hold Space to pan. Ctrl+scroll zooms. Press Enter to finish a Pen path, or click its first point to close it.
 
+## Curves
+
+With the Pen (P), click to place a corner. Press and drag instead to place a smooth point: the two handles you pull out bend the path on both sides of it.
+
+With Subselection (A), select a path to see its points and handles. Drag a point to move it, or a handle to reshape the curve. The opposite handle turns with it so the point stays smooth; hold Alt to move one handle on its own and make a cusp. Alt+drag a corner pulls handles out of it, and Alt+click a point turns it back into a corner.
+
+Freeform, Knife and the Path panel work on straight pieces, so they turn a curve into many short segments.
+
 ## Editing images
 
 Use File > Open (Ctrl+O) to edit an image, or File > Import (Ctrl+R) to add one to the current document.

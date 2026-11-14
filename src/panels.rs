@@ -45,6 +45,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         shape: Shape::Rect { radius: 5.0 },
         bounds: Rect { x: 0.0, y: 0.0, w: 32.0, h: 32.0 },
         points: Vec::new(),
+        handles: Vec::new(),
         fill,
         stroke,
         opacity,

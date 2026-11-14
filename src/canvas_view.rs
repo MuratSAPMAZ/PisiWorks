@@ -14,7 +14,7 @@ use crate::i18n::{t};
 use crate::bitmap::Bitmap;
 use crate::export::{measure_text, LINE_HEIGHT};
 use crate::menus::Tool;
-use crate::model::{Color, Object, Page, Rect, Shape, Vec2, WebKind};
+use crate::model::{flatten_curve, v2, Color, Handles, Object, Page, Rect, Shape, Vec2, WebKind};
 use crate::theme;
 use crate::workspace::{Drag, PreviewPane, ViewMap, ViewMode, Workspace};
 
@@ -140,6 +140,8 @@ pub struct Scene {
     selection_bounds: Option<Rect>,
     marquee: Option<Rect>,
     draft: Vec<Vec2>,
+    /// Curve handles to show, each as its vertex and the handle's own position.
+    handle_guides: Vec<(Vec2, Vec2)>,
     draft_closed: bool,
     /// Stroke width of the draft in document units; `None` draws a hairline.
     draft_width: Option<f32>,
@@ -202,12 +204,38 @@ impl Scene {
                 draft_width = Some(w.freehand_width());
                 draft_color = matches!(w.tool, Tool::Eraser | Tool::Blur | Tool::Stamp).then_some(ERASER_PREVIEW);
             }
+            Some(Drag::PenHandle) => draft = flatten_curve(&w.pen, &w.pen_handles, false),
             _ => {
                 if !w.pen.is_empty() {
-                    draft = w.pen.clone();
-                    draft.push(w.cursor_doc);
+                    // The segment still being placed runs from the last vertex to the pointer.
+                    let mut points = w.pen.clone();
+                    points.push(w.cursor_doc);
+                    draft = flatten_curve(&points, &w.pen_handles, false);
                 }
             }
+        }
+        let mut handle_guides = Vec::new();
+        let mut guide = |anchor: Vec2, handles: Handles| {
+            for offset in [handles.before, handles.after] {
+                if offset != Vec2::default() {
+                    handle_guides.push((anchor, v2(anchor.x + offset.x, anchor.y + offset.y)));
+                }
+            }
+        };
+        match w.tool {
+            Tool::Pen => {
+                if let (Some(anchor), Some(handles)) = (w.pen.last(), w.pen_handles.last()) {
+                    guide(*anchor, *handles);
+                }
+            }
+            Tool::Subselect => {
+                for object in w.ed.selected() {
+                    for (index, anchor) in object.points.iter().enumerate() {
+                        guide(*anchor, object.handles_at(index));
+                    }
+                }
+            }
+            _ => {}
         }
         let caret = w.text_edit.and_then(|id| w.ed.object(id)).and_then(|o| match &o.shape {
             Shape::Text { content, size } => {
@@ -235,6 +263,7 @@ impl Scene {
             selection_bounds: if editing.is_some() { None } else { w.ed.selection_bounds() },
             marquee,
             draft,
+            handle_guides,
             draft_closed,
             draft_width,
             draft_color,
@@ -423,6 +452,16 @@ impl Scene {
                 }
             }
         }
+        for (anchor, handle) in &self.handle_guides {
+            let (from, to) = (map.to_screen(*anchor), map.to_screen(*handle));
+            if let Some(path) = build_path(&[from, to], false, Some(1.0)) {
+                window.paint_path(path, accent);
+            }
+            // Hollow, so a handle is never mistaken for a vertex.
+            let knob = Bounds { origin: point(to.x - px(3.), to.y - px(3.)), size: size(px(6.), px(6.)) };
+            window.paint_quad(fill(knob, rgb(0xffffff)).corner_radii(px(3.)));
+            window.paint_quad(outline(knob, accent, BorderStyle::Solid).corner_radii(px(3.)));
+        }
         if let Some(bounds) = self.selection_bounds {
             window.paint_quad(outline(screen_rect(map, bounds), accent, BorderStyle::Solid));
             if self.selected.len() == 1 || self.all_handles {
@@ -472,6 +511,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         shape,
         bounds,
         points: Vec::new(),
+        handles: Vec::new(),
         fill: None,
         stroke: None,
         opacity: 1.0,

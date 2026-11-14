@@ -95,6 +95,7 @@ fn result_object(id: u64, template: &Object, points: Vec<Vec2>, closed: bool) ->
     object.shape = Shape::Path { closed };
     object.bounds = Rect::of_points(&points);
     object.points = points;
+    object.handles.clear();
     object
 }
 
@@ -281,6 +282,7 @@ mod tests {
             shape: Shape::Rect { radius: 0.0 },
             bounds: Rect { x, y, w, h },
             points: Vec::new(),
+            handles: Vec::new(),
             fill: Some(Color::rgb(10, 20, 30)),
             stroke: Some(Stroke { color: Color::BLACK, width: 4.0 }),
             opacity: 1.0,
