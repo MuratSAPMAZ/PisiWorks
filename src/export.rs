@@ -11,7 +11,7 @@ use tiny_skia::{
 
 use crate::i18n::{t, tf};
 use crate::bitmap::Bitmap;
-use crate::model::{Color, Object, Page, Rect, Shape, Vec2, WebKind};
+use crate::model::{Color, MaskKind, Object, ObjectMask, Page, Rect, Shape, Vec2, WebKind};
 
 pub const LINE_HEIGHT: f32 = 1.2;
 
@@ -186,8 +186,56 @@ fn draw_bitmap(target: &mut Pixmap, object: &Object, bitmap: &Bitmap) {
     target.draw_pixmap(0, 0, source.as_ref(), &paint, Transform::from_row(sx, 0.0, 0.0, sy, b.x, b.y), None);
 }
 
+/// How much of each pixel a mask lets through, from 0 to 1, for a page of the given size.
+fn mask_coverage(mask: &ObjectMask, width: u32, height: u32) -> Option<Vec<f32>> {
+    let mut drawn = Pixmap::new(width, height)?;
+    let mut shape = mask.object.clone();
+    shape.visible = true;
+    shape.mask = None;
+    shape.blend = crate::blend::BlendMode::Normal;
+    if mask.kind == MaskKind::PathOutline {
+        // Only the outline counts: whatever the mask is filled or stroked with, its inside shows.
+        if let Some(path) = sk_path(&shape.outline(), true) {
+            drawn.fill_path(&path, &sk_paint(Color::WHITE, 1.0), FillRule::EvenOdd, Transform::identity(), None);
+        }
+        return Some(drawn.pixels().iter().map(|px| px.alpha() as f32 / 255.0).collect());
+    }
+    shape.opacity = 1.0;
+    draw_object(&mut drawn, &shape);
+    Some(
+        drawn
+            .pixels()
+            .iter()
+            .map(|px| match mask.kind {
+                MaskKind::Alpha => px.alpha() as f32 / 255.0,
+                // Premultiplied channels already carry the alpha, so a clear pixel is black.
+                _ => (0.3 * px.red() as f32 + 0.59 * px.green() as f32 + 0.11 * px.blue() as f32) / 255.0,
+            })
+            .collect(),
+    )
+}
+
+/// One object drawn on nothing, as a bitmap, with where it sits in the document.
+pub fn render_object(object: &Object) -> Option<(Bitmap, Rect)> {
+    let b = object.bounds;
+    let reach = object.stroke.map_or(0.0, |s| s.width / 2.0).ceil();
+    let (left, top) = ((b.x - reach).floor(), (b.y - reach).floor());
+    let (width, height) = (((b.right() + reach).ceil() - left).max(1.0) as u32, ((b.bottom() + reach).ceil() - top).max(1.0) as u32);
+    let mut pixmap = Pixmap::new(width, height)?;
+    let mut moved = object.clone();
+    moved.translate(-left, -top);
+    moved.visible = true;
+    draw_object(&mut pixmap, &moved);
+    let rgba: Vec<u8> = pixmap.pixels().iter().flat_map(|px| {
+        let c = px.demultiply();
+        [c.red(), c.green(), c.blue(), c.alpha()]
+    }).collect();
+    Some((Bitmap::from_rgba(width, height, rgba)?, Rect { x: left, y: top, w: width as f32, h: height as f32 }))
+}
+
 fn draw_object(pixmap: &mut Pixmap, object: &Object) {
-    if !object.visible || object.is_web() {
+    // The stand-in for a mask being edited is not artwork.
+    if !object.visible || object.is_web() || object.mask_of.is_some() {
         return;
     }
     // An object with a blend mode is drawn on a layer of its own, which is then mixed into the page.
@@ -197,6 +245,35 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
         plain.blend = crate::blend::BlendMode::Normal;
         draw_object(&mut layer, &plain);
         crate::blend::composite(pixmap, &layer, object.blend);
+        return;
+    }
+    // A masked object is drawn on a layer of its own, and the mask takes away what it hides.
+    if let Some(mask) = object.mask.as_ref().filter(|mask| mask.enabled) {
+        let (Some(mut layer), Some(coverage)) = (Pixmap::new(pixmap.width(), pixmap.height()), mask_coverage(mask, pixmap.width(), pixmap.height())) else {
+            return;
+        };
+        let mut bare = object.clone();
+        bare.mask = None;
+        draw_object(&mut layer, &bare);
+        for (px, shown) in layer.pixels_mut().iter_mut().zip(&coverage) {
+            let keep = |c: u8| (c as f32 * shown).round() as u8;
+            *px = PremultipliedColorU8::from_rgba(keep(px.red()), keep(px.green()), keep(px.blue()), keep(px.alpha())).unwrap_or(PremultipliedColorU8::TRANSPARENT);
+        }
+        // A path mask can show itself as well: its fill behind what it masks, its stroke in front.
+        let shows_itself = mask.show_fill_stroke && mask.kind == MaskKind::PathOutline;
+        let part_of_mask = |fill: bool| {
+            let mut part = mask.object.clone();
+            if fill { part.stroke = None } else { part.fill = None }
+            part.mask = None;
+            part
+        };
+        if shows_itself {
+            draw_object(pixmap, &part_of_mask(true));
+        }
+        pixmap.draw_pixmap(0, 0, layer.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+        if shows_itself {
+            draw_object(pixmap, &part_of_mask(false));
+        }
         return;
     }
     if let Some(paths) = object.placed_text_paths() {
@@ -376,6 +453,8 @@ mod tests {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
             opacity: 1.0,
@@ -465,6 +544,78 @@ mod tests {
         assert!(text.contains("Multiply"));
         assert_eq!(serde_json::from_str::<Object>(&text).unwrap().blend, BlendMode::Multiply);
         assert!(!serde_json::to_string(&red_box(0.0, 1.0)).unwrap().contains("blend"));
+    }
+
+    /// A red box 40 wide, masked by `mask`.
+    fn masked(mask: Object, kind: MaskKind) -> Page {
+        let mut p = page();
+        let mut o = red_box(0.0, 40.0);
+        o.mask = Some(std::sync::Arc::new(ObjectMask { object: mask, kind, show_fill_stroke: false, enabled: true }));
+        p.layers[0].objects.push(o);
+        p
+    }
+
+    #[test]
+    fn a_path_mask_shows_only_what_is_inside_its_outline() {
+        // The mask covers the left half. What it is filled with does not matter.
+        let mut left = red_box(0.0, 20.0);
+        left.fill = Some(Color::BLACK);
+        let mut p = masked(left, MaskKind::PathOutline);
+        let img = render_page(&p).unwrap();
+        assert_eq!(rgba(&img, 10, 10), (255, 0, 0, 255));
+        assert_eq!(rgba(&img, 30, 10), (255, 255, 255, 255), "the canvas shows where the mask hides the box");
+        // Switched off, the mask hides nothing.
+        let object = &mut p.layers[0].objects[0];
+        std::sync::Arc::make_mut(object.mask.as_mut().unwrap()).enabled = false;
+        assert_eq!(rgba(&render_page(&p).unwrap(), 30, 10), (255, 0, 0, 255));
+    }
+
+    #[test]
+    fn a_grayscale_mask_shows_more_where_it_is_lighter() {
+        let shade = |level: u8| {
+            let mut mask = red_box(0.0, 40.0);
+            mask.fill = Some(Color::rgb(level, level, level));
+            masked(mask, MaskKind::Grayscale)
+        };
+        assert_eq!(rgba(&render_page(&shade(255)).unwrap(), 10, 10), (255, 0, 0, 255));
+        assert_eq!(rgba(&render_page(&shade(0)).unwrap(), 10, 10), (255, 255, 255, 255));
+        // Mid gray lets half of the red through, over the white canvas.
+        let (r, g, _, _) = rgba(&render_page(&shade(128)).unwrap(), 10, 10);
+        assert!(r == 255 && (120..=135).contains(&g), "g was {g}");
+        // By its alpha channel, the same black mask shows everything.
+        let mut black = red_box(0.0, 40.0);
+        black.fill = Some(Color::BLACK);
+        assert_eq!(rgba(&render_page(&masked(black, MaskKind::Alpha)).unwrap(), 10, 10), (255, 0, 0, 255));
+    }
+
+    #[test]
+    fn a_path_mask_can_show_its_own_fill_and_stroke() {
+        let mut frame = red_box(0.0, 20.0);
+        frame.fill = Some(Color::rgb(0, 0, 255));
+        // The masked box is narrower than the mask, so the mask's fill shows beside it.
+        let mut p = page();
+        let mut inside = red_box(0.0, 10.0);
+        inside.mask = Some(std::sync::Arc::new(ObjectMask { object: frame, kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true }));
+        p.layers[0].objects.push(inside);
+        let img = render_page(&p).unwrap();
+        assert_eq!(rgba(&img, 5, 10), (255, 0, 0, 255));
+        assert_eq!(rgba(&img, 15, 10), (0, 0, 255, 255));
+        assert_eq!(rgba(&img, 30, 10), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn a_mask_moves_and_stretches_with_its_object() {
+        let mut p = masked(red_box(0.0, 20.0), MaskKind::PathOutline);
+        let object = &mut p.layers[0].objects[0];
+        object.translate(10.0, 0.0);
+        assert_eq!(object.mask.as_ref().unwrap().object.bounds.x, 10.0);
+        object.set_bounds(Rect { x: 0.0, y: 0.0, w: 80.0, h: 40.0 });
+        let mask = object.mask.as_ref().unwrap().object.bounds;
+        assert_eq!((mask.x, mask.w), (0.0, 40.0), "twice as wide, and still over the left half of the box");
+        // Saved and read back, the mask is still there; an object without one is written as before.
+        let text = serde_json::to_string(&*object).unwrap();
+        assert_eq!(serde_json::from_str::<Object>(&text).unwrap().mask, object.mask);
+        assert!(!serde_json::to_string(&red_box(0.0, 1.0)).unwrap().contains("mask"));
     }
 
     #[test]

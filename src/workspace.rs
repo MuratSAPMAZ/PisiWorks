@@ -78,6 +78,8 @@ pub enum Combo {
     State,
     Align,
     PanelMenu(usize),
+    /// How the mask of the selection works.
+    MaskKind,
     /// The blend mode of the selection.
     Blend,
     /// Whether a symbol, given by its id, is a graphic or a button.
@@ -737,6 +739,7 @@ impl Workspace {
         for (_, (_, image)) in std::mem::replace(&mut self.textures, current).drain() {
             cx.drop_image(image, Some(window));
         }
+        self.ed.sync_mask_edit();
         // A page with blend modes is rendered whole, as it will export. It is rendered
         // again when the document changes, and on every frame of an edit in progress.
         let editing = self.drag.is_some() || self.transform.is_some() || self.text_edit.is_some() || self.field.is_some();
@@ -943,6 +946,8 @@ impl Workspace {
             Cmd::Rulers => self.show_rulers,
             Cmd::Grid => self.show_grid,
             Cmd::Language(language) => crate::i18n::language() == language,
+            // Ticked while the mask is switched off.
+            Cmd::MaskToggle => self.ed.selected().iter().any(|o| o.mask.as_ref().is_some_and(|mask| !mask.enabled)),
             _ => false,
         }
     }
@@ -1512,6 +1517,11 @@ impl Workspace {
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
             Cmd::Rotate180 | Cmd::NumericTransform => has_selection,
+            Cmd::MaskAll(_) => has_selection,
+            Cmd::MaskSelection(_) => self.active_pixels().is_some(),
+            Cmd::PasteAsMask | Cmd::PasteInside => has_selection && self.ed.has_clipboard(),
+            Cmd::GroupAsMask => self.ed.selection.len() >= 2,
+            Cmd::MaskToggle | Cmd::MaskDelete => self.ed.selected().iter().any(|o| o.mask.is_some()),
             Cmd::JpegMaskSave => self.active_pixels().is_some(),
             Cmd::JpegMaskRestore => self.ed.doc.page().jpeg_mask.is_some() && self.ed.selected().iter().any(|o| o.is_image()),
             Cmd::JpegMaskRemove => self.ed.doc.page().jpeg_mask.is_some(),
@@ -1660,6 +1670,40 @@ impl Workspace {
             }
             Cmd::FreeTransform => self.set_tool(Tool::Scale),
             Cmd::NumericTransform => self.open_numeric_dialog(center_point),
+            Cmd::MaskAll(reveal) => {
+                if self.ed.add_bitmap_mask(reveal, None) {
+                    self.ed.commit(if reveal { t("Reveal All") } else { t("Hide All") });
+                }
+            }
+            Cmd::MaskSelection(reveal) => {
+                if let Some((object, mask)) = pixels {
+                    self.ed.selection = vec![object];
+                    if self.ed.add_bitmap_mask(reveal, Some(&mask)) {
+                        self.pixel_sel = None;
+                        self.ed.commit(if reveal { t("Reveal Selection") } else { t("Hide Selection") });
+                    }
+                }
+            }
+            Cmd::PasteAsMask => {
+                if self.ed.paste_as_mask() {
+                    self.ed.commit(t("Paste as Mask"));
+                }
+            }
+            Cmd::PasteInside => {
+                if self.ed.paste_inside() {
+                    self.ed.commit(t("Paste Inside"));
+                }
+            }
+            Cmd::GroupAsMask => {
+                if self.ed.group_as_mask() {
+                    self.ed.commit(t("Group as Mask"));
+                }
+            }
+            Cmd::MaskToggle => {
+                self.ed.toggle_masks();
+                self.ed.commit(t("Disable Mask"));
+            }
+            Cmd::MaskDelete => self.confirm_delete_mask(window, cx),
             Cmd::JpegMaskSave => self.save_jpeg_mask(),
             Cmd::JpegMaskRestore => self.restore_jpeg_mask(),
             Cmd::JpegMaskRemove => {
@@ -1856,6 +1900,7 @@ impl Workspace {
     }
 
     fn write_document(&mut self, mut path: PathBuf) {
+        self.ed.end_mask_edit();
         // Saving under an image name writes a flattened copy, and the editable
         // document stays unsaved. JSON must never land in a file named .png.
         if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION) && !e.eq_ignore_ascii_case(LEGACY_EXTENSION)) {
@@ -1878,6 +1923,7 @@ impl Workspace {
     }
 
     fn export_to(&mut self, path: &Path) {
+        self.ed.end_mask_edit();
         let page = &self.ed.export_page();
         self.status = match export_page(page, path).and_then(|()| export_web(page, path)) {
             Ok(0) => tf("Exported {}", &[&path.display()]),
@@ -2310,6 +2356,54 @@ impl Workspace {
         Some((id, index))
     }
 
+    /// Asks, as Fireworks does, whether a mask is to be applied to its object before it is removed.
+    fn confirm_delete_mask(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let question = format!(
+            "{} {}",
+            t("Apply mask before removing?"),
+            t("Applying a mask converts the object and mask into a single bitmap image.")
+        );
+        let answer = window.prompt(PromptLevel::Warning, &question, None, &[t("Apply"), t("Discard"), t("Cancel")], cx);
+        self.awaiting_answer = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let answer = answer.await;
+            this.update_in(cx, |this, _, cx| {
+                this.awaiting_answer = false;
+                if let Ok(choice @ (0 | 1)) = answer {
+                    this.ed.delete_masks(choice == 0);
+                    this.ed.commit(t("Delete Mask"));
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Starts editing the mask of the object with this id.
+    pub fn edit_mask_of(&mut self, id: u64) {
+        self.finish_pending();
+        self.ed.selection = vec![id];
+        if self.ed.edit_mask() {
+            self.status = t("Editing the mask. Select something else to finish.").into();
+        }
+    }
+
+    /// The mask of the selected object, for the mask settings in Properties.
+    pub fn current_mask(&self) -> Option<Arc<crate::model::ObjectMask>> {
+        self.ed.selected().first().and_then(|o| o.mask.clone())
+    }
+
+    /// Changes the masks of the selected objects.
+    pub fn change_masks(&mut self, change: impl Fn(&mut crate::model::ObjectMask)) {
+        self.ed.for_selected(|o| {
+            if let Some(mask) = &mut o.mask {
+                change(Arc::make_mut(mask));
+            }
+        });
+        self.ed.commit(t("Mask"));
+    }
+
     /// Asks before a rectangle gives up its roundness setting to have its vertices edited.
     fn confirm_rectangle_to_path(&mut self, id: u64, window: &mut Window, cx: &mut Context<Self>) {
         // One text, because the prompt wraps its message but cuts a long detail line short.
@@ -2563,6 +2657,8 @@ impl Workspace {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
             opacity: 1.0,
@@ -3093,6 +3189,7 @@ impl Workspace {
             ("g", false, false) => Cmd::Group,
             ("t", false, false) => Cmd::FreeTransform,
             ("t", true, false) => Cmd::NumericTransform,
+            ("v", true, false) => Cmd::PasteInside,
             ("g", true, false) => Cmd::Ungroup,
             ("up", true, false) => Cmd::Arrange(Arrange::Front),
             ("up", false, false) => Cmd::Arrange(Arrange::Forward),

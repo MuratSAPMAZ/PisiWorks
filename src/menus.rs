@@ -162,6 +162,15 @@ pub enum Cmd {
     Ungroup,
     Rotate { clockwise: bool },
     FreeTransform,
+    /// Adds a mask that shows everything (true) or hides everything.
+    MaskAll(bool),
+    /// Adds a mask that shows only the selected pixels (true) or hides them.
+    MaskSelection(bool),
+    PasteAsMask,
+    PasteInside,
+    GroupAsMask,
+    MaskToggle,
+    MaskDelete,
     JpegMaskSave,
     JpegMaskRestore,
     JpegMaskRemove,
@@ -380,8 +389,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Paste", "Ctrl+V", Cmd::Paste),
             cmd("Clear", "Delete", Cmd::Clear),
             Sep,
-            na("Paste as Mask"),
-            na("Paste Inside"),
+            cmd("Paste as Mask", "", Cmd::PasteAsMask),
+            cmd("Paste Inside", "Ctrl+Shift+V", Cmd::PasteInside),
             na("Paste Attributes"),
             Sep,
             cmd("Duplicate", "Ctrl+Alt+D", Cmd::Duplicate),
@@ -470,7 +479,19 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                 "Symbol",
                 &[cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol), cmd("Break Apart", "Ctrl+B", Cmd::BreakApart)],
             ),
-            na("Mask"),
+            Sub(
+                "Mask",
+                &[
+                    cmd("Reveal All", "", Cmd::MaskAll(true)),
+                    cmd("Hide All", "", Cmd::MaskAll(false)),
+                    cmd("Paste as Mask", "", Cmd::PasteAsMask),
+                    cmd("Group as Mask", "", Cmd::GroupAsMask),
+                    cmd("Reveal Selection", "", Cmd::MaskSelection(true)),
+                    cmd("Hide Selection", "", Cmd::MaskSelection(false)),
+                    cmd("Disable Mask", "", Cmd::MaskToggle),
+                    cmd("Delete Mask", "", Cmd::MaskDelete),
+                ],
+            ),
             Sub(
                 "Selective JPEG",
                 &[

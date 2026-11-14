@@ -472,6 +472,8 @@ mod tests {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: Some(Color::rgb(200, 10, 10)),
             stroke: None,
             opacity: 1.0,

@@ -781,6 +781,8 @@ impl Workspace {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
             opacity: 1.0,
@@ -927,6 +929,23 @@ impl Workspace {
                         .child(div().flex().items_center().gap_1().h(px(20.)).child(label(t("Opacity:"))).child(self.field(FieldId::Opacity, 44., cx)).child(label("%")))
                         .child(self.combo(Combo::Blend, self.current_blend().label(), 120., cx).bg(rgb(PANEL_RAISED))),
                 )
+                .when_some(self.current_mask(), |d, mask| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().flex().items_center().gap_1().child(label(t("Mask:"))).child(self.combo(Combo::MaskKind, crate::panels::mask_kind_label(mask.kind), 150., cx).bg(rgb(PANEL_RAISED))))
+                            .child(self.text_button(t("Edit Mask"), true, cx, |this, _, _| {
+                                if let Some(id) = this.ed.selected().first().map(|o| o.id) {
+                                    this.edit_mask_of(id);
+                                }
+                            }))
+                            .when(mask.kind == crate::model::MaskKind::PathOutline, |d| {
+                                d.child(self.check_box(t("Show fill and stroke"), mask.show_fill_stroke, cx, |this| this.change_masks(|mask| mask.show_fill_stroke = !mask.show_fill_stroke)))
+                            }),
+                    )
+                })
             })
             .child(extra)
             .children(brush_size)
@@ -1206,6 +1225,27 @@ impl Workspace {
                     .border_color(rgb(LIST_BORDER))
                     .child(self.object_preview(vec![object.clone()], textures.clone())),
             )
+            // A masked object shows its mask beside it, as the Layers panel of Fireworks does.
+            .when_some(object.mask.clone(), |d, mask| {
+                d.child(
+                    div()
+                        .size(px(17.))
+                        .flex_none()
+                        .bg(rgb(INPUT))
+                        .border_1()
+                        .border_color(rgb(if mask.enabled { LIST_BORDER } else { WINDOW_CLOSE_HOVER }))
+                        // A click on the mask starts editing it.
+                        .occlude()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.edit_mask_of(id);
+                                cx.notify();
+                            }),
+                        )
+                        .child(self.object_preview(vec![mask.object.clone()], textures.clone())),
+                )
+            })
             .child(self.name_or_field(FieldId::RenameObject(id), object.name.clone(), 130., cx))
             .into_any_element()
     }

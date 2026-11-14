@@ -37,6 +37,14 @@ const ALIGN_ITEMS: [(&str, Align); 6] = [
     ("Bottom", Align::Bottom),
 ];
 
+pub(crate) fn mask_kind_label(kind: crate::model::MaskKind) -> &'static str {
+    match kind {
+        crate::model::MaskKind::PathOutline => t("Path Outline"),
+        crate::model::MaskKind::Grayscale => t("Grayscale Appearance"),
+        crate::model::MaskKind::Alpha => t("Alpha Channel"),
+    }
+}
+
 /// The tallest a drop-down list grows before it scrolls.
 const COMBO_MAX_HEIGHT: f32 = 420.0;
 
@@ -52,6 +60,8 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         handles: Vec::new(),
         placement: None,
         blend: crate::blend::BlendMode::Normal,
+        mask: None,
+        mask_of: None,
         fill,
         stroke,
         opacity,
@@ -364,6 +374,17 @@ impl Workspace {
                     )
                 })
                 .collect(),
+            Combo::MaskKind => {
+                use crate::model::MaskKind;
+                let current = self.current_mask().map(|mask| mask.kind);
+                // A vector mask goes by its outline or its look; a bitmap mask by its look or its opacity.
+                let bitmap = self.current_mask().is_some_and(|mask| mask.object.is_image());
+                let kinds = if bitmap { [MaskKind::Grayscale, MaskKind::Alpha] } else { [MaskKind::PathOutline, MaskKind::Grayscale] };
+                kinds
+                    .into_iter()
+                    .map(|kind| item(mask_kind_label(kind).into(), current == Some(kind), cx, Box::new(move |this, _, _| this.change_masks(|mask| mask.kind = kind))))
+                    .collect()
+            }
             Combo::Blend => crate::blend::BlendMode::ALL
                 .into_iter()
                 .map(|mode| item(mode.label().into(), self.current_blend() == mode, cx, Box::new(move |this, _, _| this.set_blend(mode))))

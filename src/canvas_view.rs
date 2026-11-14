@@ -589,6 +589,8 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         handles: Vec::new(),
         placement: None,
         blend: crate::blend::BlendMode::Normal,
+        mask: None,
+        mask_of: None,
         fill: None,
         stroke: None,
         opacity: 1.0,
@@ -609,6 +611,9 @@ fn paint_web(object: &Object, map: ViewMap, window: &mut Window) {
 }
 
 pub fn paint_object(object: &Object, textures: &Textures, map: ViewMap, window: &mut Window, cx: &mut App) {
+    if object.mask_of.is_some() {
+        return;
+    }
     // Text that has been rotated, skewed or distorted is drawn from the outlines of its letters.
     if let Some(paths) = object.placed_text_paths() {
         return paint_object(&paths, textures, map, window, cx);

@@ -43,6 +43,17 @@ Text stays text when it is transformed, so you can still edit it and change its 
 
 Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again from Pencil) cuts selected vectors along a dragged line. With nothing selected, Knife cuts every vector it crosses. Both turn rectangles and ellipses into paths.
 
+## Masks
+
+A mask hides part of an object. Modify > Mask has the commands:
+
+- **Group as Mask**: select two or more objects; the one on top becomes the mask of the others. The lighter the mask is, the more shows through it, so use a white shape to cut out a clean piece.
+- **Paste as Mask**: copy an object, select another and choose this; the copied object masks it by its outline. **Paste Inside** (Ctrl+Shift+V) does the opposite: what you copied appears inside the selected object, which stays in view around it.
+- **Reveal All** and **Hide All** add a bitmap mask that shows everything or nothing, to paint on. With pixels selected on a bitmap, **Reveal Selection** and **Hide Selection** make the mask from the selection.
+- **Disable Mask** switches the mask off without removing it, and **Delete Mask** removes it, after asking whether to apply it to the object first.
+
+A masked object shows Mask in Properties: Path Outline or Grayscale Appearance for a vector mask, with Show fill and stroke, and Grayscale Appearance or Alpha Channel for a bitmap mask. Edit Mask there, or a click on the mask's thumbnail in Layers, selects the mask itself so you can move, reshape or paint it with any tool. White paint reveals and black hides. Select something else to finish.
+
 ## Web areas
 
 Hotspot (J) and Slice (K) draw areas over the artwork. Move and resize them with the Pointer, and set a hotspot's link in Properties. Press 2 to hide or show them.

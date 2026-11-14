@@ -45,6 +45,17 @@ Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu de
 
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 
+## Maskeler
+
+Maske, bir nesnenin bir bölümünü gizler. Komutlar Değiştir > Maske menüsündedir:
+
+- **Maske olarak Grupla**: iki veya daha fazla nesne seçin; en üstteki, diğerlerinin maskesi olur. Maske ne kadar açık renkliyse o kadar çok şey görünür; temiz bir parça kesmek için beyaz bir şekil kullanın.
+- **Maske Olarak Yapıştır**: bir nesneyi kopyalayın, başka birini seçip bu komutu verin; kopyalanan nesne onu anahattıyla maskeler. **İçine Yapıştır** (Ctrl+Shift+V) tersini yapar: kopyaladığınız şey seçili nesnenin içinde görünür, seçili nesne çevresinde görünmeye devam eder.
+- **Tümünü Göster** ve **Tümünü Gizle**, üzerine boyamak için her şeyi gösteren veya hiçbir şeyi göstermeyen bir bitmap maskesi ekler. Bir bitmap üzerinde piksel seçiliyken **Seçimi Göster** ve **Seçimi Gizle** maskeyi seçimden oluşturur.
+- **Maskeyi Devre Dışı Bırak** maskeyi kaldırmadan kapatır; **Maskeyi Sil**, önce nesneye uygulanıp uygulanmayacağını sorduktan sonra kaldırır.
+
+Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi için Yol anahattı veya Gri tonlama görünümü ile Dolgu ve konturu göster; bitmap maskesi için Gri tonlama görünümü veya Alfa kanalı. Oradaki Maskeyi Düzenle düğmesi ya da Katmanlar panelinde maskenin küçük resmine tıklamak maskenin kendisini seçer; maskeyi herhangi bir araçla taşıyabilir, yeniden biçimlendirebilir veya boyayabilirsiniz. Beyaz boya gösterir, siyah gizler. Bitirmek için başka bir şey seçin.
+
 ## Web alanları
 
 Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.

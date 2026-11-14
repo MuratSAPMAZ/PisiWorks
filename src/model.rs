@@ -394,6 +394,43 @@ pub enum WebKind {
     Slice,
 }
 
+/// How a mask decides what shows of the object it belongs to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MaskKind {
+    /// Everything inside the outline of the mask shows.
+    PathOutline,
+    /// The lighter the mask is drawn, the more shows through it.
+    Grayscale,
+    /// The more opaque the mask is, the more shows through it.
+    Alpha,
+}
+
+/// A mask on an object: another object, placed in the document, that hides part of it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ObjectMask {
+    pub object: Object,
+    pub kind: MaskKind,
+    /// With a path outline, whether the mask's own fill and stroke are drawn too.
+    #[serde(default)]
+    pub show_fill_stroke: bool,
+    /// A disabled mask is kept but hides nothing.
+    #[serde(default = "enabled")]
+    pub enabled: bool,
+}
+
+fn enabled() -> bool {
+    true
+}
+
+impl ObjectMask {
+    /// A mask from `object`, working the way Fireworks picks for it: a bitmap by its
+    /// grayscale appearance, a vector by its outline unless `appearance` asks otherwise.
+    pub fn new(object: Object, appearance: bool) -> Self {
+        let kind = if object.is_image() || appearance { MaskKind::Grayscale } else { MaskKind::PathOutline };
+        Self { object, kind, show_fill_stroke: false, enabled: true }
+    }
+}
+
 /// How a stroke changes the pixels under it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PixelStroke {
@@ -423,6 +460,14 @@ pub struct Object {
     /// How the object's colors mix with the artwork under it.
     #[serde(default, skip_serializing_if = "BlendMode::is_normal")]
     pub blend: BlendMode,
+    /// What hides part of the object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mask: Option<Arc<ObjectMask>>,
+    /// Set on the stand-in for a mask while the mask is being edited: the id of the
+    /// object it masks. The stand-in is an ordinary object every tool can work on,
+    /// it is not drawn, and it never reaches a file.
+    #[serde(skip)]
+    pub mask_of: Option<u64>,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     /// 0.0 to 1.0.
@@ -454,6 +499,8 @@ impl Object {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -475,6 +522,8 @@ impl Object {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -705,6 +754,8 @@ impl Object {
                     handles: Vec::new(),
                     placement: None,
                     blend: crate::blend::BlendMode::Normal,
+                    mask: None,
+                    mask_of: None,
                     fill: self.fill,
                     stroke: None,
                     opacity: 1.0,
@@ -718,7 +769,7 @@ impl Object {
         self.shape = Shape::Group { objects: Arc::new(parts) };
         // The letters were laid out upright, so a transform the text carried is applied to them now.
         match self.placement.take() {
-            Some(placement) => self.warp(&placement.warp),
+            Some(placement) => self.warp_own(&placement.warp),
             None => true,
         }
     }
@@ -768,6 +819,23 @@ impl Object {
     /// transform and stay what they are. Returns false, leaving the object as it
     /// was, when it cannot be transformed.
     pub fn warp(&mut self, warp: &Warp) -> bool {
+        let done = self.warp_own(warp);
+        if done {
+            self.with_mask(|mask| {
+                mask.warp(warp);
+            });
+        }
+        done
+    }
+
+    /// Runs `change` on the object's mask, if it has one, so the mask follows the object.
+    fn with_mask(&mut self, change: impl FnOnce(&mut Object)) {
+        if let Some(mask) = &mut self.mask {
+            change(&mut Arc::make_mut(mask).object);
+        }
+    }
+
+    fn warp_own(&mut self, warp: &Warp) -> bool {
         if !self.warpable() {
             return false;
         }
@@ -1062,6 +1130,11 @@ impl Object {
     }
 
     pub fn translate(&mut self, dx: f32, dy: f32) {
+        self.translate_own(dx, dy);
+        self.with_mask(|mask| mask.translate(dx, dy));
+    }
+
+    fn translate_own(&mut self, dx: f32, dy: f32) {
         self.bounds.x += dx;
         self.bounds.y += dy;
         for p in &mut self.points {
@@ -1075,6 +1148,18 @@ impl Object {
 
     /// Moves or scales the object into `target`, carrying its vertices along.
     pub fn set_bounds(&mut self, target: Rect) {
+        let old = self.bounds;
+        self.set_bounds_own(target);
+        // The mask keeps its place within the object as the object moves and stretches.
+        let fit = Warp::fit(old, target);
+        self.with_mask(|mask| {
+            let b = mask.bounds;
+            let (corner, far) = (fit.apply(v2(b.x, b.y)), fit.apply(v2(b.right(), b.bottom())));
+            mask.set_bounds(Rect { x: corner.x, y: corner.y, w: far.x - corner.x, h: far.y - corner.y });
+        });
+    }
+
+    fn set_bounds_own(&mut self, target: Rect) {
         let old = self.bounds;
         let sx = if old.w > 0.0 { target.w / old.w } else { 1.0 };
         let sy = if old.h > 0.0 { target.h / old.h } else { 1.0 };
@@ -1092,6 +1177,20 @@ impl Object {
     }
 
     pub fn flip(&mut self, horizontal: bool) {
+        let b = self.bounds;
+        self.flip_own(horizontal);
+        self.with_mask(|mask| {
+            let m = mask.bounds;
+            if horizontal {
+                mask.translate(b.x + b.right() - m.right() - m.x, 0.0);
+            } else {
+                mask.translate(0.0, b.y + b.bottom() - m.bottom() - m.y);
+            }
+            mask.flip(horizontal);
+        });
+    }
+
+    fn flip_own(&mut self, horizontal: bool) {
         let b = self.bounds;
         match &self.shape {
             // Mirrored through their placement, so they stay editable.
@@ -1139,6 +1238,16 @@ impl Object {
 
     /// Turns the object a quarter turn around `center`. Returns false if it cannot turn.
     pub fn rotate90(&mut self, clockwise: bool, center: Vec2) -> bool {
+        let done = self.rotate90_own(clockwise, center);
+        if done {
+            self.with_mask(|mask| {
+                mask.rotate90(clockwise, center);
+            });
+        }
+        done
+    }
+
+    fn rotate90_own(&mut self, clockwise: bool, center: Vec2) -> bool {
         let turn = |p: Vec2| {
             let (dx, dy) = (p.x - center.x, p.y - center.y);
             if clockwise { v2(center.x - dy, center.y + dx) } else { v2(center.x + dy, center.y - dx) }
@@ -2016,7 +2125,7 @@ impl Editor {
     /// it has to be shown as the exporter renders it.
     pub fn needs_compositing(&self) -> bool {
         fn special(object: &Object) -> bool {
-            !object.blend.is_normal() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+            !object.blend.is_normal() || object.mask.is_some() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
         self.doc.page().objects().any(|o| o.visible && special(o))
     }
@@ -2413,6 +2522,8 @@ impl Editor {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2493,12 +2604,191 @@ impl Editor {
     }
 
     /// Combines the selected objects into one group, in their stacking order.
+    /// The selected objects, bottom-most first.
+    fn selected_in_order(&self) -> Vec<Object> {
+        self.doc.page().objects().filter(|o| self.is_selected(o.id)).cloned().collect()
+    }
+
+    /// One object standing for `objects`: the object itself if there is only one, a group otherwise.
+    fn one_object(&mut self, mut objects: Vec<Object>) -> Option<Object> {
+        match objects.len() {
+            0 => None,
+            1 => objects.pop(),
+            _ => self.group_of(objects),
+        }
+    }
+
+    /// Fireworks' Group as Mask: the top-most selected object masks the others. A vector
+    /// on top masks by how light it is drawn, as a bitmap does.
+    pub fn group_as_mask(&mut self) -> bool {
+        let mut objects = self.selected_in_order();
+        if objects.len() < 2 {
+            return false;
+        }
+        let Some(mask) = objects.pop() else { return false };
+        let Some(mut masked) = self.one_object(objects) else { return false };
+        masked.mask = Some(Arc::new(ObjectMask::new(mask, true)));
+        self.replace_selected(vec![masked]);
+        true
+    }
+
+    /// Fireworks' Paste as Mask: what is on the clipboard masks each selected object,
+    /// a vector by its outline and a bitmap by how light it is.
+    pub fn paste_as_mask(&mut self) -> bool {
+        let clipboard = self.clipboard.clone();
+        if self.selection.is_empty() {
+            return false;
+        }
+        let Some(mask) = self.one_object(clipboard) else { return false };
+        self.for_selected(|o| o.mask = Some(Arc::new(ObjectMask::new(mask.clone(), false))));
+        true
+    }
+
+    /// Fireworks' Paste Inside: what is on the clipboard is pasted and shows only inside
+    /// the selected object, which stays visible around it.
+    pub fn paste_inside(&mut self) -> bool {
+        let mut pasted = self.clipboard.clone();
+        let Some(frame) = self.selected_in_order().pop() else { return false };
+        for object in &mut pasted {
+            object.id = self.alloc_id();
+        }
+        let Some(mut inside) = self.one_object(pasted) else { return false };
+        inside.mask = Some(Arc::new(ObjectMask { object: frame.clone(), kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true }));
+        self.selection = vec![frame.id];
+        self.replace_selected(vec![inside]);
+        true
+    }
+
+    /// Gives each selected object a bitmap mask that shows all of it or none. With
+    /// `pixels`, the selected pixels of a bitmap are what shows, or what is hidden.
+    pub fn add_bitmap_mask(&mut self, reveal: bool, pixels: Option<&crate::bitmap::Mask>) -> bool {
+        let ids = self.selection.clone();
+        let mut done = false;
+        for id in ids {
+            let Some(bounds) = self.object(id).map(|o| o.bounds) else { continue };
+            let (width, height) = pixels.map_or(((bounds.w.ceil() as u32).max(1), (bounds.h.ceil() as u32).max(1)), |mask| mask.size());
+            let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
+            for y in 0..height {
+                for x in 0..width {
+                    let shown = pixels.map_or(reveal, |mask| mask.is_set(x, y) == reveal);
+                    let level = if shown { 255 } else { 0 };
+                    rgba.extend_from_slice(&[level, level, level, 255]);
+                }
+            }
+            let Some(bitmap) = Bitmap::from_rgba(width, height, rgba) else { continue };
+            let mut mask = Object::new_bitmap(self.alloc_id(), t("Mask"), bitmap, bounds.x, bounds.y);
+            mask.set_bounds(bounds);
+            if let Some(object) = self.object_mut(id) {
+                object.mask = Some(Arc::new(ObjectMask::new(mask, false)));
+                done = true;
+            }
+        }
+        done
+    }
+
+    /// Starts editing the mask of the selected object: a stand-in for the mask is put
+    /// above it and selected, for the tools to work on. Returns false without a mask.
+    pub fn edit_mask(&mut self) -> bool {
+        self.end_mask_edit();
+        let Some(owner) = self.selected().into_iter().find(|o| o.mask.is_some()).cloned() else { return false };
+        let Some(mask) = &owner.mask else { return false };
+        let mut stand_in = mask.object.clone();
+        stand_in.id = self.alloc_id();
+        stand_in.mask_of = Some(owner.id);
+        (stand_in.visible, stand_in.locked) = (true, false);
+        let id = stand_in.id;
+        for layer in &mut self.doc.page_mut().layers {
+            if let Some(at) = layer.objects.iter().position(|o| o.id == owner.id) {
+                layer.objects.insert(at + 1, stand_in);
+                self.selection = vec![id];
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Whether a mask is being edited.
+    pub fn editing_mask(&self) -> bool {
+        self.doc.page().objects().any(|o| o.mask_of.is_some())
+    }
+
+    /// Copies every mask stand-in back into the mask it stands for, so the artwork
+    /// follows the edit. Stand-ins that are no longer selected are done with and removed.
+    pub fn sync_mask_edit(&mut self) {
+        if !self.editing_mask() {
+            return;
+        }
+        let selection = self.selection.clone();
+        let stand_ins: Vec<Object> = self.doc.page().objects().filter(|o| o.mask_of.is_some()).cloned().collect();
+        for stand_in in &stand_ins {
+            let Some(owner) = stand_in.mask_of.and_then(|id| self.object_mut(id)) else { continue };
+            let Some(mask) = &mut owner.mask else { continue };
+            let mut edited = stand_in.clone();
+            (edited.id, edited.mask_of) = (mask.object.id, None);
+            if mask.object != edited {
+                Arc::make_mut(mask).object = edited;
+            }
+        }
+        let finished: Vec<u64> = stand_ins.iter().filter(|o| !selection.contains(&o.id)).map(|o| o.id).collect();
+        if !finished.is_empty() {
+            for layer in &mut self.doc.page_mut().layers {
+                layer.objects.retain(|o| !finished.contains(&o.id));
+            }
+        }
+    }
+
+    /// Finishes any mask edit, keeping what was done.
+    pub fn end_mask_edit(&mut self) {
+        if self.editing_mask() {
+            let stand_ins: Vec<u64> = self.doc.page().objects().filter(|o| o.mask_of.is_some()).map(|o| o.id).collect();
+            self.selection.retain(|id| !stand_ins.contains(id));
+            self.sync_mask_edit();
+        }
+    }
+
+    /// Switches the masks of the selected objects off or back on.
+    pub fn toggle_masks(&mut self) {
+        self.for_selected(|o| {
+            if let Some(mask) = &mut o.mask {
+                let mask = Arc::make_mut(mask);
+                mask.enabled = !mask.enabled;
+            }
+        });
+    }
+
+    /// Removes the masks of the selected objects. With `apply`, each object first
+    /// becomes the bitmap of what its mask let show.
+    pub fn delete_masks(&mut self, apply: bool) {
+        self.for_selected(|o| {
+            if o.mask.is_none() {
+                return;
+            }
+            if apply {
+                if let Some((bitmap, bounds)) = crate::export::render_object(o) {
+                    o.shape = Shape::Image { bitmap: Arc::new(bitmap) };
+                    o.bounds = bounds;
+                    (o.fill, o.stroke, o.placement, o.opacity) = (None, None, None, 1.0);
+                    o.points.clear();
+                    o.handles.clear();
+                }
+            }
+            o.mask = None;
+        });
+    }
+
     pub fn group_selected(&mut self) -> bool {
-        let objects: Vec<Object> = self.doc.page().objects().filter(|o| self.is_selected(o.id)).cloned().collect();
-        let Some(bounds) = objects.iter().map(|o| o.bounds).reduce(Rect::union).filter(|_| objects.len() >= 2) else {
+        let objects = self.selected_in_order();
+        let Some(group) = self.group_of(objects).filter(|group| matches!(&group.shape, Shape::Group { objects } if objects.len() >= 2)) else {
             return false;
         };
-        let group = Object {
+        self.replace_selected(vec![group]);
+        true
+    }
+
+    /// A group holding `objects`.
+    fn group_of(&mut self, objects: Vec<Object>) -> Option<Object> {
+        let bounds = objects.iter().map(|o| o.bounds).reduce(Rect::union)?;
+        Some(Object {
             id: self.alloc_id(),
             name: tc("object", "Group").into(),
             shape: Shape::Group { objects: Arc::new(objects) },
@@ -2507,14 +2797,14 @@ impl Editor {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: None,
             stroke: None,
             opacity: 1.0,
             visible: true,
             locked: false,
-        };
-        self.replace_selected(vec![group]);
-        true
+        })
     }
 
     /// Turns the selection a quarter turn around its center. Returns how many objects could not turn.
@@ -2711,6 +3001,8 @@ mod tests {
             handles: Vec::new(),
             placement: None,
             blend: crate::blend::BlendMode::Normal,
+            mask: None,
+            mask_of: None,
             fill: Some(Color::BLACK),
             stroke: None,
             opacity: 1.0,
@@ -3608,6 +3900,107 @@ mod tests {
         let mut converted = o.clone();
         assert!(converted.text_to_paths());
         assert!(same_rect(converted.bounds, drawn));
+    }
+
+    #[test]
+    fn group_as_mask_puts_the_top_object_over_the_rest() {
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 0.0, 0.0, 100.0, 100.0));
+        e.add_object(rect(2, 20.0, 20.0, 40.0, 40.0));
+        e.selection = vec![1];
+        assert!(!e.group_as_mask(), "one object has nothing to be masked by");
+        e.selection = vec![1, 2];
+        assert!(e.group_as_mask());
+        let masked = e.selected()[0].clone();
+        assert_eq!(e.doc.page().objects().count(), 1);
+        assert_eq!(masked.id, 1);
+        let mask = masked.mask.expect("the box below is masked");
+        assert_eq!((mask.object.id, mask.kind), (2, MaskKind::Grayscale));
+    }
+
+    #[test]
+    fn pasting_as_a_mask_and_pasting_inside() {
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 0.0, 0.0, 100.0, 100.0));
+        e.add_object(rect(2, 20.0, 20.0, 40.0, 40.0));
+        e.selection = vec![2];
+        e.copy();
+        // The copied box, as a mask on the other one, works by its outline.
+        e.selection = vec![1];
+        assert!(e.paste_as_mask());
+        let mask = e.selected()[0].mask.clone().unwrap();
+        assert_eq!((mask.kind, mask.show_fill_stroke), (MaskKind::PathOutline, false));
+        // Pasted inside box 1, a copy of box 2 takes its place, masked by box 1 which stays in view.
+        assert!(e.paste_inside());
+        let inside = e.selected()[0].clone();
+        assert_eq!(inside.bounds, Rect { x: 20.0, y: 20.0, w: 40.0, h: 40.0 });
+        let frame = inside.mask.unwrap();
+        assert_eq!((frame.object.id, frame.show_fill_stroke), (1, true));
+        assert_eq!(e.doc.page().objects().count(), 2);
+    }
+
+    #[test]
+    fn bitmap_masks_reveal_hide_and_can_be_applied() {
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 10.0, 10.0, 20.0, 20.0));
+        e.selection = vec![1];
+        assert!(e.add_bitmap_mask(false, None));
+        let mask = e.selected()[0].mask.clone().unwrap();
+        assert_eq!(mask.object.bounds, Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0 });
+        assert_eq!(mask.object.bitmap().unwrap().pixel(5, 5), Some([0, 0, 0, 255]), "Hide All is a black mask");
+        e.toggle_masks();
+        assert!(!e.selected()[0].mask.as_ref().unwrap().enabled);
+        e.toggle_masks();
+        // Thrown away, the box is itself again.
+        e.delete_masks(false);
+        assert!(e.selected()[0].mask.is_none() && matches!(e.selected()[0].shape, Shape::Rect { .. }));
+        // Applied, a hidden box is a bitmap with nothing in it.
+        e.add_bitmap_mask(false, None);
+        e.delete_masks(true);
+        let applied = e.selected()[0].clone();
+        assert!(applied.mask.is_none());
+        assert_eq!(applied.bitmap().unwrap().pixel(10, 10).map(|p| p[3]), Some(0));
+        // Revealing only some pixels of a bitmap makes a mask that is white there and black elsewhere.
+        e.selection = vec![applied.id];
+        let pixels = crate::bitmap::Mask::from_fn(applied.bitmap().unwrap().width(), applied.bitmap().unwrap().height(), |x, _| x < 3);
+        assert!(e.add_bitmap_mask(true, Some(&pixels)));
+        let mask = e.selected()[0].mask.clone().unwrap();
+        assert_eq!(mask.object.bitmap().unwrap().pixel(1, 1), Some([255, 255, 255, 255]));
+        assert_eq!(mask.object.bitmap().unwrap().pixel(8, 1), Some([0, 0, 0, 255]));
+    }
+
+    #[test]
+    fn editing_a_mask_works_on_a_stand_in_that_is_copied_back() {
+        let mut e = Editor::new(Document::new(300, 300));
+        // Ids the editor hands out itself, so the stand-in's cannot clash with them.
+        let (base, top) = (e.alloc_id(), e.alloc_id());
+        e.add_object(rect(base, 0.0, 0.0, 100.0, 100.0));
+        e.add_object(rect(top, 20.0, 20.0, 40.0, 40.0));
+        e.selection = vec![base, top];
+        e.group_as_mask();
+        assert!(e.edit_mask());
+        assert!(e.editing_mask());
+        let stand_in = e.selected()[0].clone();
+        assert_eq!(stand_in.mask_of, Some(base));
+        assert_eq!(e.doc.page().objects().count(), 2);
+        // Moving the stand-in moves the mask, once the two are brought in line.
+        e.for_selected(|o| o.translate(30.0, 0.0));
+        e.sync_mask_edit();
+        let owner = e.object(base).unwrap();
+        assert_eq!(owner.mask.as_ref().unwrap().object.bounds.x, 50.0);
+        assert_eq!(owner.mask.as_ref().unwrap().object.id, top, "the mask keeps its own identity");
+        assert!(e.editing_mask(), "still selected, so still being edited");
+        // Selecting something else ends the edit and takes the stand-in away.
+        e.selection = vec![base];
+        e.sync_mask_edit();
+        assert!(!e.editing_mask());
+        assert_eq!(e.doc.page().objects().count(), 1);
+        assert_eq!(e.object(base).unwrap().mask.as_ref().unwrap().object.bounds.x, 50.0);
+        // A stand-in never reaches a file.
+        e.edit_mask();
+        e.end_mask_edit();
+        assert!(!document_to_json(&e.doc).unwrap().contains("mask_of"));
+        assert_eq!(e.doc.page().objects().count(), 1);
     }
 
     #[test]
