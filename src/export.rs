@@ -1,7 +1,6 @@
 //! Rasterizes a page to PNG, and measures text with the same font used for export.
 
 use std::path::Path;
-use std::sync::OnceLock;
 
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont};
 use anyhow::{anyhow, Context, Result};
@@ -16,12 +15,7 @@ use crate::model::{Color, Object, Page, Rect, Shape, Vec2, WebKind};
 pub const LINE_HEIGHT: f32 = 1.2;
 
 fn font() -> Option<&'static FontVec> {
-    static FONT: OnceLock<Option<FontVec>> = OnceLock::new();
-    FONT.get_or_init(|| {
-        let bytes = std::fs::read("C:/Windows/Fonts/segoeui.ttf").ok()?;
-        FontVec::try_from_vec(bytes).ok()
-    })
-    .as_ref()
+    crate::fonts::outlines()
 }
 
 /// Converts an em size, as used by the canvas, to the font's pixel-height scale.

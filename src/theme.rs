@@ -35,7 +35,6 @@ pub const LIST_SPECIAL: u32 = 0xd4d0c8;
 pub const SELECTION: u32 = 0x00a8ff;
 pub const RULER: u32 = 0xdfdfdf;
 
-pub const FONT: &str = "Segoe UI";
 pub const FONT_SIZE: f32 = 11.0;
 
 pub const MENU_BAR_HEIGHT: f32 = 32.0;

@@ -538,7 +538,7 @@ fn paint_caption(pane: Bounds<Pixels>, text: String, window: &mut Window, cx: &m
     window.paint_quad(fill(strip, rgb(theme::PANEL)));
     let run = TextRun {
         len: text.len(),
-        font: font(theme::FONT),
+        font: font(crate::fonts::family()),
         color: rgb(theme::TEXT).into(),
         background_color: None,
         underline: None,
@@ -576,7 +576,7 @@ fn paint_text(object: &Object, content: &str, text_size: f32, color: Hsla, map: 
         }
         let run = TextRun {
             len: line.len(),
-            font: font(theme::FONT),
+            font: font(crate::fonts::family()),
             color,
             background_color: None,
             underline: None,
@@ -627,7 +627,7 @@ fn paint_rulers(bounds: Bounds<Pixels>, map: ViewMap, window: &mut Window, cx: &
     let label = |text: String, origin: Point<Pixels>, window: &mut Window, cx: &mut App| {
         let run = TextRun {
             len: text.len(),
-            font: font(theme::FONT),
+            font: font(crate::fonts::family()),
             color: rgb(theme::TEXT_DIM).into(),
             background_color: None,
             underline: None,

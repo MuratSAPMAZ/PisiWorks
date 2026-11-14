@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use gpui::{
-    anchored, canvas, deferred, div, prelude::*, px, rgb, svg, AnyElement, AnyView, App, Context, CursorStyle, Div,
+    anchored, canvas, deferred, div, prelude::*, px, rgb, svg, AnyElement, AnyView, App, Context, CursorStyle, Decorations,
+    Div,
     ElementInputHandler, FontWeight, MouseButton, MouseDownEvent, ParentElement, Render, SharedString, Stateful, Svg,
     Window, WindowControlArea,
 };
@@ -39,7 +40,7 @@ impl Render for Tip {
             .border_color(rgb(BORDER))
             .text_color(rgb(0x202020))
             .text_size(px(FONT_SIZE))
-            .font_family(FONT)
+            .font_family(crate::fonts::family())
             .child(self.0.clone())
     }
 }
@@ -148,7 +149,48 @@ impl Workspace {
                 .hover(move |s| s.bg(rgb(if close { WINDOW_CLOSE_HOVER } else { HOVER })))
                 .occlude()
                 .window_control_area(area)
+                // Windows handles these areas itself. Elsewhere they are ordinary buttons.
+                .when(!cfg!(windows), |d| {
+                    d.on_click(cx.listener(move |this, _, window, cx| match area {
+                        WindowControlArea::Min => window.minimize_window(),
+                        WindowControlArea::Max => window.zoom_window(),
+                        WindowControlArea::Close => {
+                            if this.request_close(window, cx) {
+                                window.remove_window();
+                            }
+                        }
+                        WindowControlArea::Drag => {}
+                    }))
+                })
                 .child(icon(name, 10., TEXT))
+        };
+        // With a system title bar the window already has these buttons.
+        let own_frame = cfg!(windows) || !matches!(window.window_decorations(), Decorations::Server);
+        let window_buttons = own_frame.then(|| {
+            div()
+                .mr_1()
+                .flex()
+                .flex_none()
+                .gap(px(2.))
+                .child(window_button("window-min", "win-min", WindowControlArea::Min, false))
+                .child(window_button(
+                    "window-max",
+                    if window.is_maximized() { "win-restore" } else { "win-max" },
+                    WindowControlArea::Max,
+                    false,
+                ))
+                .child(window_button("window-close", "win-close", WindowControlArea::Close, true))
+        });
+        let drag_area = |d: Div| {
+            d.occlude().window_control_area(WindowControlArea::Drag).when(!cfg!(windows) && own_frame, |d| {
+                d.on_mouse_down(MouseButton::Left, |ev, window, _| {
+                    if ev.click_count == 2 {
+                        window.zoom_window();
+                    } else {
+                        window.start_window_move();
+                    }
+                })
+            })
         };
         let zoom = (self.zoom * 100.0).round() as u32;
         let mode = if self.compact_workspace { "Collapsed Mode" } else { "Expanded Mode" };
@@ -161,41 +203,27 @@ impl Workspace {
             .border_b_1()
             .border_color(rgb(BORDER))
             .child(
-                div()
-                    .w(px(40.))
-                    .h_full()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .justify_center()
-                    .text_size(px(19.))
-                    .font_weight(FontWeight::BOLD)
-                    .text_color(rgb(APP_MARK_COLOR))
-                    .occlude()
-                    .window_control_area(WindowControlArea::Drag)
-                    .child(APP_MARK),
+                drag_area(
+                    div()
+                        .w(px(40.))
+                        .h_full()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .text_size(px(19.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(rgb(APP_MARK_COLOR)),
+                )
+                .child(APP_MARK),
             )
             .child(div().h_full().flex().flex_none().children(titles))
             .child(div().w(px(1.)).h(px(20.)).mx_2().flex_none().bg(rgb(SEPARATOR)))
             .child(div().id("app-bar-tools").flex().flex_none().children(VIEW_TOOLS.iter().map(|s| self.tool_slot(s, cx)).collect::<Vec<_>>()))
             .child(div().ml_1().flex_none().child(self.combo(Combo::Zoom, format!("{zoom}%"), 64., cx).bg(rgb(PANEL_RAISED))))
-            .child(div().flex_1().h_full().occlude().window_control_area(WindowControlArea::Drag))
+            .child(drag_area(div().flex_1().h_full()))
             .child(div().mr_2().flex_none().child(self.combo(Combo::WorkspaceMode, mode, 112., cx).bg(rgb(PANEL_RAISED))))
-            .child(
-                div()
-                    .mr_1()
-                    .flex()
-                    .flex_none()
-                    .gap(px(2.))
-                    .child(window_button("window-min", "win-min", WindowControlArea::Min, false))
-                    .child(window_button(
-                        "window-max",
-                        if window.is_maximized() { "win-restore" } else { "win-max" },
-                        WindowControlArea::Max,
-                        false,
-                    ))
-                    .child(window_button("window-close", "win-close", WindowControlArea::Close, true)),
-            )
+            .children(window_buttons)
     }
 
     fn menu_panel(&self, entries: &'static [Entry], top_level: bool, cx: &mut Context<Self>) -> Div {
@@ -1409,7 +1437,7 @@ impl Render for Workspace {
             .bg(rgb(PANEL))
             .text_color(rgb(TEXT))
             .text_size(px(FONT_SIZE))
-            .font_family(FONT)
+            .font_family(crate::fonts::family())
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::root_mouse_down))

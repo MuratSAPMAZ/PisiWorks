@@ -1320,7 +1320,11 @@ impl Workspace {
     }
 
     fn default_dir() -> PathBuf {
-        std::env::var_os("USERPROFILE").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."))
+        ["USERPROFILE", "HOME"]
+            .iter()
+            .find_map(|name| std::env::var_os(name))
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("."))
     }
 
     fn write_document(&mut self, mut path: PathBuf) {

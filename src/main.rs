@@ -4,6 +4,7 @@ mod autoshape;
 mod bitmap;
 mod canvas_view;
 mod export;
+mod fonts;
 mod icons;
 mod library;
 mod menus;
