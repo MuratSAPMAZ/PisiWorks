@@ -19,8 +19,8 @@ use crate::theme;
 use crate::workspace::{quad_handles, Drag, PreviewPane, ViewMap, ViewMode, Workspace};
 
 const HANDLE_SIZE: f32 = 7.0;
-/// The pink Fireworks lays over a JPEG mask.
-const JPEG_MASK_TINT: Rgba = Rgba { r: 1.0, g: 0.2, b: 0.6, a: 0.3 };
+/// How strongly the JPEG mask is tinted.
+const JPEG_MASK_OPACITY: f32 = 0.3;
 const CHECKER: f32 = 8.0;
 const PANE_GAP: f32 = 2.0;
 const PANE_CAPTION_HEIGHT: f32 = 18.0;
@@ -156,7 +156,7 @@ pub struct Scene {
     stamp_mark: Option<Vec2>,
     all_handles: bool,
     /// The page's JPEG mask, tinted so the area kept at the selective quality can be seen.
-    jpeg_mask: Option<Arc<Vec<Rect>>>,
+    jpeg_mask: Option<(Arc<Vec<Rect>>, Color)>,
     /// The box of the Scale, Skew and Distort tools, with the point rotation turns around.
     transform_box: Option<([Vec2; 4], Vec2)>,
     caret: Option<(Vec2, f32)>,
@@ -288,7 +288,7 @@ impl Scene {
             ants,
             stamp_mark,
             all_handles: matches!(w.tool, Tool::Scale | Tool::Skew | Tool::Distort),
-            jpeg_mask: w.jpeg_mask_rects(),
+            jpeg_mask: w.jpeg_mask_rects().map(|rects| (rects, w.ed.doc.page().jpeg_mask_color.unwrap_or(crate::workspace::JPEG_MASK_COLOR))),
             transform_box: if editing.is_some() { None } else { w.transform_box() },
             caret,
             show_rulers: w.show_rulers,
@@ -451,9 +451,9 @@ impl Scene {
 
     fn paint_overlays(&self, map: ViewMap, window: &mut Window) {
         let accent = rgb(theme::SELECTION);
-        if let Some(rects) = &self.jpeg_mask {
+        if let Some((rects, color)) = &self.jpeg_mask {
             for rect in rects.iter() {
-                window.paint_quad(fill(screen_rect(map, *rect), JPEG_MASK_TINT));
+                window.paint_quad(fill(screen_rect(map, *rect), to_hsla(*color, JPEG_MASK_OPACITY)));
             }
         }
         for object in &self.selected {

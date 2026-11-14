@@ -4,7 +4,9 @@
 
 pub const APP_NAME: &str = "PisiWorks";
 pub const APP_MARK: &str = "Pw";
-pub const FILE_EXTENSION: &str = "ember";
+pub const FILE_EXTENSION: &str = "pisi";
+/// The extension documents had before, and Emberframe documents still have. They open and save as before.
+pub const LEGACY_EXTENSION: &str = "ember";
 
 pub const PANEL: u32 = 0xd6d6d6;
 /// The strip behind panel and document tabs.

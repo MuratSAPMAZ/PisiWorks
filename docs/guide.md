@@ -20,7 +20,7 @@ Brush, Pencil and Eraser change the pixels of the bitmap under the pointer. Off 
 
 Drag with Crop, then press Enter or double-click to apply. Esc cancels.
 
-Save never overwrites the opened image. It creates an `.ember` document that keeps your objects, and File > Export writes a flat image.
+Save never overwrites the opened image. It creates a `.pisi` document that keeps your objects, and File > Export writes a flat image.
 
 Marquee (M), Lasso (L) and Magic Wand (W) select pixels on a bitmap. Hold Shift to add to the selection, or Alt to subtract. Painting, filling and filters stay inside the selection. Cut, Copy and Delete act on the selected pixels, and Paste adds them as a new bitmap. Drag inside the selection with the Pointer, or press the arrow keys, to move the selected pixels; hold Alt to leave a copy behind. Dragging inside it with Marquee or Lasso moves only the selection border, and with Ctrl held it moves the pixels. Ctrl+D or Esc drops the selection.
 
@@ -54,7 +54,7 @@ They never appear in the flattened image. Exporting `name.png` also writes `name
 The Window menu opens and closes every panel, and F4 hides or restores them all. Click a tab to bring it forward, and double-click the front tab to collapse its group.
 
 - **States**: each state has its own objects. Play the animation, turn on onion skinning, and share a layer across states from the Layers panel. Double-click a page, state, layer or object to rename it.
-- **Optimize**: pick GIF, Animated GIF, JPEG, PNG 8, PNG 24 or PNG 32. The panel estimates the file size, and Export Page uses these settings. For a JPEG, Smoothing (0 to 8) blurs the picture a little to make the file smaller. Selective quality keeps part of the page at a quality of its own: select the pixels, choose Modify > Selective JPEG > Save Selection as JPEG Mask, and tick Selective quality. The mask shows as a pink tint. Settings can also keep all text at the selective quality.
+- **Optimize**: pick GIF, Animated GIF, JPEG, PNG 8, PNG 24 or PNG 32. The panel estimates the file size, and Export Page uses these settings. For a JPEG, Smoothing (0 to 8) blurs the picture a little to make the file smaller. Selective quality keeps part of the page at a quality of its own: select the pixels, choose Modify > Selective JPEG > Save Selection as JPEG Mask, and tick Selective quality. The mask shows as a pink tint. Settings can also keep all text and all buttons at the selective quality, and change the color of the tint. A symbol is a button when its Type in Symbol Properties says so, as the buttons of the Common Library do.
 - **Styles**: click a style to apply it, or to set the colors for the next shape. Styles hold fill, stroke and opacity.
 - **Path**: Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset.
 - **Auto Shapes**: drag a tile onto the canvas, or click it to place the shape in the middle of the page, then adjust it in Auto Shape Properties.

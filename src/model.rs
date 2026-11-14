@@ -1450,6 +1450,13 @@ pub struct Page {
     /// The part of the page a JPEG keeps at its selective quality, a cell for each pixel of the page.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub jpeg_mask: Option<Arc<crate::bitmap::Mask>>,
+    /// The color the JPEG mask is tinted with on the canvas; `None` is the usual pink.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jpeg_mask_color: Option<Color>,
+    /// The symbols that are buttons. Filled in only on the copy of a page handed to
+    /// the exporter, which has the page but not the document's library.
+    #[serde(skip)]
+    pub button_symbols: Vec<u64>,
 }
 
 impl Page {
@@ -1465,6 +1472,8 @@ impl Page {
             active_state: 0,
             export: ExportSettings::default(),
             jpeg_mask: None,
+            jpeg_mask_color: None,
+            button_symbols: Vec::new(),
         }
     }
 
@@ -1675,6 +1684,27 @@ pub struct Symbol {
     pub id: u64,
     pub name: String,
     pub objects: Vec<Object>,
+    #[serde(default)]
+    pub kind: SymbolKind,
+}
+
+/// What a symbol is for, as Fireworks sorts them.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SymbolKind {
+    #[default]
+    Graphic,
+    Button,
+}
+
+impl SymbolKind {
+    pub const ALL: [SymbolKind; 2] = [SymbolKind::Graphic, SymbolKind::Button];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SymbolKind::Graphic => t("Graphic"),
+            SymbolKind::Button => t("Button"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1972,6 +2002,13 @@ impl Editor {
 
     pub fn object(&self, id: u64) -> Option<&Object> {
         self.doc.page().objects().find(|o| o.id == id)
+    }
+
+    /// The current page as the exporter needs it, knowing which of its symbols are buttons.
+    pub fn export_page(&self) -> Page {
+        let mut page = self.doc.page().clone();
+        page.button_symbols = self.doc.symbols.iter().filter(|s| s.kind == SymbolKind::Button).map(|s| s.id).collect();
+        page
     }
 
     pub fn object_mut(&mut self, id: u64) -> Option<&mut Object> {
@@ -2339,12 +2376,12 @@ impl Editor {
     }
 
     /// Adds a symbol to the library, or finds the one that already has this name.
-    pub fn add_library_symbol(&mut self, name: &str, objects: &[Object]) -> u64 {
+    pub fn add_library_symbol(&mut self, name: &str, objects: &[Object], kind: SymbolKind) -> u64 {
         if let Some(existing) = self.doc.symbols.iter().find(|s| s.name == name) {
             return existing.id;
         }
         let id = self.alloc_id();
-        self.doc.symbols.push(Symbol { id, name: name.to_string(), objects: normalized(objects) });
+        self.doc.symbols.push(Symbol { id, name: name.to_string(), objects: normalized(objects), kind });
         id
     }
 
@@ -2395,7 +2432,7 @@ impl Editor {
         self.selection = objects.iter().map(|o| o.id).collect();
         let id = self.alloc_id();
         let name = tf("Symbol {}", &[&(self.doc.symbols.len() + 1)]);
-        self.doc.symbols.push(Symbol { id, name, objects: normalized(&objects) });
+        self.doc.symbols.push(Symbol { id, name, objects: normalized(&objects), kind: SymbolKind::Graphic });
         let instance = self.new_instance(id, bounds);
         self.replace_selected(vec![instance]);
         Some(id)

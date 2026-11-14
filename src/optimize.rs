@@ -73,13 +73,13 @@ impl ExportFormat {
 
 /// Ready-made settings offered at the top of the Optimize panel.
 pub const PRESETS: [(&str, ExportSettings); 7] = [
-    ("GIF Web 216", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 216, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("GIF Web 256", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("Animated GIF", ExportSettings { format: ExportFormat::AnimatedGif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("JPEG - Better Quality", ExportSettings { format: ExportFormat::Jpeg, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("JPEG - Smaller File", ExportSettings { format: ExportFormat::Jpeg, quality: 60, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("PNG 8", ExportSettings { format: ExportFormat::Png8, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
-    ("PNG 32", ExportSettings { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }),
+    ("GIF Web 216", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 216, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("GIF Web 256", ExportSettings { format: ExportFormat::Gif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("Animated GIF", ExportSettings { format: ExportFormat::AnimatedGif, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("JPEG - Better Quality", ExportSettings { format: ExportFormat::Jpeg, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("JPEG - Smaller File", ExportSettings { format: ExportFormat::Jpeg, quality: 60, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("PNG 8", ExportSettings { format: ExportFormat::Png8, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
+    ("PNG 32", ExportSettings { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }),
 ];
 
 /// The settings compared in 4-Up view: the current ones and two cheaper alternatives.
@@ -151,6 +151,9 @@ pub struct ExportSettings {
     pub selective_quality: u8,
     #[serde(default)]
     pub preserve_text: bool,
+    /// Whether copies of button symbols are written at the selective quality too.
+    #[serde(default)]
+    pub preserve_buttons: bool,
 }
 
 fn default_selective_quality() -> u8 {
@@ -162,7 +165,7 @@ pub const MAX_SMOOTHING: u8 = 8;
 
 impl Default for ExportSettings {
     fn default() -> Self {
-        Self { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false }
+        Self { format: ExportFormat::Png32, quality: 80, colors: 256, transparent: false, matte: None, smoothing: 0, selective: false, selective_quality: 90, preserve_text: false, preserve_buttons: false }
     }
 }
 
@@ -394,11 +397,12 @@ pub fn encode(page: &Page, settings: &ExportSettings) -> Result<Vec<u8>> {
                 let quality = settings.quality.clamp(1, 100);
                 // The areas kept at the selective quality: the JPEG mask, and text if it is to be preserved.
                 let mask = page.jpeg_mask.as_ref().filter(|mask| mask.size() == (w, h));
-                let text: Vec<crate::model::Rect> = if settings.preserve_text {
-                    page.objects().filter(|o| o.visible && matches!(o.shape, crate::model::Shape::Text { .. })).map(|o| o.bounds).collect()
-                } else {
-                    Vec::new()
+                let kept = |o: &&crate::model::Object| match &o.shape {
+                    crate::model::Shape::Text { .. } => settings.preserve_text,
+                    crate::model::Shape::Instance { symbol, .. } => settings.preserve_buttons && page.button_symbols.contains(symbol),
+                    _ => false,
                 };
+                let text: Vec<crate::model::Rect> = page.objects().filter(|o| o.visible).filter(kept).map(|o| o.bounds).collect();
                 if settings.selective && (mask.is_some() || !text.is_empty()) {
                     let covers = |x: u32, y: u32| {
                         mask.is_some_and(|mask| mask.is_set(x, y)) || text.iter().any(|b| b.contains(crate::model::v2(x as f32 + 0.5, y as f32 + 0.5)))
@@ -569,6 +573,25 @@ mod tests {
         let without = encode(&source, &plain).unwrap().len();
         let with = encode(&source, &ExportSettings { preserve_text: true, ..plain }).unwrap().len();
         assert!(with > without, "{with} against {without}");
+    }
+
+    #[test]
+    fn button_symbols_can_be_kept_at_the_selective_quality() {
+        let mut ed = crate::model::Editor::new(crate::model::Document::new(64, 64));
+        let noise = noisy_page().layers[0].objects[0].clone();
+        ed.add_object(noise);
+        // A symbol placed over part of the page, first as a graphic and then as a button.
+        let mut part = Object::new_bitmap(5, "s", crate::bitmap::Bitmap::from_rgba(1, 1, vec![0, 0, 0, 0]).unwrap(), 0.0, 0.0);
+        part.bounds = crate::model::Rect { x: 0.0, y: 0.0, w: 32.0, h: 32.0 };
+        let symbol = ed.add_library_symbol("b", &[part], crate::model::SymbolKind::Graphic);
+        assert!(ed.place_symbol(symbol));
+        let options = ExportSettings { quality: 20, selective: true, selective_quality: 95, preserve_buttons: true, ..settings(ExportFormat::Jpeg) };
+        let as_graphic = encode(&ed.export_page(), &options).unwrap().len();
+        ed.doc.symbols[0].kind = crate::model::SymbolKind::Button;
+        let as_button = encode(&ed.export_page(), &options).unwrap().len();
+        assert!(as_button > as_graphic, "{as_button} against {as_graphic}");
+        // The option switched off leaves the button at the plain quality.
+        assert_eq!(encode(&ed.export_page(), &ExportSettings { preserve_buttons: false, ..options }).unwrap().len(), as_graphic);
     }
 
     #[test]

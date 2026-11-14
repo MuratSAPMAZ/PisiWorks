@@ -46,7 +46,7 @@ It is deliberately a look-alike: the same docked layout, tool groups, panels and
 | **Bitmap** | Paint, erase, clone, flood fill, pixel selections, Brighten, Darken, Grayscale, Invert, Blur and Sharpen |
 | **Screens and animation** | Pages, layers, shared layers, states, onion skinning, symbols and a library |
 | **Export** | PNG 8, PNG 24, PNG 32, JPEG, GIF and animated GIF, with Preview, 2-Up and 4-Up comparison, slices and HTML image maps |
-| **Documents** | Native `.ember` files, opening and importing common image formats, Canvas Size, Image Size and Fit Canvas |
+| **Documents** | Native `.pisi` files (`.ember` files from Emberframe open too), opening and importing common image formats, Canvas Size, Image Size and Fit Canvas |
 
 ## Screenshots
 
@@ -73,7 +73,7 @@ cd emberframe
 cargo run --release
 ```
 
-Then open [`examples/solstice-landing.ember`](examples/solstice-landing.ember) with Ctrl+O to explore the design in the screenshots. The [user guide](docs/guide.md) explains the tools and panels.
+Then open [`examples/solstice-landing.pisi`](examples/solstice-landing.pisi) with Ctrl+O to explore the design in the screenshots. The [user guide](docs/guide.md) explains the tools and panels.
 
 ```bash
 cargo test

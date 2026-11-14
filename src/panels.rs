@@ -10,6 +10,7 @@ use crate::autoshape::AutoKind;
 use crate::canvas_view::paint_thumbnail;
 use crate::library::common_items;
 use crate::menus::{Cmd, Panel, SlotAction, COLOR_TOOLS, DOCK_GROUPS, TOOL_SECTIONS, TRANSFORM_TOOLS, ZOOM_LEVELS};
+use crate::model::SymbolKind;
 use crate::model::{Align, Color, Object, Rect, Shape, Stroke};
 use crate::bitmap::Filter;
 use crate::optimize::{format_size, ExportFormat, PRESETS};
@@ -359,6 +360,18 @@ impl Workspace {
                     )
                 })
                 .collect(),
+            Combo::SymbolKind(symbol) => SymbolKind::ALL
+                .into_iter()
+                .map(|kind| {
+                    let current = self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == kind);
+                    item(kind.label().into(), current, cx, Box::new(move |this, _, _| {
+                        if let Some(entry) = this.ed.doc.symbols.iter_mut().find(|s| s.id == symbol) {
+                            entry.kind = kind;
+                            this.ed.commit(t("Symbol Properties"));
+                        }
+                    }))
+                })
+                .collect(),
             Combo::NumericMode => NumericMode::ALL
                 .into_iter()
                 .map(|mode| {
@@ -579,8 +592,10 @@ impl Workspace {
             .flat_map(|page| page.objects())
             .filter(|o| matches!(o.shape, Shape::Instance { symbol: placed, .. } if placed == symbol))
             .count();
+        let kind = self.ed.doc.symbols.iter().find(|s| s.id == symbol).map_or(SymbolKind::Graphic, |s| s.kind);
         shell
             .child(labelled_row(t("Symbol:"), 46., self.field(FieldId::RenameSymbol(symbol), 150., cx)))
+            .child(labelled_row(t("Type:"), 30., self.combo(Combo::SymbolKind(symbol), kind.label(), 90., cx).bg(rgb(PANEL_RAISED))))
             .child(div().h(px(22.)).flex().items_center().child(label(tf(if copies == 1 { "{} copy in this document" } else { "{} copies in this document" }, &[&copies]))))
             .child(self.text_button(t("Break Apart"), true, cx, |this, window, cx| this.run(Cmd::BreakApart, window, cx)))
     }
@@ -713,7 +728,9 @@ impl Workspace {
                         .child(div().font_weight(FontWeight::BOLD).child(t("Selective JPEG Settings")))
                         .child(self.check_box(t("Enable selective quality"), settings.selective, cx, |this| this.set_export(|s| s.selective = !s.selective)))
                         .child(div().flex().items_center().gap_1().child(label(t("Selective quality:"))).child(self.field(FieldId::OptimizeSelective, 44., cx)))
+                        .child(div().flex().items_center().gap_1().child(label(t("Overlay color:"))).child(self.swatch(ColorTarget::JpegMask, 18., cx)))
                         .child(self.check_box(t("Preserve text quality"), settings.preserve_text, cx, |this| this.set_export(|s| s.preserve_text = !s.preserve_text)))
+                        .child(self.check_box(t("Preserve button quality"), settings.preserve_buttons, cx, |this| this.set_export(|s| s.preserve_buttons = !s.preserve_buttons)))
                         .child(
                             div()
                                 .flex()

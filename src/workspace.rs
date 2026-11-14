@@ -26,11 +26,12 @@ use crate::library::common_items;
 use crate::menus::{panel_shortcut, Cmd, Panel, ScreenMode, Tool, DOCK_GROUPS, ZOOM_LEVELS};
 use crate::optimize::{comparison_settings, encode, encoded_palette, export_page, format_size, settings_label, ExportSettings, MAX_COLORS, MIN_COLORS};
 use crate::paths::PathOp;
+use crate::model::SymbolKind;
 use crate::model::{
     document_from_json, document_to_json, flatten_curve, pull_points, subdivide, v2, Color, Document, Editor, Handles,
     Object, PixelStroke, Rect, Shape, Stroke, Vec2, Warp, WebKind,
 };
-use crate::theme::{APP_NAME, FILE_EXTENSION};
+use crate::theme::{APP_NAME, FILE_EXTENSION, LEGACY_EXTENSION};
 
 /// Screen pixels the pointer must travel before a press counts as pulling a curve handle.
 const HANDLE_DRAG_START: f32 = 3.0;
@@ -61,6 +62,8 @@ pub enum ColorTarget {
     Stroke,
     Canvas,
     Matte,
+    /// The tint that shows the JPEG mask.
+    JpegMask,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -74,6 +77,8 @@ pub enum Combo {
     State,
     Align,
     PanelMenu(usize),
+    /// Whether a symbol, given by its id, is a graphic or a button.
+    SymbolKind(u64),
     /// What the Numeric Transform dialog changes.
     NumericMode,
     /// The tools behind the Scale button.
@@ -227,6 +232,9 @@ pub enum PanelItem {
     /// A symbol of the Document Library.
     Symbol(u64),
 }
+
+/// The pink Fireworks lays over a JPEG mask unless another color is chosen.
+pub const JPEG_MASK_COLOR: Color = Color::rgb(255, 51, 153);
 
 /// Screen pixels the pointer may wander during a press that still counts as a click.
 const CLICK_SLOP: f32 = 4.0;
@@ -423,7 +431,7 @@ pub struct Workspace {
     pub size_dialog: Option<SizeDialog>,
     pub numeric_dialog: Option<NumericDialog>,
     /// The Selective JPEG Settings dialog, holding the settings to go back to on Cancel.
-    pub jpeg_dialog: Option<ExportSettings>,
+    pub jpeg_dialog: Option<(ExportSettings, Option<Color>)>,
     /// The JPEG mask as rectangles to tint, kept until the mask changes.
     jpeg_tint: std::cell::RefCell<Option<(usize, Arc<Vec<Rect>>)>>,
     pub collapsed_layers: Vec<usize>,
@@ -921,7 +929,7 @@ impl Workspace {
         self.estimate_key = Some(key);
         self.estimate = None;
         self.estimate_error = None;
-        let page = self.ed.doc.page().clone();
+        let page = self.ed.export_page();
         cx.spawn(async move |this, cx| {
             let result = cx
                 .background_executor()
@@ -960,7 +968,7 @@ impl Workspace {
             return;
         }
         self.previews_key = Some(key);
-        let page = self.ed.doc.page().clone();
+        let page = self.ed.export_page();
         let settings: Vec<ExportSettings> = match self.view_mode {
             ViewMode::FourUp => comparison_settings(page.export).to_vec(),
             _ => vec![page.export],
@@ -1064,9 +1072,11 @@ impl Workspace {
     /// Closes the Selective JPEG Settings dialog, putting the settings back unless `keep` is set.
     pub fn close_jpeg_dialog(&mut self, keep: bool) {
         self.commit_field();
-        if let Some(before) = self.jpeg_dialog.take().filter(|_| !keep) {
-            if before != self.ed.doc.page().export {
-                self.set_export(|settings| *settings = before);
+        if let Some((settings, color)) = self.jpeg_dialog.take().filter(|_| !keep) {
+            let page = self.ed.doc.page();
+            if settings != page.export || color != page.jpeg_mask_color {
+                self.ed.doc.page_mut().jpeg_mask_color = color;
+                self.set_export(|current| *current = settings);
             }
         }
     }
@@ -1265,7 +1275,9 @@ impl Workspace {
             PanelItem::AutoShape(kind) => self.insert_auto_shape_at(kind, center),
             PanelItem::Common(index) => {
                 let Some(entry) = common_items().get(index) else { return };
-                let id = self.ed.add_library_symbol(t(entry.name), &entry.objects());
+                // The buttons of the Common Library arrive as button symbols.
+                let kind = if entry.category == "Buttons" { SymbolKind::Button } else { SymbolKind::Graphic };
+                let id = self.ed.add_library_symbol(t(entry.name), &entry.objects(), kind);
                 self.symbol_selection = Some(id);
                 self.place_symbol_at(id, center);
             }
@@ -1622,7 +1634,7 @@ impl Workspace {
                 self.ed.doc.page_mut().jpeg_mask = None;
                 self.ed.commit(t("Remove JPEG Mask"));
             }
-            Cmd::JpegSettings => self.jpeg_dialog = Some(self.ed.doc.page().export),
+            Cmd::JpegSettings => self.jpeg_dialog = Some((self.ed.doc.page().export, self.ed.doc.page().jpeg_mask_color)),
             Cmd::SelectTool(tool) => self.set_tool(tool),
             Cmd::TextToPaths => {
                 self.ed.for_selected(|o| {
@@ -1814,7 +1826,7 @@ impl Workspace {
     fn write_document(&mut self, mut path: PathBuf) {
         // Saving under an image name writes a flattened copy, and the editable
         // document stays unsaved. JSON must never land in a file named .png.
-        if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION)) {
+        if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION) && !e.eq_ignore_ascii_case(LEGACY_EXTENSION)) {
             self.export_to(&path);
             return;
         }
@@ -1834,7 +1846,7 @@ impl Workspace {
     }
 
     fn export_to(&mut self, path: &Path) {
-        let page = self.ed.doc.page();
+        let page = &self.ed.export_page();
         self.status = match export_page(page, path).and_then(|()| export_web(page, path)) {
             Ok(0) => tf("Exported {}", &[&path.display()]),
             Ok(extra) => tf("Exported {} and {} web file(s) beside it", &[&path.display(), &extra]),
@@ -3490,6 +3502,7 @@ impl Workspace {
             ColorTarget::Stroke => first.map_or(self.stroke, |o| o.stroke.map(|s| s.color)),
             ColorTarget::Canvas => self.ed.doc.page().canvas,
             ColorTarget::Matte => self.ed.doc.page().export.matte,
+            ColorTarget::JpegMask => Some(self.ed.doc.page().jpeg_mask_color.unwrap_or(JPEG_MASK_COLOR)),
         }
     }
 
@@ -3520,6 +3533,10 @@ impl Workspace {
                 self.ed.commit(t("Canvas Color"));
             }
             ColorTarget::Matte => self.set_export(|s| s.matte = color),
+            ColorTarget::JpegMask => {
+                self.ed.doc.page_mut().jpeg_mask_color = color;
+                self.ed.commit(t("Optimize"));
+            }
         }
     }
 
