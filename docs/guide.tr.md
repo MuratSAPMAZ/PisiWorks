@@ -30,12 +30,14 @@ Klonlama Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından orad
 
 Ölçekle (Q), seçili her şeyi tutamaçlarından yeniden boyutlandırır. Shift'i basılı tutmadığınız sürece köşeler oranları korur.
 
-Eğ ve Çarpıt araçları Ölçekle'nin yanındadır; Q'ya yeniden basmak üçü arasında sırayla geçer. Üçünde de döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun.
+Eğ ve Çarpıt, Ölçekle düğmesini paylaşır: listelemek için düğmeye basılı tutun veya üçü arasında sırayla geçmek için Q'ya yeniden basın. Üçünde de döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun. Döndürme, kutunun ortasındaki küçük dairenin çevresinde yapılır; bu daireyi önce başka bir yere sürükleyebilirsiniz.
 
 - **Eğ**: seçimi yatırmak için bir kenar tutamacını, perspektif için bir köşe tutamacını sürükleyin; perspektifte köşe ile komşusu birbirinden uzaklaşır veya birbirine yaklaşır.
 - **Çarpıt**: yalnızca bir köşeyi oynatmak için köşe tutamacını, bütün bir kenarı taşımak için kenar tutamacını sürükleyin.
 
-Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Dönüşüm, fareyi bıraktığınızda uygulanır.
+Sürüklerken çizim dönüşümü yalnızca önizler; başka bir tutamaçla veya üç araçtan bir diğeriyle devam edebilirsiniz. Uygulamak için Enter'a basın veya kutunun içine çift tıklayın, her şeyi eski haline getirmek için Esc'ye basın. Kutunun içini sürüklemek seçimi taşır.
+
+Değiştir > Dönüştür menüsünde aynı araçlar ile 180° Döndür, 90° döndürmeler ve iki çevirme bulunur. Sayısal Dönüştürme (Ctrl+Shift+T), seçimin ortasını sabit tutarak yüzdeyle ölçekler, piksel cinsinden boyut verir veya bir açıyla döndürür.
 
 Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu değiştirmeye devam edebilirsiniz. Sembol de kitaplığa bağlı kalır. Değiştir > Dönüştür > Dönüşümleri Kaldır ikisini de yeniden dik hale getirir. Dikdörtgenler ve elipsler yola çevrilir, bitmap'ler yeniden çizilir. Web alanları dönüştürülmez. Metin > Yollara Dönüştür, metni harflerinin ana hatlarına çevirir.
 

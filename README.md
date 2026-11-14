@@ -83,7 +83,6 @@ cargo test
 
 Emberframe is at version 0.1, so some things are still missing:
 
-- Numeric Transform, and moving the point a rotation turns around.
 - Masks, live effects in Styles, and moving selected pixels in place.
 - Dragging Auto Shapes and library items onto the canvas. Click them to insert.
 - Printing, layer blend modes, and JPEG Selective quality and Smoothing, which appear greyed out.

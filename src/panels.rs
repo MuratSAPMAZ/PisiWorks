@@ -9,14 +9,14 @@ use crate::i18n::{t, tf};
 use crate::autoshape::AutoKind;
 use crate::canvas_view::paint_thumbnail;
 use crate::library::common_items;
-use crate::menus::{Cmd, Panel, COLOR_TOOLS, DOCK_GROUPS, TOOL_SECTIONS, ZOOM_LEVELS};
+use crate::menus::{Cmd, Panel, SlotAction, COLOR_TOOLS, DOCK_GROUPS, TOOL_SECTIONS, TRANSFORM_TOOLS, ZOOM_LEVELS};
 use crate::model::{Align, Color, Object, Rect, Shape, Stroke};
 use crate::bitmap::Filter;
 use crate::optimize::{format_size, ExportFormat, PRESETS};
 use crate::paths::PathOp;
 use crate::theme::*;
 use crate::ui::{color_icon, color_u32, icon, label, label_width, tip};
-use crate::workspace::{ColorTarget, Combo, FieldId, FindMode, SizeDialogKind, Workspace};
+use crate::workspace::{ColorTarget, Combo, FieldId, FindMode, NumericDialog, NumericMode, SizeDialogKind, Workspace};
 
 const TILE: f32 = 44.0;
 /// Width of a tile with its name underneath.
@@ -359,6 +359,44 @@ impl Workspace {
                     )
                 })
                 .collect(),
+            Combo::NumericMode => NumericMode::ALL
+                .into_iter()
+                .map(|mode| {
+                    let current = self.numeric_dialog.is_some_and(|d| d.mode == mode);
+                    item(mode.label().into(), current, cx, Box::new(move |this, _, _| {
+                        this.commit_field();
+                        if let Some(dialog) = this.numeric_dialog.as_mut() {
+                            dialog.mode = mode;
+                        }
+                    }))
+                })
+                .collect(),
+            Combo::TransformTools => TRANSFORM_TOOLS
+                .iter()
+                .map(|slot| {
+                    let SlotAction::Select(tool) = slot.action else { return div().into_any_element() };
+                    let pick = move |this: &mut Workspace, cx: &mut Context<Workspace>| {
+                        this.open_combo = None;
+                        this.set_tool(tool);
+                        cx.notify();
+                    };
+                    div()
+                        .h(px(22.))
+                        .px_2()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap_2()
+                        .when(self.tool == tool, |d| d.bg(rgb(ACCENT)))
+                        .hover(|s| s.bg(rgb(ACCENT)))
+                        // The button may still be held: letting go over a tool picks it, and so does a click.
+                        .on_mouse_up(MouseButton::Left, cx.listener(move |this, _, _, cx| pick(this, cx)))
+                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, _, cx| pick(this, cx)))
+                        .child(color_icon(slot.icon, 15., true))
+                        .child(t(slot.label))
+                        .into_any_element()
+                })
+                .collect(),
             Combo::PanelMenu(group) => {
                 let collapse = if self.groups[group].collapsed { t("Expand Panel Group") } else { t("Collapse Panel Group") };
                 vec![
@@ -571,8 +609,8 @@ impl Workspace {
                             .border_color(rgb(BORDER))
                             .shadow_lg()
                             .child(div().font_weight(FontWeight::BOLD).child(title))
-                            .child(labelled_row(t("Width:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogW, 70., cx)).child(label("pixels"))))
-                            .child(labelled_row(t("Height:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogH, 70., cx)).child(label("pixels"))))
+                            .child(labelled_row(t("Width:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogW, 70., cx)).child(label(t("pixels")))))
+                            .child(labelled_row(t("Height:"), size_label_width, div().flex().items_center().gap_1().child(self.field(FieldId::DialogH, 70., cx)).child(label(t("pixels")))))
                             .when(is_image, |d| {
                                 d.child(
                                     div()
@@ -615,6 +653,83 @@ impl Workspace {
                                     })),
                             ),
                     ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
+    pub(crate) fn numeric_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let dialog = self.numeric_dialog?;
+        let names = [t("Width:"), t("Height:"), t("Angle:")];
+        let name_width = label_width(&names, 50.);
+        let number_row = |this: &Self, name: &'static str, id: FieldId, unit: &'static str, cx: &mut Context<Self>| {
+            labelled_row(name, name_width, div().flex().items_center().gap_1().child(this.field(id, 70., cx)).child(label(unit)))
+        };
+        let checkbox = |text: &'static str, on: bool, cx: &mut Context<Self>, toggle: fn(&mut NumericDialog)| {
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.commit_field();
+                        if let Some(dialog) = this.numeric_dialog.as_mut() {
+                            toggle(dialog);
+                        }
+                        cx.notify();
+                    }),
+                )
+                .child(
+                    div()
+                        .size(px(13.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(rgb(INPUT))
+                        .border_1()
+                        .border_color(rgb(INPUT_BORDER))
+                        .when(on, |d| d.child(icon("check", 9., TEXT))),
+                )
+                .child(text)
+        };
+        let unit = if dialog.mode == NumericMode::Scale { "%" } else { t("pixels") };
+        let sized = dialog.mode != NumericMode::Rotate;
+        Some(
+            deferred(
+                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                    div()
+                        .w(px(260.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .bg(rgb(PANEL))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_lg()
+                        .child(div().font_weight(FontWeight::BOLD).child(t("Numeric Transform")))
+                        .child(self.combo(Combo::NumericMode, dialog.mode.label(), 120., cx).bg(rgb(PANEL_RAISED)))
+                        .when(sized, |d| {
+                            d.child(number_row(self, names[0], FieldId::NumericA, unit, cx))
+                                .child(number_row(self, names[1], FieldId::NumericB, unit, cx))
+                                .child(checkbox(t("Scale Attributes"), dialog.scale_attributes, cx, |d| d.scale_attributes = !d.scale_attributes))
+                                .child(checkbox(t("Constrain Proportions"), dialog.constrain, cx, |d| d.constrain = !d.constrain))
+                        })
+                        .when(!sized, |d| d.child(number_row(self, names[2], FieldId::NumericA, t("degrees"), cx)))
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_1()
+                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.apply_numeric_dialog()))
+                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| {
+                                    this.field = None;
+                                    this.numeric_dialog = None;
+                                })),
+                        ),
+                ),
             )
             .with_priority(1)
             .into_any_element(),

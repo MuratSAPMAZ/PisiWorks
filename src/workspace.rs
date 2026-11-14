@@ -74,6 +74,10 @@ pub enum Combo {
     State,
     Align,
     PanelMenu(usize),
+    /// What the Numeric Transform dialog changes.
+    NumericMode,
+    /// The tools behind the Scale button.
+    TransformTools,
 }
 
 /// How the document area shows the page.
@@ -104,6 +108,45 @@ pub struct SizeDialog {
     pub width: u32,
     pub height: u32,
     pub constrain: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum NumericMode {
+    /// Width and height as percentages of what they are.
+    Scale,
+    /// Width and height in pixels.
+    Resize,
+    /// An angle in degrees, clockwise.
+    Rotate,
+}
+
+impl NumericMode {
+    pub const ALL: [NumericMode; 3] = [NumericMode::Scale, NumericMode::Resize, NumericMode::Rotate];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            NumericMode::Scale => t("Scale"),
+            NumericMode::Resize => t("Resize"),
+            NumericMode::Rotate => t("Rotate"),
+        }
+    }
+}
+
+/// The Numeric Transform dialog while it is open.
+#[derive(Clone, Copy, Debug)]
+pub struct NumericDialog {
+    pub mode: NumericMode,
+    /// The selection box the numbers apply to.
+    pub bounds: Rect,
+    /// Percentages for Scale.
+    pub percent: (f32, f32),
+    /// Pixels for Resize.
+    pub size: (f32, f32),
+    /// Degrees for Rotate.
+    pub angle: f32,
+    pub constrain: bool,
+    /// Whether stroke widths grow and shrink with the artwork.
+    pub scale_attributes: bool,
 }
 
 /// One encoded version of the page, shown by the Preview, 2-Up and 4-Up views.
@@ -158,6 +201,9 @@ pub enum FieldId {
     NewUrl,
     DialogW,
     DialogH,
+    /// The first and second number of the Numeric Transform dialog.
+    NumericA,
+    NumericB,
 }
 
 pub struct FieldEdit {
@@ -167,11 +213,15 @@ pub struct FieldEdit {
     pub fresh: bool,
 }
 
-/// What dragging does with the Scale, Skew and Distort tools.
+/// What a drag does with the Scale, Skew and Distort tools.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WarpKind {
-    /// Any of the three tools, dragging outside the selection box: turn around its center.
+pub enum TransformKind {
+    /// Scale tool, any handle.
+    Scale,
+    /// Any of the three tools, dragging outside the box: turn around the center point.
     Rotate,
+    /// Any of the three tools, dragging inside the box.
+    Move,
     /// Skew tool, a side handle: that side slides along itself.
     Skew,
     /// Skew tool, a corner handle: the corner and its neighbour move apart or together.
@@ -180,20 +230,69 @@ pub enum WarpKind {
     Distort,
     /// Distort tool, a side handle: both corners of that side move.
     DistortSide,
+    /// Dragging the center point that rotation turns around.
+    Pivot,
 }
 
-impl WarpKind {
-    fn label(self) -> &'static str {
-        match self {
-            WarpKind::Rotate => t("Rotate"),
-            WarpKind::Skew | WarpKind::Perspective => t("Skew"),
-            WarpKind::Distort | WarpKind::DistortSide => t("Distort"),
-        }
+/// A transform being tried out with the Scale, Skew or Distort tool. As in Fireworks,
+/// the artwork only previews it until Enter or a double-click applies it, and Esc
+/// puts everything back.
+pub struct TransformSession {
+    /// The selection box when the session began.
+    pub origin: Rect,
+    /// Everything done so far, as one map from that box.
+    pub warp: Warp,
+    /// The selected objects as they were.
+    originals: Vec<Object>,
+    /// The point rotation turns around, once it has been dragged off the middle.
+    pub pivot: Option<Vec2>,
+}
+
+impl TransformSession {
+    /// The corners of the box as they are now, clockwise from the top-left.
+    pub fn quad(&self) -> [Vec2; 4] {
+        rect_corners(self.origin).map(|corner| self.warp.apply(corner))
     }
+
+    pub fn pivot(&self) -> Vec2 {
+        self.pivot.unwrap_or_else(|| quad_center(self.quad()))
+    }
+}
+
+pub fn rect_corners(r: Rect) -> [Vec2; 4] {
+    [v2(r.x, r.y), v2(r.right(), r.y), v2(r.right(), r.bottom()), v2(r.x, r.bottom())]
+}
+
+pub fn quad_center(quad: [Vec2; 4]) -> Vec2 {
+    v2(quad.iter().map(|p| p.x).sum::<f32>() / 4.0, quad.iter().map(|p| p.y).sum::<f32>() / 4.0)
+}
+
+/// The eight handles of a transform box: its corners and the middles of its sides,
+/// clockwise from the top-left like [`handle_rects`].
+pub fn quad_handles(quad: [Vec2; 4]) -> [Vec2; 8] {
+    let mid = |a: Vec2, b: Vec2| v2((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+    [quad[0], mid(quad[0], quad[1]), quad[1], mid(quad[1], quad[2]), quad[2], mid(quad[2], quad[3]), quad[3], mid(quad[3], quad[0])]
+}
+
+/// The upright rectangle a box is, if it has only been moved and scaled.
+fn upright(quad: [Vec2; 4]) -> Option<Rect> {
+    let close = |a: f32, b: f32| (a - b).abs() < 1e-3;
+    let [a, b, c, d] = quad;
+    (close(a.y, b.y) && close(b.x, c.x) && close(c.y, d.y) && close(d.x, a.x) && b.x > a.x && d.y > a.y)
+        .then(|| Rect { x: a.x, y: a.y, w: b.x - a.x, h: d.y - a.y })
+}
+
+fn is_transform_tool(tool: Tool) -> bool {
+    matches!(tool, Tool::Scale | Tool::Skew | Tool::Distort)
 }
 
 /// Rotation with Shift held snaps to steps of this many degrees.
 const ROTATE_STEP_DEGREES: f32 = 15.0;
+/// How close, in screen pixels, the pointer must be to a transform handle to take it.
+const TRANSFORM_REACH: f32 = 5.0;
+/// How long the shared tool button is held before its tools are listed.
+const TOOL_HOLD_MS: u64 = 350;
+const TOOL_FLYOUT_OFFSET: f32 = 24.0;
 
 pub enum Drag {
     Move { last: Vec2 },
@@ -205,10 +304,8 @@ pub enum Drag {
     Crop { start: Vec2, current: Vec2 },
     /// A Marquee or Lasso drag. Marquee keeps just the two corners.
     PixelArea { target: u64, points: Vec<Vec2>, mode: MaskMode },
-    Scale { handle: usize, origin: Rect, originals: Vec<Object> },
-    /// `originals` are the objects as the drag found them, so every move starts
-    /// again from the untouched artwork.
-    Warp { kind: WarpKind, handle: usize, start: Vec2, origin: Rect, originals: Vec<Object>, moved: bool },
+    /// One drag of a transform session. `from` is the session's map when the drag began.
+    Transform { kind: TransformKind, handle: usize, start: Vec2, from: Warp, pivot: Vec2 },
     Freeform { id: u64, start: Vec2, base: Vec<Vec2>, radius: f32 },
     Vertex { id: u64, index: usize },
     /// Pulling the curve handles out of the vertex the Pen just placed.
@@ -259,6 +356,11 @@ pub struct Workspace {
     pub pen: Vec<Vec2>,
     /// Curve handles of the vertices in `pen`, one each.
     pub pen_handles: Vec<Handles>,
+    pub transform: Option<TransformSession>,
+    /// Which of Scale, Skew and Distort the shared tool button shows.
+    pub transform_tool: Tool,
+    /// Counts presses of that button, so a hold that ended is not mistaken for one still held.
+    tool_hold: u64,
     pub cursor_doc: Vec2,
     pub focus: FocusHandle,
     pub canvas_bounds: Rc<Cell<Bounds<Pixels>>>,
@@ -279,6 +381,7 @@ pub struct Workspace {
     previews_key: Option<(u64, ViewMode)>,
     stale_previews: Vec<Arc<RenderImage>>,
     pub size_dialog: Option<SizeDialog>,
+    pub numeric_dialog: Option<NumericDialog>,
     pub collapsed_layers: Vec<usize>,
     pub properties_collapsed: bool,
     pub properties_tab: PropertiesTab,
@@ -450,6 +553,9 @@ impl Workspace {
             drag: None,
             pen: Vec::new(),
             pen_handles: Vec::new(),
+            transform: None,
+            transform_tool: Tool::Scale,
+            tool_hold: 0,
             cursor_doc: Vec2::default(),
             focus: cx.focus_handle(),
             canvas_bounds: Rc::new(Cell::new(Bounds::default())),
@@ -476,6 +582,7 @@ impl Workspace {
             previews_key: None,
             stale_previews: Vec::new(),
             size_dialog: None,
+            numeric_dialog: None,
             collapsed_layers: Vec::new(),
             properties_collapsed: false,
             properties_tab: PropertiesTab::Properties,
@@ -580,9 +687,15 @@ impl Workspace {
     }
 
     pub fn set_tool(&mut self, tool: Tool) {
+        // Moving between Scale, Skew and Distort carries on with the same transform.
+        let session = if is_transform_tool(tool) && is_transform_tool(self.tool) { self.transform.take() } else { None };
         self.finish_pending();
+        self.transform = session;
         self.crop_area = None;
         self.tool = tool;
+        if is_transform_tool(tool) {
+            self.transform_tool = tool;
+        }
         let hint = match tool {
             Tool::Scale => Some(t("Drag a handle to scale, or outside the box to rotate.")),
             Tool::Skew => Some(t("Drag a side to skew or a corner for perspective, or outside the box to rotate.")),
@@ -599,6 +712,81 @@ impl Workspace {
         self.commit_field();
         self.finish_text();
         self.finish_pen(false);
+        self.apply_transform();
+    }
+
+    /// The shared tool button was pressed. If it is still down after a moment, its tools are listed.
+    pub fn begin_tool_hold(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+        self.tool_hold += 1;
+        let token = self.tool_hold;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_millis(TOOL_HOLD_MS)).await;
+            this.update(cx, |this, cx| {
+                if this.tool_hold == token {
+                    // Beside the button, so letting go over the button picks nothing.
+                    let beside = point(position.x + px(TOOL_FLYOUT_OFFSET), position.y - px(10.));
+                    this.open_combo = Some((Combo::TransformTools, beside));
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    pub fn end_tool_hold(&mut self) {
+        self.tool_hold += 1;
+    }
+
+    /// Makes a previewed transform permanent, as Enter and a double-click do.
+    pub fn apply_transform(&mut self) {
+        let Some(session) = self.transform.take() else { return };
+        if session.warp == Warp::identity() {
+            return;
+        }
+        self.ed.commit(t("Transform"));
+        let skipped = session.originals.iter().filter(|o| !o.warpable()).count();
+        self.report_transform(skipped);
+    }
+
+    /// Drops a previewed transform and puts the artwork back, as Esc does.
+    pub fn cancel_transform(&mut self) -> bool {
+        if self.transform.take().is_none() {
+            return false;
+        }
+        self.ed.rollback();
+        true
+    }
+
+    /// The transform box to draw: the session's, or the upright selection box before one begins.
+    pub fn transform_box(&self) -> Option<([Vec2; 4], Vec2)> {
+        if !is_transform_tool(self.tool) {
+            return None;
+        }
+        match &self.transform {
+            Some(session) => Some((session.quad(), session.pivot())),
+            None => self.ed.selection_bounds().map(|bounds| (rect_corners(bounds), bounds.center())),
+        }
+    }
+
+    /// Redraws the selection from the untouched originals through the session's map.
+    fn preview_transform(&mut self) {
+        let Some(session) = &self.transform else { return };
+        let (origin, warp) = (session.origin, session.warp);
+        // A box that was only moved and scaled keeps rectangles, bitmaps and text as they are.
+        let target = upright(session.quad());
+        for original in &session.originals {
+            let next = match target {
+                Some(target) => Some(scale_object(original, origin, target)),
+                None => {
+                    let mut warped = original.clone();
+                    warped.warp(&warp).then_some(warped)
+                }
+            };
+            if let (Some(next), Some(object)) = (next, self.ed.object_mut(original.id)) {
+                *object = next;
+            }
+        }
     }
 
     pub fn close_overlays(&mut self) {
@@ -775,6 +963,53 @@ impl Workspace {
     fn open_size_dialog(&mut self, kind: SizeDialogKind) {
         let page = self.ed.doc.page();
         self.size_dialog = Some(SizeDialog { kind, width: page.width, height: page.height, constrain: kind == SizeDialogKind::Image });
+    }
+
+    fn open_numeric_dialog(&mut self) {
+        let Some(bounds) = self.ed.selection_bounds() else { return };
+        self.numeric_dialog = Some(NumericDialog {
+            mode: NumericMode::Scale,
+            bounds,
+            percent: (100.0, 100.0),
+            size: (bounds.w, bounds.h),
+            angle: 0.0,
+            constrain: true,
+            scale_attributes: true,
+        });
+    }
+
+    /// Applies the Numeric Transform dialog around the middle of the selection and closes it.
+    pub fn apply_numeric_dialog(&mut self) {
+        self.commit_field();
+        let Some(dialog) = self.numeric_dialog.take() else { return };
+        let (bounds, center) = (dialog.bounds, dialog.bounds.center());
+        let mut skipped = 0;
+        if dialog.mode == NumericMode::Rotate {
+            let warp = Warp::rotation(center, dialog.angle.to_radians());
+            self.ed.for_selected(|o| {
+                if !o.warp(&warp) {
+                    skipped += 1;
+                }
+            });
+        } else {
+            let (w, h) = match dialog.mode {
+                NumericMode::Scale => (bounds.w * dialog.percent.0 / 100.0, bounds.h * dialog.percent.1 / 100.0),
+                _ => dialog.size,
+            };
+            let target = Rect { x: center.x - w / 2.0, y: center.y - h / 2.0, w, h };
+            let factor = |from: f32, to: f32| if from > 0.0 { to / from } else { 1.0 };
+            let growth = (factor(bounds.w, w) + factor(bounds.h, h)) / 2.0;
+            self.ed.for_selected(|o| {
+                *o = scale_object(o, bounds, target);
+                if dialog.scale_attributes {
+                    if let Some(stroke) = &mut o.stroke {
+                        stroke.width *= growth;
+                    }
+                }
+            });
+        }
+        self.ed.commit(t("Transform"));
+        self.report_transform(skipped);
     }
 
     /// Applies the open size dialog and closes it.
@@ -1081,7 +1316,7 @@ impl Workspace {
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
-            Cmd::Rotate180 => has_selection,
+            Cmd::Rotate180 | Cmd::NumericTransform => has_selection,
             Cmd::RemoveTransform => self.ed.selected().iter().any(|o| o.placement.is_some()),
             Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
@@ -1224,6 +1459,7 @@ impl Workspace {
                 self.ed.commit(t("Remove Transformations"));
             }
             Cmd::FreeTransform => self.set_tool(Tool::Scale),
+            Cmd::NumericTransform => self.open_numeric_dialog(),
             Cmd::SelectTool(tool) => self.set_tool(tool),
             Cmd::TextToPaths => {
                 self.ed.for_selected(|o| {
@@ -1543,7 +1779,7 @@ impl Workspace {
         }
         match tool {
             Tool::Pointer => self.pointer_down(ev, p),
-            Tool::Scale | Tool::Skew | Tool::Distort => self.scale_down(ev, p),
+            Tool::Scale | Tool::Skew | Tool::Distort => self.transform_down(ev, p),
             Tool::Subselect => self.subselect_down(p, ev.modifiers.alt),
             Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
@@ -1625,34 +1861,50 @@ impl Workspace {
         }
     }
 
-    fn scale_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
-        if let Some(origin) = self.ed.selection_bounds() {
-            let map = self.view_map();
-            if let Some(handle) = handle_rects(origin, map).iter().position(|r| r.contains(&ev.position)) {
-                // Handles run clockwise from the top-left, so the corners are the even ones.
-                let corner = handle % 2 == 0;
-                match self.tool {
-                    Tool::Skew => self.begin_warp(if corner { WarpKind::Perspective } else { WarpKind::Skew }, handle, p, origin),
-                    Tool::Distort => self.begin_warp(if corner { WarpKind::Distort } else { WarpKind::DistortSide }, handle, p, origin),
-                    _ => {
-                        let originals = self.ed.selected().into_iter().cloned().collect();
-                        self.drag = Some(Drag::Scale { handle, origin, originals });
-                    }
-                }
-                return;
-            }
-            // Outside the box, a press on other artwork still selects it; on nothing, it turns the selection.
-            if !origin.contains(p) && self.ed.doc.page().hit_test(p, self.tolerance()).is_none() {
-                self.begin_warp(WarpKind::Rotate, 0, p, origin);
-                return;
-            }
+    /// A press with the Scale, Skew or Distort tool.
+    fn transform_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        // A session belongs to the selection it began with.
+        let selection: Vec<u64> = self.ed.selected().iter().map(|o| o.id).collect();
+        if self.transform.as_ref().is_some_and(|s| s.originals.iter().map(|o| o.id).ne(selection.iter().copied())) {
+            self.apply_transform();
         }
-        self.pointer_down(ev, p);
-    }
-
-    fn begin_warp(&mut self, kind: WarpKind, handle: usize, start: Vec2, origin: Rect) {
-        let originals = self.ed.selected().into_iter().cloned().collect();
-        self.drag = Some(Drag::Warp { kind, handle, start, origin, originals, moved: false });
+        let Some((quad, pivot)) = self.transform_box() else { return self.pointer_down(ev, p) };
+        let reach = TRANSFORM_REACH / self.zoom;
+        let near = |q: Vec2| (q.x - p.x).abs() <= reach && (q.y - p.y).abs() <= reach;
+        let inside = crate::model::point_in_polygon(p, &quad);
+        let handle = quad_handles(quad).iter().position(|h| near(*h));
+        let (kind, handle) = if near(pivot) {
+            (TransformKind::Pivot, 0)
+        } else if let Some(handle) = handle {
+            // Handles run clockwise from the top-left, so the corners are the even ones.
+            let corner = handle % 2 == 0;
+            let kind = match self.tool {
+                Tool::Skew if corner => TransformKind::Perspective,
+                Tool::Skew => TransformKind::Skew,
+                Tool::Distort if corner => TransformKind::Distort,
+                Tool::Distort => TransformKind::DistortSide,
+                _ => TransformKind::Scale,
+            };
+            (kind, handle)
+        } else if inside {
+            if ev.click_count >= 2 {
+                self.apply_transform();
+                return;
+            }
+            (TransformKind::Move, 0)
+        } else if self.transform.is_none() && self.ed.doc.page().hit_test(p, self.tolerance()).is_some() {
+            // Before a transform has begun, a press on other artwork still selects it.
+            return self.pointer_down(ev, p);
+        } else {
+            (TransformKind::Rotate, 0)
+        };
+        if self.transform.is_none() {
+            let Some(origin) = self.ed.selection_bounds() else { return };
+            let originals = self.ed.selected().into_iter().cloned().collect();
+            self.transform = Some(TransformSession { origin, warp: Warp::identity(), originals, pivot: None });
+        }
+        let from = self.transform.as_ref().map_or(Warp::identity(), |s| s.warp);
+        self.drag = Some(Drag::Transform { kind, handle, start: p, from, pivot });
     }
 
     /// Tells the user what a transform had to leave alone.
@@ -1957,72 +2209,74 @@ impl Workspace {
                     points.push(p);
                 }
             }
-            Drag::Scale { handle, origin, originals } => {
-                let target = scaled(*origin, *handle, snap(p), !ev.modifiers.shift);
-                for original in originals.iter() {
-                    if let Some(object) = self.ed.object_mut(original.id) {
-                        *object = scale_object(original, *origin, target);
+            Drag::Transform { kind, handle, start, from, pivot } => {
+                let (kind, handle, start, from, pivot) = (*kind, *handle, *start, *from, *pivot);
+                let Some(session) = self.transform.as_mut() else { return };
+                let origin = session.origin;
+                // Handle drags are worked out in the box's own upright space, so a box
+                // that has been turned still scales and slants along its own sides.
+                let local = from.inverse().map(|inverse| (inverse.apply(start), inverse.apply(p)));
+                let (dx, dy) = local.map_or((0.0, 0.0), |(a, b)| (b.x - a.x, b.y - a.y));
+                let in_box = |change: Option<Warp>| change.map(|change| change.then(&from));
+                let next = match kind {
+                    TransformKind::Pivot => {
+                        session.pivot = Some(p);
+                        None
                     }
-                }
-            }
-            Drag::Warp { kind, handle, start, origin, originals, moved, .. } => {
-                let origin = *origin;
-                let warp = match kind {
-                    WarpKind::Rotate => {
-                        let center = origin.center();
-                        let angle_to = |q: Vec2| (q.y - center.y).atan2(q.x - center.x);
-                        let mut angle = angle_to(p) - angle_to(*start);
+                    TransformKind::Move => Some(from.then(&Warp::translation((p.x - start.x).round(), (p.y - start.y).round()))),
+                    TransformKind::Rotate => {
+                        let angle_to = |q: Vec2| (q.y - pivot.y).atan2(q.x - pivot.x);
+                        let mut angle = angle_to(p) - angle_to(start);
                         if ev.modifiers.shift {
                             let step = ROTATE_STEP_DEGREES.to_radians();
                             angle = (angle / step).round() * step;
                         }
-                        Some(Warp::rotation(center, angle))
+                        Some(from.then(&Warp::rotation(pivot, angle)))
+                    }
+                    TransformKind::Scale => {
+                        in_box(local.map(|(_, at)| Warp::fit(origin, scaled(origin, handle, at, !ev.modifiers.shift))))
                     }
                     // The dragged side slides along itself, and the opposite side stays put.
-                    WarpKind::Skew => match *handle {
-                        1 => (origin.h > 0.0).then(|| Warp::shear_x(origin.bottom(), (p.x - start.x) / -origin.h)),
-                        5 => (origin.h > 0.0).then(|| Warp::shear_x(origin.y, (p.x - start.x) / origin.h)),
-                        3 => (origin.w > 0.0).then(|| Warp::shear_y(origin.x, (p.y - start.y) / origin.w)),
-                        _ => (origin.w > 0.0).then(|| Warp::shear_y(origin.right(), (p.y - start.y) / -origin.w)),
-                    },
-                    WarpKind::Perspective | WarpKind::Distort | WarpKind::DistortSide => {
-                        // Corners run clockwise from the top-left, as the handles do.
-                        let mut corners =
-                            [v2(origin.x, origin.y), v2(origin.right(), origin.y), v2(origin.right(), origin.bottom()), v2(origin.x, origin.bottom())];
-                        let (dx, dy) = (p.x - start.x, p.y - start.y);
-                        let corner = *handle / 2;
-                        match kind {
-                            WarpKind::Distort => corners[corner] = p,
-                            WarpKind::DistortSide => {
-                                for index in [corner, (corner + 1) % 4] {
-                                    corners[index] = v2(corners[index].x + dx, corners[index].y + dy);
-                                }
-                            }
-                            // The neighbour along the dragged direction mirrors the corner,
-                            // so that side of the box grows or shrinks about its middle.
-                            _ if dx.abs() >= dy.abs() => {
-                                corners[corner].x += dx;
-                                corners[[1, 0, 3, 2][corner]].x -= dx;
-                            }
-                            _ => {
-                                corners[corner].y += dy;
-                                corners[[3, 2, 1, 0][corner]].y -= dy;
+                    TransformKind::Skew => in_box(match handle {
+                        1 => (origin.h > 0.0).then(|| Warp::shear_x(origin.bottom(), dx / -origin.h)),
+                        5 => (origin.h > 0.0).then(|| Warp::shear_x(origin.y, dx / origin.h)),
+                        3 => (origin.w > 0.0).then(|| Warp::shear_y(origin.x, dy / origin.w)),
+                        _ => (origin.w > 0.0).then(|| Warp::shear_y(origin.right(), dy / -origin.w)),
+                    }),
+                    TransformKind::Perspective => {
+                        // The neighbour along the dragged direction mirrors the corner,
+                        // so that side of the box grows or shrinks about its middle.
+                        let mut corners = rect_corners(origin);
+                        let corner = handle / 2;
+                        if dx.abs() >= dy.abs() {
+                            corners[corner].x += dx;
+                            corners[[1, 0, 3, 2][corner]].x -= dx;
+                        } else {
+                            corners[corner].y += dy;
+                            corners[[3, 2, 1, 0][corner]].y -= dy;
+                        }
+                        in_box(Warp::quad(origin, corners))
+                    }
+                    TransformKind::Distort | TransformKind::DistortSide => {
+                        let mut corners = rect_corners(origin).map(|corner| from.apply(corner));
+                        let corner = handle / 2;
+                        if kind == TransformKind::Distort {
+                            corners[corner] = p;
+                        } else {
+                            for index in [corner, (corner + 1) % 4] {
+                                corners[index] = v2(corners[index].x + p.x - start.x, corners[index].y + p.y - start.y);
                             }
                         }
                         Warp::quad(origin, corners)
                     }
                 };
-                // A corner pulled across the box has no sensible result, so the last good one stays.
-                if let Some(warp) = warp {
-                    *moved = true;
-                    for original in originals.iter() {
-                        let mut warped = original.clone();
-                        if warped.warp(&warp) {
-                            if let Some(object) = self.ed.object_mut(original.id) {
-                                *object = warped;
-                            }
-                        }
-                    }
+                // A box pulled inside out has no sensible result, so the last good one stays.
+                let sound = |warp: &Warp| {
+                    origin.w <= 0.0 || origin.h <= 0.0 || Warp::quad(origin, rect_corners(origin).map(|c| warp.apply(c))).is_some()
+                };
+                if let Some(next) = next.filter(sound) {
+                    session.warp = next;
+                    self.preview_transform();
                 }
             }
             Drag::Freeform { id, start, base, radius } => {
@@ -2126,12 +2380,9 @@ impl Workspace {
             Drag::Freehand { points, target } => self.finish_freehand(points, target),
             Drag::Crop { start, current } => self.finish_crop_drag(start, current),
             Drag::PixelArea { target, points, mode } => self.finish_pixel_area(target, points, mode),
-            Drag::Scale { .. } => self.ed.commit(t("Scale")),
-            Drag::Warp { kind, originals, moved, .. } => {
-                if moved {
-                    self.ed.commit(kind.label());
-                    let skipped = originals.iter().filter(|o| !o.warpable()).count();
-                    self.report_transform(skipped);
+            Drag::Transform { kind, .. } => {
+                if kind != TransformKind::Pivot {
+                    self.status = t("Press Enter or double-click to apply, Esc to cancel").into();
                 }
             }
             Drag::Freeform { .. } => self.ed.commit(t("Freeform")),
@@ -2257,6 +2508,12 @@ impl Workspace {
                 "enter" => self.edit_text(|t| t.push('\n')),
                 _ => {}
             }
+        } else if self.numeric_dialog.is_some() {
+            match key {
+                "enter" => self.apply_numeric_dialog(),
+                "escape" => self.numeric_dialog = None,
+                _ => {}
+            }
         } else if self.size_dialog.is_some() {
             match key {
                 "enter" => self.apply_size_dialog(),
@@ -2305,6 +2562,7 @@ impl Workspace {
             ("b", false, false) => Cmd::BreakApart,
             ("g", false, false) => Cmd::Group,
             ("t", false, false) => Cmd::FreeTransform,
+            ("t", true, false) => Cmd::NumericTransform,
             ("g", true, false) => Cmd::Ungroup,
             ("up", true, false) => Cmd::Arrange(Arrange::Front),
             ("up", false, false) => Cmd::Arrange(Arrange::Forward),
@@ -2361,13 +2619,14 @@ impl Workspace {
             }
             "delete" | "backspace" => self.run(Cmd::Clear, window, cx),
             "enter" if self.crop_area.is_some() => self.apply_crop(),
+            "enter" if self.transform.is_some() => self.apply_transform(),
             "enter" => self.finish_pen(false),
             "escape" => {
                 self.pen.clear();
                 self.pen_handles.clear();
                 self.crop_area = None;
                 self.pixel_sel = None;
-                if self.drag.take().is_some() {
+                if self.drag.take().is_some() | self.cancel_transform() {
                     self.ed.rollback();
                 }
                 self.close_overlays();
@@ -2449,6 +2708,14 @@ impl Workspace {
             FieldId::NewUrl => String::new(),
             FieldId::DialogW => self.size_dialog.map_or_else(String::new, |d| d.width.to_string()),
             FieldId::DialogH => self.size_dialog.map_or_else(String::new, |d| d.height.to_string()),
+            FieldId::NumericA | FieldId::NumericB => self.numeric_dialog.map_or_else(String::new, |d| {
+                let (a, b) = match d.mode {
+                    NumericMode::Scale => d.percent,
+                    NumericMode::Resize => d.size,
+                    NumericMode::Rotate => (d.angle, d.angle),
+                };
+                number(if id == FieldId::NumericA { a } else { b })
+            }),
         }
     }
 
@@ -2653,6 +2920,26 @@ impl Workspace {
                 let Some(v) = number else { return };
                 self.set_mixer_channel(channel, v.clamp(0.0, 255.0) as u8);
             }
+            FieldId::NumericA | FieldId::NumericB => {
+                let (Some(v), Some(dialog)) = (number, self.numeric_dialog.as_mut()) else { return };
+                let first = field.id == FieldId::NumericA;
+                match dialog.mode {
+                    NumericMode::Rotate => dialog.angle = v,
+                    NumericMode::Scale if v > 0.0 => {
+                        dialog.percent = if dialog.constrain { (v, v) } else if first { (v, dialog.percent.1) } else { (dialog.percent.0, v) };
+                    }
+                    NumericMode::Resize if v > 0.0 => {
+                        let (w, h) = (dialog.bounds.w, dialog.bounds.h);
+                        dialog.size = match (first, dialog.constrain && w > 0.0 && h > 0.0) {
+                            (true, true) => (v, v * h / w),
+                            (false, true) => (v * w / h, v),
+                            (true, false) => (v, dialog.size.1),
+                            (false, false) => (dialog.size.0, v),
+                        };
+                    }
+                    _ => {}
+                }
+            }
             FieldId::DialogW | FieldId::DialogH => {
                 let page = self.ed.doc.page();
                 let (page_w, page_h) = (page.width.max(1) as f32, page.height.max(1) as f32);
@@ -2820,6 +3107,42 @@ pub fn app_quit_on_close(cx: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_moved_or_scaled_box_is_still_upright() {
+        let origin = Rect { x: 10.0, y: 20.0, w: 100.0, h: 50.0 };
+        assert_eq!(upright(rect_corners(origin)), Some(origin));
+        let grown = Warp::fit(origin, Rect { x: 0.0, y: 0.0, w: 200.0, h: 25.0 });
+        assert_eq!(upright(rect_corners(origin).map(|c| grown.apply(c))), Some(Rect { x: 0.0, y: 0.0, w: 200.0, h: 25.0 }));
+        // Turned, slanted or flipped boxes are not.
+        let turned = Warp::rotation(origin.center(), 0.3);
+        assert_eq!(upright(rect_corners(origin).map(|c| turned.apply(c))), None);
+        let slanted = Warp::shear_x(origin.bottom(), 0.5);
+        assert_eq!(upright(rect_corners(origin).map(|c| slanted.apply(c))), None);
+        let half_turn = Warp::rotation(origin.center(), std::f32::consts::PI);
+        assert_eq!(upright(rect_corners(origin).map(|c| half_turn.apply(c))), None);
+    }
+
+    #[test]
+    fn transform_handles_sit_on_corners_and_side_middles() {
+        let quad = rect_corners(Rect { x: 0.0, y: 0.0, w: 10.0, h: 4.0 });
+        let handles = quad_handles(quad);
+        assert_eq!(handles[0], v2(0.0, 0.0));
+        assert_eq!(handles[1], v2(5.0, 0.0));
+        assert_eq!(handles[3], v2(10.0, 2.0));
+        assert_eq!(handles[7], v2(0.0, 2.0));
+        assert_eq!(quad_center(quad), v2(5.0, 2.0));
+    }
+
+    #[test]
+    fn a_session_box_follows_its_map_and_turns_around_its_middle() {
+        let origin = Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 };
+        let mut session = TransformSession { origin, warp: Warp::translation(5.0, 0.0), originals: Vec::new(), pivot: None };
+        assert_eq!(session.quad()[0], v2(5.0, 0.0));
+        assert_eq!(session.pivot(), v2(10.0, 5.0));
+        session.pivot = Some(v2(1.0, 2.0));
+        assert_eq!(session.pivot(), v2(1.0, 2.0));
+    }
     use gpui::{point, px, size};
 
     fn map() -> ViewMap {

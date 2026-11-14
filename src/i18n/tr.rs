@@ -95,6 +95,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Free Transform", "Serbest Dönüştürme"),
     ("Numeric Transform...", "Sayısal Dönüştürme..."),
     ("Rotate 180", "180° Döndür"),
+    ("Numeric Transform", "Sayısal Dönüştürme"),
+    ("Angle:", "Açı:"),
+    ("degrees", "derece"),
+    ("pixels", "piksel"),
+    ("Scale Attributes", "Nitelikleri Ölçekle"),
     ("Remove Transformations", "Dönüşümleri Kaldır"),
     ("Rotate 90 CW", "90° Saat Yönünde Döndür"),
     ("Rotate 90 CCW", "90° Saat Yönünün Tersine Döndür"),
@@ -533,6 +538,10 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Picked {}", "{} seçildi"),
     ("Choose a fill color first", "Önce bir dolgu rengi seçin"),
     ("The Knife line did not cross a vector path.", "Bıçak çizgisi bir vektör yolunu kesmedi."),
+    (
+        "Press Enter or double-click to apply, Esc to cancel",
+        "Uygulamak için Enter'a basın veya çift tıklayın, iptal için Esc",
+    ),
     (
         "Press Enter or double-click to crop, Esc to cancel",
         "Kırpmak için Enter'a basın veya çift tıklayın, iptal için Esc",

@@ -62,9 +62,8 @@ pub const TOOL_SECTIONS: &[(&str, &[ToolSlot])] = &[
         &[
             on("Pointer (V)", "pointer", Tool::Pointer),
             on("Subselection (A)", "subselect", Tool::Subselect),
+            // One button for the three transform tools, see [`TRANSFORM_TOOLS`].
             on("Scale (Q)", "scale", Tool::Scale),
-            on("Skew (Q)", "skew", Tool::Skew),
-            on("Distort (Q)", "distort", Tool::Distort),
             on("Crop (C)", "crop", Tool::Crop),
         ],
     ),
@@ -103,6 +102,11 @@ pub const TOOL_SECTIONS: &[(&str, &[ToolSlot])] = &[
         ],
     ),
 ];
+
+/// The tools that share the Scale button. Holding the button down lists them, and
+/// the button shows whichever was used last.
+pub const TRANSFORM_TOOLS: &[ToolSlot] =
+    &[on("Scale (Q)", "scale", Tool::Scale), on("Skew (Q)", "skew", Tool::Skew), on("Distort (Q)", "distort", Tool::Distort)];
 
 pub const COLOR_TOOLS: &[ToolSlot] = &[on("Eyedropper (I)", "eyedropper", Tool::Eyedropper), on("Paint Bucket (G)", "bucket", Tool::Bucket)];
 
@@ -158,6 +162,7 @@ pub enum Cmd {
     Ungroup,
     Rotate { clockwise: bool },
     FreeTransform,
+    NumericTransform,
     SelectTool(Tool),
     Rotate180,
     RemoveTransform,
@@ -474,7 +479,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                     cmd("Scale", "", Cmd::SelectTool(Tool::Scale)),
                     cmd("Skew", "", Cmd::SelectTool(Tool::Skew)),
                     cmd("Distort", "", Cmd::SelectTool(Tool::Distort)),
-                    na("Numeric Transform..."),
+                    cmd("Numeric Transform...", "Ctrl+Shift+T", Cmd::NumericTransform),
                     Sep,
                     cmd("Rotate 180", "", Cmd::Rotate180),
                     cmd("Rotate 90 CW", "", Cmd::Rotate { clockwise: true }),

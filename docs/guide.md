@@ -28,12 +28,14 @@ Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
 
 Scale (Q) resizes everything selected from its handles. Corners keep proportions unless you hold Shift.
 
-Skew and Distort sit beside Scale, and pressing Q again steps through the three. With any of them, drag outside the selection box to rotate; hold Shift to turn in steps of 15 degrees.
+Skew and Distort share the Scale button: hold the button down to list them, or press Q again to step through the three. With any of them, drag outside the selection box to rotate; hold Shift to turn in steps of 15 degrees. Rotation turns around the small circle in the middle of the box, which you can drag somewhere else first.
 
 - **Skew**: drag a side handle to slant the selection, or a corner handle for perspective, where the corner and its neighbour move apart or together.
 - **Distort**: drag a corner handle to move that corner alone, or a side handle to move the whole side.
 
-Modify > Transform lists the same tools, with Rotate 180, Rotate 90 and the two flips. A transform is applied when you release the mouse.
+While you drag, the artwork only previews the transform, and you can go on with another handle or another of the three tools. Press Enter or double-click inside the box to apply it, or Esc to put everything back. Dragging inside the box moves the selection.
+
+Modify > Transform lists the same tools, with Rotate 180, Rotate 90 and the two flips. Numeric Transform (Ctrl+Shift+T) scales by a percentage, resizes to a size in pixels or rotates by an angle, around the middle of the selection.
 
 Text stays text when it is transformed, so you can still edit it and change its size, and a symbol stays linked to the library. Modify > Transform > Remove Transformations stands either one upright again. Rectangles and ellipses become paths, and bitmaps are redrawn. Web areas are not transformed. Text > Convert to Paths turns text into the outlines of its letters.
 

@@ -16,7 +16,7 @@ use crate::export::{measure_text, LINE_HEIGHT};
 use crate::menus::Tool;
 use crate::model::{flatten_curve, v2, Color, Handles, Object, Page, Rect, Shape, Vec2, WebKind};
 use crate::theme;
-use crate::workspace::{Drag, PreviewPane, ViewMap, ViewMode, Workspace};
+use crate::workspace::{quad_handles, Drag, PreviewPane, ViewMap, ViewMode, Workspace};
 
 const HANDLE_SIZE: f32 = 7.0;
 const CHECKER: f32 = 8.0;
@@ -151,6 +151,8 @@ pub struct Scene {
     ants: Option<(Arc<Vec<(Vec2, Vec2)>>, Object)>,
     stamp_mark: Option<Vec2>,
     all_handles: bool,
+    /// The box of the Scale, Skew and Distort tools, with the point rotation turns around.
+    transform_box: Option<([Vec2; 4], Vec2)>,
     caret: Option<(Vec2, f32)>,
     show_rulers: bool,
     show_grid: bool,
@@ -274,6 +276,7 @@ impl Scene {
             ants,
             stamp_mark,
             all_handles: matches!(w.tool, Tool::Scale | Tool::Skew | Tool::Distort),
+            transform_box: if editing.is_some() { None } else { w.transform_box() },
             caret,
             show_rulers: w.show_rulers,
             show_grid: w.show_grid,
@@ -465,7 +468,22 @@ impl Scene {
             window.paint_quad(fill(knob, rgb(0xffffff)).corner_radii(px(3.)));
             window.paint_quad(outline(knob, accent, BorderStyle::Solid).corner_radii(px(3.)));
         }
-        if let Some(bounds) = self.selection_bounds {
+        if let Some((quad, pivot)) = self.transform_box {
+            // The box follows the transform, so it may be turned or pulled out of square.
+            let corners: Vec<_> = quad.iter().map(|p| map.to_screen(*p)).collect();
+            if let Some(path) = build_path(&corners, true, Some(1.0)) {
+                window.paint_path(path, accent);
+            }
+            let square = |at: Point<Pixels>, side: f32| Bounds { origin: point(at.x - px(side / 2.0), at.y - px(side / 2.0)), size: size(px(side), px(side)) };
+            for handle in quad_handles(quad) {
+                let handle = square(map.to_screen(handle), HANDLE_SIZE);
+                window.paint_quad(fill(handle, rgb(0xffffff)));
+                window.paint_quad(outline(handle, accent, BorderStyle::Solid));
+            }
+            let center = square(map.to_screen(pivot), HANDLE_SIZE);
+            window.paint_quad(fill(center, rgb(0xffffff)).corner_radii(px(HANDLE_SIZE / 2.0)));
+            window.paint_quad(outline(center, accent, BorderStyle::Solid).corner_radii(px(HANDLE_SIZE / 2.0)));
+        } else if let Some(bounds) = self.selection_bounds {
             window.paint_quad(outline(screen_rect(map, bounds), accent, BorderStyle::Solid));
             if self.selected.len() == 1 || self.all_handles {
                 for handle in handle_rects(bounds, map) {
