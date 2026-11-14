@@ -28,6 +28,10 @@ Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
 
 Scale (Q) resizes everything selected from its handles. Corners keep proportions unless you hold Shift.
 
+The same tool rotates, skews and distorts. Drag outside the selection box to rotate; hold Shift to turn in steps of 15 degrees. Ctrl+drag a side handle to skew, and Ctrl+drag a corner handle to move that corner alone. Modify > Transform > Free Transform (Ctrl+T) picks the tool.
+
+Rectangles and ellipses become paths when they are transformed this way, and bitmaps are redrawn. Text becomes the paths of its letters, so finish editing it first; Text > Convert to Paths does the same on its own. Symbols and web areas are left as they are: use Modify > Symbol > Break Apart on a symbol first.
+
 Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again from Pencil) cuts selected vectors along a dragged line. With nothing selected, Knife cuts every vector it crosses. Both turn rectangles and ellipses into paths.
 
 ## Web areas

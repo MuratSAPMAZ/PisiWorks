@@ -28,7 +28,7 @@ use crate::optimize::{comparison_settings, encode, encoded_palette, export_page,
 use crate::paths::PathOp;
 use crate::model::{
     document_from_json, document_to_json, flatten_curve, pull_points, subdivide, v2, Color, Document, Editor, Handles,
-    Object, PixelStroke, Rect, Shape, Stroke, Vec2, WebKind,
+    Object, PixelStroke, Rect, Shape, Stroke, Vec2, Warp, WebKind,
 };
 use crate::theme::{APP_NAME, FILE_EXTENSION};
 
@@ -167,6 +167,32 @@ pub struct FieldEdit {
     pub fresh: bool,
 }
 
+/// The free transforms of the Scale tool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WarpKind {
+    /// Dragging outside the selection box turns it around its center.
+    Rotate,
+    /// Ctrl+dragging a side handle slides that side along itself.
+    Skew,
+    /// Ctrl+dragging a corner handle moves that corner alone.
+    Distort,
+}
+
+impl WarpKind {
+    fn label(self) -> &'static str {
+        match self {
+            WarpKind::Rotate => t("Rotate"),
+            WarpKind::Skew => t("Skew"),
+            WarpKind::Distort => t("Distort"),
+        }
+    }
+}
+
+/// Rotation with Shift held snaps to steps of this many degrees.
+const ROTATE_STEP_DEGREES: f32 = 15.0;
+const SCALE_TOOL_HINT: &str =
+    "Drag a handle to scale, or outside the box to rotate. Ctrl+drag a side to skew, a corner to distort.";
+
 pub enum Drag {
     Move { last: Vec2 },
     Resize { handle: usize, origin: Rect },
@@ -178,6 +204,9 @@ pub enum Drag {
     /// A Marquee or Lasso drag. Marquee keeps just the two corners.
     PixelArea { target: u64, points: Vec<Vec2>, mode: MaskMode },
     Scale { handle: usize, origin: Rect, originals: Vec<Object> },
+    /// `originals` are the objects as the drag found them, with text already turned
+    /// into paths, so every move starts again from the untouched artwork.
+    Warp { kind: WarpKind, handle: usize, start: Vec2, origin: Rect, originals: Vec<Object>, text: bool, moved: bool },
     Freeform { id: u64, start: Vec2, base: Vec<Vec2>, radius: f32 },
     Vertex { id: u64, index: usize },
     /// Pulling the curve handles out of the vertex the Pen just placed.
@@ -549,6 +578,9 @@ impl Workspace {
         self.finish_pending();
         self.crop_area = None;
         self.tool = tool;
+        if tool == Tool::Scale {
+            self.status = t(SCALE_TOOL_HINT).into();
+        }
     }
 
     /// Commits any in-progress field, text or pen edit.
@@ -1038,6 +1070,7 @@ impl Workspace {
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
+            Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
             _ => true,
@@ -1162,11 +1195,17 @@ impl Workspace {
                 self.ed.commit(t("Ungroup"));
             }
             Cmd::Rotate { clockwise } => {
+                let text = self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. }));
                 let skipped = self.ed.rotate_selected(clockwise);
                 self.ed.commit(t("Rotate"));
-                if skipped > 0 {
-                    self.status = tf("{} text or symbol object(s) could not be rotated", &[&skipped]);
-                }
+                self.report_transform(skipped, text);
+            }
+            Cmd::FreeTransform => self.set_tool(Tool::Scale),
+            Cmd::TextToPaths => {
+                self.ed.for_selected(|o| {
+                    o.text_to_paths();
+                });
+                self.ed.commit(t("Convert to Paths"));
             }
             Cmd::CanvasSize => self.open_size_dialog(SizeDialogKind::Canvas),
             Cmd::ImageSize => self.open_size_dialog(SizeDialogKind::Image),
@@ -1566,12 +1605,50 @@ impl Workspace {
         if let Some(origin) = self.ed.selection_bounds() {
             let map = self.view_map();
             if let Some(handle) = handle_rects(origin, map).iter().position(|r| r.contains(&ev.position)) {
-                let originals = self.ed.selected().into_iter().cloned().collect();
-                self.drag = Some(Drag::Scale { handle, origin, originals });
+                if ev.modifiers.control {
+                    // Handles run clockwise from the top-left, so the corners are the even ones.
+                    let kind = if handle % 2 == 0 { WarpKind::Distort } else { WarpKind::Skew };
+                    self.begin_warp(kind, handle, p, origin);
+                } else {
+                    let originals = self.ed.selected().into_iter().cloned().collect();
+                    self.drag = Some(Drag::Scale { handle, origin, originals });
+                }
+                return;
+            }
+            // Outside the box, a press on other artwork still selects it; on nothing, it turns the selection.
+            if !origin.contains(p) && self.ed.doc.page().hit_test(p, self.tolerance()).is_none() {
+                self.begin_warp(WarpKind::Rotate, 0, p, origin);
                 return;
             }
         }
         self.pointer_down(ev, p);
+    }
+
+    fn begin_warp(&mut self, kind: WarpKind, handle: usize, start: Vec2, origin: Rect) {
+        let mut text = false;
+        let originals = self
+            .ed
+            .selected()
+            .into_iter()
+            .map(|object| {
+                let mut object = object.clone();
+                // Done once here, not on every move of the pointer.
+                if matches!(object.shape, Shape::Text { .. }) {
+                    text |= object.text_to_paths();
+                }
+                object
+            })
+            .collect();
+        self.drag = Some(Drag::Warp { kind, handle, start, origin, originals, text, moved: false });
+    }
+
+    /// Tells the user what a transform left alone or had to change to do its work.
+    fn report_transform(&mut self, skipped: usize, text: bool) {
+        if skipped > 0 {
+            self.status = tf("{} symbol or web object(s) could not be transformed", &[&skipped]);
+        } else if text {
+            self.status = t("Text was converted to paths so it could be transformed").into();
+        }
     }
 
     /// The bitmap a selection drag applies to: the one under the pointer, or the selected one.
@@ -1878,6 +1955,46 @@ impl Workspace {
                     }
                 }
             }
+            Drag::Warp { kind, handle, start, origin, originals, moved, .. } => {
+                let origin = *origin;
+                let warp = match kind {
+                    WarpKind::Rotate => {
+                        let center = origin.center();
+                        let angle_to = |q: Vec2| (q.y - center.y).atan2(q.x - center.x);
+                        let mut angle = angle_to(p) - angle_to(*start);
+                        if ev.modifiers.shift {
+                            let step = ROTATE_STEP_DEGREES.to_radians();
+                            angle = (angle / step).round() * step;
+                        }
+                        Some(Warp::rotation(center, angle))
+                    }
+                    // The dragged side slides along itself, and the opposite side stays put.
+                    WarpKind::Skew => match *handle {
+                        1 => (origin.h > 0.0).then(|| Warp::shear_x(origin.bottom(), (p.x - start.x) / -origin.h)),
+                        5 => (origin.h > 0.0).then(|| Warp::shear_x(origin.y, (p.x - start.x) / origin.h)),
+                        3 => (origin.w > 0.0).then(|| Warp::shear_y(origin.x, (p.y - start.y) / origin.w)),
+                        _ => (origin.w > 0.0).then(|| Warp::shear_y(origin.right(), (p.y - start.y) / -origin.w)),
+                    },
+                    WarpKind::Distort => {
+                        let mut corners =
+                            [v2(origin.x, origin.y), v2(origin.right(), origin.y), v2(origin.right(), origin.bottom()), v2(origin.x, origin.bottom())];
+                        corners[*handle / 2] = p;
+                        Warp::quad(origin, corners)
+                    }
+                };
+                // A corner pulled across the box has no sensible result, so the last good one stays.
+                if let Some(warp) = warp {
+                    *moved = true;
+                    for original in originals.iter() {
+                        let mut warped = original.clone();
+                        if warped.warp(&warp) {
+                            if let Some(object) = self.ed.object_mut(original.id) {
+                                *object = warped;
+                            }
+                        }
+                    }
+                }
+            }
             Drag::Freeform { id, start, base, radius } => {
                 let delta = v2(p.x - start.x, p.y - start.y);
                 let points = pull_points(base, *start, delta, *radius);
@@ -1980,6 +2097,13 @@ impl Workspace {
             Drag::Crop { start, current } => self.finish_crop_drag(start, current),
             Drag::PixelArea { target, points, mode } => self.finish_pixel_area(target, points, mode),
             Drag::Scale { .. } => self.ed.commit(t("Scale")),
+            Drag::Warp { kind, originals, text, moved, .. } => {
+                if moved {
+                    self.ed.commit(kind.label());
+                    let skipped = originals.iter().filter(|o| !o.warpable()).count();
+                    self.report_transform(skipped, text);
+                }
+            }
             Drag::Freeform { .. } => self.ed.commit(t("Freeform")),
             Drag::Pan { .. } => {}
         }
@@ -2150,6 +2274,7 @@ impl Workspace {
             ("f", false, false) => Cmd::Panel(Panel::Find),
             ("b", false, false) => Cmd::BreakApart,
             ("g", false, false) => Cmd::Group,
+            ("t", false, false) => Cmd::FreeTransform,
             ("g", true, false) => Cmd::Ungroup,
             ("up", true, false) => Cmd::Arrange(Arrange::Front),
             ("up", false, false) => Cmd::Arrange(Arrange::Forward),

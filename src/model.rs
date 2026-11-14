@@ -83,6 +83,100 @@ impl Handles {
     }
 }
 
+/// A projective map of the plane. Turning, slanting and pulling one corner of a box are
+/// all cases of it, so one type carries every free transform.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Warp {
+    /// A 3x3 matrix, row by row.
+    m: [f32; 9],
+}
+
+impl Warp {
+    /// Turns around `center`. Positive angles turn clockwise on screen, where y grows downward.
+    pub fn rotation(center: Vec2, radians: f32) -> Self {
+        let (s, c) = radians.sin_cos();
+        Self { m: [c, -s, center.x - c * center.x + s * center.y, s, c, center.y - s * center.x - c * center.y, 0.0, 0.0, 1.0] }
+    }
+
+    /// Slides points sideways by `slope` for every unit they are below the line y = `fixed_y`.
+    pub fn shear_x(fixed_y: f32, slope: f32) -> Self {
+        Self { m: [1.0, slope, -slope * fixed_y, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] }
+    }
+
+    /// Slides points up or down by `slope` for every unit they are right of the line x = `fixed_x`.
+    pub fn shear_y(fixed_x: f32, slope: f32) -> Self {
+        Self { m: [1.0, 0.0, 0.0, slope, 1.0, -slope * fixed_x, 0.0, 0.0, 1.0] }
+    }
+
+    /// Maps the rectangle `from` onto the quadrilateral `to`, whose corners run clockwise
+    /// from the top-left. Straight lines stay straight. Returns `None` when `from` is empty
+    /// or `to` is not convex, because the map would fold over itself.
+    pub fn quad(from: Rect, to: [Vec2; 4]) -> Option<Self> {
+        if from.w <= 0.0 || from.h <= 0.0 {
+            return None;
+        }
+        let turn = |i: usize| {
+            let (a, b, c) = (to[i], to[(i + 1) % 4], to[(i + 2) % 4]);
+            (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+        };
+        let turns = [turn(0), turn(1), turn(2), turn(3)];
+        if !(turns.iter().all(|t| *t > 1e-3) || turns.iter().all(|t| *t < -1e-3)) {
+            return None;
+        }
+        let [p0, p1, p2, p3] = to;
+        let (dx1, dx2, sx) = (p1.x - p2.x, p3.x - p2.x, p0.x - p1.x + p2.x - p3.x);
+        let (dy1, dy2, sy) = (p1.y - p2.y, p3.y - p2.y, p0.y - p1.y + p2.y - p3.y);
+        let det = dx1 * dy2 - dx2 * dy1;
+        if det.abs() < 1e-6 {
+            return None;
+        }
+        let g = (sx * dy2 - dx2 * sy) / det;
+        let h = (dx1 * sy - sx * dy1) / det;
+        // The unit square onto the quadrilateral.
+        let unit = [p1.x - p0.x + g * p1.x, p3.x - p0.x + h * p3.x, p0.x, p1.y - p0.y + g * p1.y, p3.y - p0.y + h * p3.y, p0.y, g, h, 1.0];
+        // Then `from` onto the unit square first.
+        let mut m = [0.0; 9];
+        for row in 0..3 {
+            let (a, b, c) = (unit[row * 3], unit[row * 3 + 1], unit[row * 3 + 2]);
+            m[row * 3] = a / from.w;
+            m[row * 3 + 1] = b / from.h;
+            m[row * 3 + 2] = c - a * from.x / from.w - b * from.y / from.h;
+        }
+        Some(Self { m })
+    }
+
+    pub fn apply(&self, p: Vec2) -> Vec2 {
+        let m = &self.m;
+        let w = m[6] * p.x + m[7] * p.y + m[8];
+        if w.abs() < 1e-6 {
+            return p;
+        }
+        v2((m[0] * p.x + m[1] * p.y + m[2]) / w, (m[3] * p.x + m[4] * p.y + m[5]) / w)
+    }
+
+    /// The map that undoes this one, used to find where each pixel of a warped bitmap came from.
+    pub fn inverse(&self) -> Option<Self> {
+        let m = &self.m;
+        let cofactor = |a: usize, b: usize, c: usize, d: usize| m[a] * m[d] - m[b] * m[c];
+        let inv = [
+            cofactor(4, 5, 7, 8),
+            -cofactor(1, 2, 7, 8),
+            cofactor(1, 2, 4, 5),
+            -cofactor(3, 5, 6, 8),
+            cofactor(0, 2, 6, 8),
+            -cofactor(0, 2, 3, 5),
+            cofactor(3, 4, 6, 7),
+            -cofactor(0, 1, 6, 7),
+            cofactor(0, 1, 3, 4),
+        ];
+        let det = m[0] * inv[0] + m[1] * inv[3] + m[2] * inv[6];
+        (det.abs() > 1e-9).then(|| Self { m: inv.map(|v| v / det) })
+    }
+}
+
+/// How far a handle reaches along each axis to draw a quarter of a circle of radius one.
+const CIRCLE_HANDLE: f32 = 0.552_284_8;
+
 /// Curve segments are cut into pieces about this long, in document units.
 const CURVE_STEP: f32 = 3.0;
 const CURVE_MIN_STEPS: usize = 8;
@@ -392,6 +486,152 @@ impl Object {
         true
     }
 
+    /// Rewrites a rectangle or an ellipse as the Bezier path that draws it, and any
+    /// other vector shape as a plain path.
+    fn to_bezier_path(&mut self) -> bool {
+        let b = self.bounds;
+        let (points, handles) = match self.shape {
+            Shape::Ellipse => {
+                let (c, rx, ry) = (b.center(), b.w / 2.0, b.h / 2.0);
+                let (kx, ky) = (rx * CIRCLE_HANDLE, ry * CIRCLE_HANDLE);
+                (
+                    vec![v2(c.x + rx, c.y), v2(c.x, c.y + ry), v2(c.x - rx, c.y), v2(c.x, c.y - ry)],
+                    vec![
+                        Handles { before: v2(0.0, -ky), after: v2(0.0, ky) },
+                        Handles { before: v2(kx, 0.0), after: v2(-kx, 0.0) },
+                        Handles { before: v2(0.0, ky), after: v2(0.0, -ky) },
+                        Handles { before: v2(-kx, 0.0), after: v2(kx, 0.0) },
+                    ],
+                )
+            }
+            Shape::Rect { radius } if radius.min(b.w / 2.0).min(b.h / 2.0) > 0.0 => {
+                let r = radius.min(b.w / 2.0).min(b.h / 2.0);
+                let k = r * CIRCLE_HANDLE;
+                let (x0, y0, x1, y1) = (b.x, b.y, b.right(), b.bottom());
+                let zero = Vec2::default();
+                (
+                    vec![
+                        v2(x0 + r, y0),
+                        v2(x1 - r, y0),
+                        v2(x1, y0 + r),
+                        v2(x1, y1 - r),
+                        v2(x1 - r, y1),
+                        v2(x0 + r, y1),
+                        v2(x0, y1 - r),
+                        v2(x0, y0 + r),
+                    ],
+                    vec![
+                        Handles { before: v2(-k, 0.0), after: zero },
+                        Handles { before: zero, after: v2(k, 0.0) },
+                        Handles { before: v2(0.0, -k), after: zero },
+                        Handles { before: zero, after: v2(0.0, k) },
+                        Handles { before: v2(k, 0.0), after: zero },
+                        Handles { before: zero, after: v2(-k, 0.0) },
+                        Handles { before: v2(0.0, k), after: zero },
+                        Handles { before: zero, after: v2(0.0, -k) },
+                    ],
+                )
+            }
+            _ => return self.to_path(),
+        };
+        self.points = points;
+        self.handles = handles;
+        self.shape = Shape::Path { closed: true };
+        true
+    }
+
+    /// Replaces text with a group of paths, one for each character, so it can be
+    /// reshaped like any other artwork. Returns false if the text draws nothing.
+    pub fn text_to_paths(&mut self) -> bool {
+        let Shape::Text { content, size } = &self.shape else { return false };
+        let glyphs = crate::export::glyph_outlines(content, *size, v2(self.bounds.x, self.bounds.y));
+        let parts: Vec<Object> = glyphs
+            .into_iter()
+            .filter_map(|mut rings| {
+                if rings.is_empty() {
+                    return None;
+                }
+                let outer = rings.remove(0);
+                let points = bridge(outer, rings);
+                Some(Object {
+                    id: 0,
+                    name: t("Path").into(),
+                    shape: Shape::Path { closed: true },
+                    bounds: Rect::of_points(&points),
+                    points,
+                    handles: Vec::new(),
+                    fill: self.fill,
+                    stroke: None,
+                    opacity: 1.0,
+                    visible: true,
+                    locked: false,
+                })
+            })
+            .collect();
+        let Some(bounds) = parts.iter().map(|part| part.bounds).reduce(Rect::union) else { return false };
+        self.bounds = bounds;
+        self.shape = Shape::Group { objects: Arc::new(parts) };
+        true
+    }
+
+    /// Whether a free transform can reshape this object. Symbols and web areas cannot take one.
+    pub fn warpable(&self) -> bool {
+        match &self.shape {
+            Shape::Instance { .. } | Shape::Web { .. } => false,
+            Shape::Group { objects } => objects.iter().all(Object::warpable),
+            _ => true,
+        }
+    }
+
+    /// Applies a free transform: a rotation, a skew or a distortion. Shapes become
+    /// paths, bitmaps are redrawn and text becomes paths. Returns false, leaving the
+    /// object as it was, when it cannot be transformed.
+    pub fn warp(&mut self, warp: &Warp) -> bool {
+        if !self.warpable() {
+            return false;
+        }
+        match &self.shape {
+            Shape::Text { .. } => return self.text_to_paths() && self.warp(warp),
+            Shape::Group { .. } => {
+                let mut parts = self.instance_parts();
+                if !parts.iter_mut().all(|part| part.warp(warp)) {
+                    return false;
+                }
+                self.bounds = parts.iter().map(|part| part.bounds).reduce(Rect::union).unwrap_or(self.bounds);
+                self.opacity = 1.0;
+                self.shape = Shape::Group { objects: Arc::new(parts) };
+                return true;
+            }
+            Shape::Image { bitmap } => {
+                let Some((bitmap, bounds)) = bitmap.warped(self.bounds, warp) else { return false };
+                self.shape = Shape::Image { bitmap: Arc::new(bitmap) };
+                self.bounds = bounds;
+                return true;
+            }
+            _ => {}
+        }
+        if !self.to_bezier_path() {
+            return false;
+        }
+        for index in 0..self.points.len() {
+            let from = self.points[index];
+            let to = warp.apply(from);
+            if let Some(handles) = self.handles.get_mut(index) {
+                // A handle moves with the point of the plane it sits on.
+                *handles = handles.map(|offset| {
+                    if offset == Vec2::default() {
+                        return offset;
+                    }
+                    let end = warp.apply(v2(from.x + offset.x, from.y + offset.y));
+                    v2(end.x - to.x, end.y - to.y)
+                });
+            }
+            self.points[index] = to;
+        }
+        self.refit_to_points();
+        true
+    }
+
     pub fn is_curved(&self) -> bool {
         self.handles.iter().any(|h| !h.is_corner())
     }
@@ -599,7 +839,9 @@ impl Object {
             if clockwise { v2(center.x - dy, center.y + dx) } else { v2(center.x + dy, center.y - dx) }
         };
         match self.shape {
-            Shape::Text { .. } | Shape::Instance { .. } => return false,
+            Shape::Instance { .. } => return false,
+            // Text cannot be drawn turned, so it turns as the paths of its letters.
+            Shape::Text { .. } => return self.text_to_paths() && self.rotate90(clockwise, center),
             Shape::Group { .. } => {
                 let mut parts = self.instance_parts();
                 if !parts.iter_mut().all(|part| part.rotate90(clockwise, center)) {
@@ -2042,10 +2284,13 @@ mod tests {
     }
 
     #[test]
-    fn text_does_not_rotate() {
+    fn empty_text_does_not_rotate() {
+        // Text turns as the paths of its letters, and blank text has none.
         let mut text = rect(1, 0.0, 0.0, 10.0, 10.0);
-        text.shape = Shape::Text { content: "a".into(), size: 12.0 };
+        text.shape = Shape::Text { content: " ".into(), size: 12.0 };
+        let before = text.clone();
         assert!(!text.rotate90(true, v2(0.0, 0.0)));
+        assert_eq!(text, before);
     }
 
     #[test]
@@ -2695,6 +2940,177 @@ mod tests {
     fn plain_outlines_are_one_ring() {
         let square = vec![v2(0.0, 0.0), v2(1.0, 0.0), v2(1.0, 1.0), v2(0.0, 1.0)];
         assert_eq!(contours(&square), vec![square]);
+    }
+
+    fn close(a: Vec2, b: Vec2) -> bool {
+        (a.x - b.x).abs() < 0.01 && (a.y - b.y).abs() < 0.01
+    }
+
+    #[test]
+    fn rotation_turns_clockwise_on_screen() {
+        let quarter = Warp::rotation(v2(0.0, 0.0), std::f32::consts::FRAC_PI_2);
+        // Right becomes down, because y grows downward.
+        assert!(close(quarter.apply(v2(1.0, 0.0)), v2(0.0, 1.0)));
+        let about = Warp::rotation(v2(10.0, 10.0), std::f32::consts::PI);
+        assert!(close(about.apply(v2(10.0, 10.0)), v2(10.0, 10.0)));
+        assert!(close(about.apply(v2(12.0, 13.0)), v2(8.0, 7.0)));
+    }
+
+    #[test]
+    fn shear_keeps_one_edge_still() {
+        // The line y = 50 stays, and the line y = 0 slides 20 to the right.
+        let slide = Warp::shear_x(50.0, 20.0 / -50.0);
+        assert!(close(slide.apply(v2(7.0, 50.0)), v2(7.0, 50.0)));
+        assert!(close(slide.apply(v2(7.0, 0.0)), v2(27.0, 0.0)));
+        let lift = Warp::shear_y(0.0, 10.0 / 100.0);
+        assert!(close(lift.apply(v2(0.0, 5.0)), v2(0.0, 5.0)));
+        assert!(close(lift.apply(v2(100.0, 5.0)), v2(100.0, 15.0)));
+    }
+
+    #[test]
+    fn quad_sends_each_corner_to_its_target_and_can_be_undone() {
+        let from = Rect { x: 10.0, y: 20.0, w: 100.0, h: 50.0 };
+        let to = [v2(0.0, 0.0), v2(120.0, 10.0), v2(100.0, 90.0), v2(15.0, 60.0)];
+        let warp = Warp::quad(from, to).unwrap();
+        let corners = [v2(10.0, 20.0), v2(110.0, 20.0), v2(110.0, 70.0), v2(10.0, 70.0)];
+        for (corner, target) in corners.iter().zip(to) {
+            assert!(close(warp.apply(*corner), target), "{corner:?}");
+        }
+        let back = warp.inverse().unwrap();
+        let inside = v2(42.0, 33.0);
+        assert!(close(back.apply(warp.apply(inside)), inside));
+        // The same rectangle maps onto itself without moving anything.
+        let same = Warp::quad(from, corners).unwrap();
+        assert!(close(same.apply(inside), inside));
+    }
+
+    #[test]
+    fn quad_refuses_shapes_that_fold_over() {
+        let from = Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 };
+        // The top-left corner dragged past the opposite corner.
+        assert!(Warp::quad(from, [v2(20.0, 20.0), v2(10.0, 0.0), v2(10.0, 10.0), v2(0.0, 10.0)]).is_none());
+        assert!(Warp::quad(Rect { w: 0.0, ..from }, [v2(0.0, 0.0), v2(10.0, 0.0), v2(10.0, 10.0), v2(0.0, 10.0)]).is_none());
+    }
+
+    #[test]
+    fn a_rectangle_turns_into_a_path_and_turns() {
+        let mut o = rect(1, 0.0, 0.0, 100.0, 50.0);
+        assert!(o.warp(&Warp::rotation(o.bounds.center(), std::f32::consts::FRAC_PI_2)));
+        assert_eq!(o.shape, Shape::Path { closed: true });
+        assert_eq!(o.points.len(), 4);
+        let b = o.bounds;
+        assert!((b.x - 25.0).abs() < 0.01 && (b.y + 25.0).abs() < 0.01 && (b.w - 50.0).abs() < 0.01 && (b.h - 100.0).abs() < 0.01, "{b:?}");
+    }
+
+    #[test]
+    fn a_circle_stays_round_at_any_angle() {
+        let mut o = rect(1, 0.0, 0.0, 100.0, 100.0);
+        o.shape = Shape::Ellipse;
+        assert!(o.warp(&Warp::rotation(v2(50.0, 50.0), 0.5)));
+        assert_eq!(o.points.len(), 4, "four curve points, not a polygon");
+        assert!(o.is_curved());
+        for p in o.outline() {
+            let radius = ((p.x - 50.0).powi(2) + (p.y - 50.0).powi(2)).sqrt();
+            assert!((radius - 50.0).abs() < 0.05, "radius was {radius}");
+        }
+        assert!((o.bounds.w - 100.0).abs() < 0.1 && (o.bounds.h - 100.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn rounded_corners_survive_as_curves() {
+        let mut o = rect(1, 0.0, 0.0, 100.0, 60.0);
+        o.shape = Shape::Rect { radius: 20.0 };
+        let before = o.outline();
+        // Turning by nothing still rewrites the shape as a path.
+        assert!(o.warp(&Warp::rotation(o.bounds.center(), 0.0)));
+        assert_eq!(o.points.len(), 8);
+        let b = o.bounds;
+        assert!(b.x.abs() < 0.01 && b.y.abs() < 0.01 && (b.w - 100.0).abs() < 0.01 && (b.h - 60.0).abs() < 0.01);
+        // The curves follow the arcs they replace: no point of the old outline is far from the new one.
+        let after = o.outline();
+        for p in before {
+            let nearest = after.iter().map(|q| ((p.x - q.x).powi(2) + (p.y - q.y).powi(2)).sqrt()).fold(f32::MAX, f32::min);
+            assert!(nearest < 1.6, "{p:?} is {nearest} away");
+        }
+    }
+
+    #[test]
+    fn skewing_a_curve_moves_its_handles_with_it() {
+        let mut o = arch();
+        // Slide the top right by 45 while y = 0 stays where it is.
+        assert!(o.warp(&Warp::shear_x(0.0, -1.0)));
+        assert_eq!(o.points, vec![v2(0.0, 0.0), v2(100.0, 0.0)]);
+        assert!(close(o.handles[0].after, v2(60.0, -60.0)));
+        let top = o.outline().into_iter().min_by(|a, b| a.y.total_cmp(&b.y)).unwrap();
+        assert!((top.y + 45.0).abs() < 0.5 && (top.x - 95.0).abs() < 2.0, "{top:?}");
+    }
+
+    #[test]
+    fn a_group_turns_as_one() {
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 0.0, 0.0, 20.0, 20.0));
+        e.add_object(rect(2, 80.0, 0.0, 20.0, 20.0));
+        e.selection = vec![1, 2];
+        assert!(e.group_selected());
+        let mut group = e.selected()[0].clone();
+        let bounds = group.bounds;
+        assert!(group.warp(&Warp::rotation(bounds.center(), std::f32::consts::FRAC_PI_2)));
+        let b = group.bounds;
+        assert!((b.w - 20.0).abs() < 0.01 && (b.h - 100.0).abs() < 0.01, "{b:?}");
+        assert_eq!(group.instance_parts().len(), 2);
+    }
+
+    #[test]
+    fn web_areas_are_left_alone() {
+        let mut web = Object::new_web(1, WebKind::Slice, Rect { x: 0.0, y: 0.0, w: 10.0, h: 10.0 });
+        let before = web.clone();
+        assert!(!web.warpable());
+        assert!(!web.warp(&Warp::rotation(v2(0.0, 0.0), 1.0)));
+        assert_eq!(web, before);
+    }
+
+    #[test]
+    fn a_bitmap_is_redrawn_when_it_turns() {
+        // Red on the left, blue on the right.
+        let pixels = Bitmap::from_rgba(2, 1, vec![255, 0, 0, 255, 0, 0, 255, 255]).unwrap();
+        let mut o = Object::new_bitmap(1, "b", pixels, 0.0, 0.0);
+        assert!(o.warp(&Warp::rotation(o.bounds.center(), std::f32::consts::PI)));
+        let Shape::Image { bitmap } = &o.shape else { panic!("still a bitmap") };
+        assert_eq!((bitmap.width(), bitmap.height()), (2, 1));
+        assert_eq!(bitmap.pixel(0, 0), Some([0, 0, 255, 255]));
+        assert_eq!(bitmap.pixel(1, 0), Some([255, 0, 0, 255]));
+
+        // Turned an eighth of a turn, a square needs a larger box with empty corners.
+        let square = Bitmap::from_rgba(40, 40, [10, 200, 30, 255].repeat(1600)).unwrap();
+        let mut o = Object::new_bitmap(2, "s", square, 0.0, 0.0);
+        assert!(o.warp(&Warp::rotation(v2(20.0, 20.0), std::f32::consts::FRAC_PI_4)));
+        let Shape::Image { bitmap } = &o.shape else { panic!("still a bitmap") };
+        assert_eq!((bitmap.width(), bitmap.height()), (58, 58));
+        assert_eq!(o.bounds, Rect { x: -9.0, y: -9.0, w: 58.0, h: 58.0 });
+        assert_eq!(bitmap.pixel(0, 0), Some([0, 0, 0, 0]));
+        assert_eq!(bitmap.pixel(29, 29), Some([10, 200, 30, 255]));
+    }
+
+    #[test]
+    fn text_becomes_paths_with_the_holes_of_its_letters() {
+        let mut o = rect(1, 10.0, 10.0, 60.0, 120.0);
+        o.shape = Shape::Text { content: "o".into(), size: 100.0 };
+        o.fill = Some(Color::BLACK);
+        // Without an installed font there is nothing to outline.
+        if !o.text_to_paths() {
+            return;
+        }
+        let parts = o.instance_parts();
+        assert_eq!(parts.len(), 1);
+        assert_eq!(contours(&parts[0].outline()).len(), 2, "an outer ring and the hole");
+        let center = parts[0].bounds.center();
+        assert!(!parts[0].hit(center, 0.5), "the middle of the letter is empty");
+        // Paths can turn, which text could not.
+        let mut turned = rect(2, 10.0, 10.0, 60.0, 120.0);
+        turned.shape = Shape::Text { content: "o".into(), size: 100.0 };
+        turned.fill = Some(Color::BLACK);
+        assert!(turned.rotate90(true, v2(0.0, 0.0)));
+        assert!(matches!(turned.shape, Shape::Group { .. }));
     }
 
     /// An open path from (0,0) to (100,0) that bulges upward: both handles point to y = -60.

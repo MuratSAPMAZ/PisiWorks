@@ -11,9 +11,13 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tiny_skia::{FillRule, LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::i18n::{t, tf};
-use crate::model::{v2, Color, Vec2};
+use crate::model::{v2, Color, Rect, Vec2, Warp};
 
 pub const MAX_DIMENSION: u32 = 16000;
+/// The longest side, in pixels, a free transform will give a bitmap.
+const WARP_MAX_SIDE: f32 = 8000.0;
+/// Rounding error allowed when fitting a transformed bitmap to whole pixels.
+const WARP_SNAP: f32 = 1e-3;
 pub const FILL_TOLERANCE: u8 = 32;
 const BRIGHTNESS_STEP: i32 = 25;
 const BLUR_SIGMA: f32 = 2.0;
@@ -470,6 +474,77 @@ impl Bitmap {
         }
         self.rgba = turned;
         std::mem::swap(&mut self.width, &mut self.height);
+    }
+
+    /// Redraws the bitmap as a free transform moves it. `bounds` is where the bitmap
+    /// sits in the document. Returns the new pixels and where they sit, or `None`
+    /// when the result would be empty or too large.
+    pub fn warped(&self, bounds: Rect, warp: &Warp) -> Option<(Bitmap, Rect)> {
+        if bounds.w <= 0.0 || bounds.h <= 0.0 {
+            return None;
+        }
+        let inverse = warp.inverse()?;
+        let corners = [v2(bounds.x, bounds.y), v2(bounds.right(), bounds.y), v2(bounds.right(), bounds.bottom()), v2(bounds.x, bounds.bottom())]
+            .map(|corner| warp.apply(corner));
+        let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+        for corner in corners {
+            (x0, y0, x1, y1) = (x0.min(corner.x), y0.min(corner.y), x1.max(corner.x), y1.max(corner.y));
+        }
+        // A half turn lands a hair off whole pixels, which must not add an empty row.
+        let (left, top) = ((x0 + WARP_SNAP).floor(), (y0 + WARP_SNAP).floor());
+        let target = Rect { x: left, y: top, w: (x1 - WARP_SNAP).ceil() - left, h: (y1 - WARP_SNAP).ceil() - top };
+        // Pixels per document unit of the source, kept so a bitmap shown small stays sharp.
+        let (sx, sy) = (self.width as f32 / bounds.w, self.height as f32 / bounds.h);
+        let mut density = ((sx + sy) / 2.0).clamp(0.25, 4.0);
+        let longest = target.w.max(target.h);
+        if longest * density > WARP_MAX_SIDE {
+            density = WARP_MAX_SIDE / longest;
+        }
+        let (width, height) = ((target.w * density).round() as u32, (target.h * density).round() as u32);
+        if width == 0 || height == 0 || width > MAX_DIMENSION || height > MAX_DIMENSION {
+            return None;
+        }
+        let (w, h) = (self.width as i64, self.height as i64);
+        // Premultiplied, so transparent pixels do not tint the edges they blend with.
+        let sample = |x: i64, y: i64| -> [f32; 4] {
+            if x < 0 || y < 0 || x >= w || y >= h {
+                return [0.0; 4];
+            }
+            let at = ((y * w + x) * 4) as usize;
+            let alpha = self.rgba[at + 3] as f32 / 255.0;
+            [self.rgba[at] as f32 * alpha, self.rgba[at + 1] as f32 * alpha, self.rgba[at + 2] as f32 * alpha, alpha * 255.0]
+        };
+        let mut rgba = vec![0u8; width as usize * height as usize * 4];
+        for row in 0..height {
+            for column in 0..width {
+                let doc = v2(target.x + (column as f32 + 0.5) / density, target.y + (row as f32 + 0.5) / density);
+                let from = inverse.apply(doc);
+                let (u, v) = ((from.x - bounds.x) * sx - 0.5, (from.y - bounds.y) * sy - 0.5);
+                if u < -1.0 || v < -1.0 || u > w as f32 || v > h as f32 {
+                    continue;
+                }
+                let (left, top) = (u.floor(), v.floor());
+                let (fx, fy) = (u - left, v - top);
+                let (left, top) = (left as i64, top as i64);
+                let mut mixed = [0.0f32; 4];
+                for (dx, dy, weight) in [(0, 0, (1.0 - fx) * (1.0 - fy)), (1, 0, fx * (1.0 - fy)), (0, 1, (1.0 - fx) * fy), (1, 1, fx * fy)] {
+                    let px = sample(left + dx, top + dy);
+                    for channel in 0..4 {
+                        mixed[channel] += px[channel] * weight;
+                    }
+                }
+                let alpha = mixed[3];
+                if alpha <= 0.0 {
+                    continue;
+                }
+                let at = (row as usize * width as usize + column as usize) * 4;
+                for channel in 0..3 {
+                    rgba[at + channel] = (mixed[channel] * 255.0 / alpha).round().clamp(0.0, 255.0) as u8;
+                }
+                rgba[at + 3] = alpha.round().clamp(0.0, 255.0) as u8;
+            }
+        }
+        Some((Bitmap { width, height, rgba }, target))
     }
 
     pub fn apply_filter(&mut self, filter: Filter) {

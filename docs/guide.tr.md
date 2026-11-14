@@ -30,6 +30,10 @@ Klonlama Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından orad
 
 Ölçekle (Q), seçili her şeyi tutamaçlarından yeniden boyutlandırır. Shift'i basılı tutmadığınız sürece köşeler oranları korur.
 
+Aynı araç döndürür, eğer ve çarpıtır. Döndürmek için seçim kutusunun dışını sürükleyin; 15 derecelik adımlarla döndürmek için Shift'i basılı tutun. Eğmek için bir kenar tutamacını, tek bir köşeyi oynatmak için bir köşe tutamacını Ctrl ile sürükleyin. Değiştir > Dönüştür > Serbest Dönüştürme (Ctrl+T) bu aracı seçer.
+
+Dikdörtgenler ve elipsler bu şekilde dönüştürüldüğünde yola çevrilir, bitmap'ler yeniden çizilir. Metin harflerinin yollarına dönüşür; bu yüzden önce metni düzenlemeyi bitirin. Metin > Yollara Dönüştür aynı işi tek başına yapar. Semboller ve web alanları olduğu gibi kalır: sembol için önce Değiştir > Sembol > Ayır komutunu kullanın.
+
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 
 ## Web alanları

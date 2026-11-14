@@ -50,6 +50,67 @@ fn sk_paint(color: Color, opacity: f32) -> Paint<'static> {
     paint
 }
 
+/// The outline of every character that draws something, as closed rings in document
+/// space. Text is laid out exactly as [`draw_text`] paints it.
+pub fn glyph_outlines(content: &str, size: f32, origin: Vec2) -> Vec<Vec<Vec<Vec2>>> {
+    use ab_glyph::OutlineCurve;
+    let Some(font) = font() else { return Vec::new() };
+    let scale = em_scale(font, size);
+    let scaled = font.as_scaled(scale);
+    let line_height = size * LINE_HEIGHT;
+    let lead = (line_height - (scaled.ascent() - scaled.descent())) / 2.0;
+    let far = |a: Vec2, b: Vec2| (a.x - b.x).abs() + (a.y - b.y).abs() > 0.01;
+    let mut glyphs = Vec::new();
+    for (row, line) in content.split('\n').enumerate() {
+        let mut caret = origin.x;
+        let baseline = origin.y + row as f32 * line_height + lead + scaled.ascent();
+        for ch in line.chars() {
+            let id = scaled.glyph_id(ch);
+            if let Some(outline) = font.outline(id) {
+                // Font outlines have y pointing up.
+                let place = |p: &ab_glyph::Point| Vec2 { x: caret + p.x * scaled.h_scale_factor(), y: baseline - p.y * scaled.v_scale_factor() };
+                let mut rings: Vec<Vec<Vec2>> = Vec::new();
+                for curve in &outline.curves {
+                    let controls: Vec<Vec2> = match curve {
+                        OutlineCurve::Line(a, b) => vec![place(a), place(b)],
+                        OutlineCurve::Quad(a, b, c) => vec![place(a), place(b), place(c)],
+                        OutlineCurve::Cubic(a, b, c, d) => vec![place(a), place(b), place(c), place(d)],
+                    };
+                    let (start, end) = (controls[0], controls[controls.len() - 1]);
+                    // A curve that does not start where the last one ended opens a new ring.
+                    if rings.last().and_then(|ring| ring.last()).is_none_or(|last| far(*last, start)) {
+                        rings.push(vec![start]);
+                    }
+                    let Some(ring) = rings.last_mut() else { continue };
+                    let length: f32 = controls.windows(2).map(|w| ((w[0].x - w[1].x).powi(2) + (w[0].y - w[1].y).powi(2)).sqrt()).sum();
+                    let steps = if controls.len() == 2 { 1 } else { (length.ceil() as usize).clamp(2, 16) };
+                    for step in 1..steps {
+                        let t = step as f32 / steps as f32;
+                        // De Casteljau: works for a quadratic and a cubic alike.
+                        let mut level = controls.clone();
+                        while level.len() > 1 {
+                            level = level.windows(2).map(|w| Vec2 { x: w[0].x + (w[1].x - w[0].x) * t, y: w[0].y + (w[1].y - w[0].y) * t }).collect();
+                        }
+                        ring.push(level[0]);
+                    }
+                    ring.push(end);
+                }
+                for ring in &mut rings {
+                    if ring.len() > 1 && !far(ring[0], ring[ring.len() - 1]) {
+                        ring.pop();
+                    }
+                }
+                rings.retain(|ring| ring.len() >= 3);
+                if !rings.is_empty() {
+                    glyphs.push(rings);
+                }
+            }
+            caret += scaled.h_advance(id);
+        }
+    }
+    glyphs
+}
+
 fn sk_path(points: &[Vec2], closed: bool) -> Option<tiny_skia::Path> {
     let (first, rest) = points.split_first()?;
     let mut builder = PathBuilder::new();

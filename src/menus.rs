@@ -153,6 +153,8 @@ pub enum Cmd {
     Group,
     Ungroup,
     Rotate { clockwise: bool },
+    FreeTransform,
+    TextToPaths,
     CanvasSize,
     ImageSize,
     FitCanvas,
@@ -461,7 +463,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sub(
                 "Transform",
                 &[
-                    na("Free Transform"),
+                    cmd("Free Transform", "Ctrl+T", Cmd::FreeTransform),
                     na("Numeric Transform..."),
                     Sep,
                     cmd("Rotate 90 CW", "", Cmd::Rotate { clockwise: true }),
@@ -518,7 +520,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Ungroup", "Ctrl+Shift+G", Cmd::Ungroup),
         ],
     ),
-    ("Text", &[na("Font"), na("Size"), na("Style"), na("Align"), Sep, na("Attach to Path"), na("Convert to Paths"), Sep, na("Check Spelling...")]),
+    ("Text", &[na("Font"), na("Size"), na("Style"), na("Align"), Sep, na("Attach to Path"), cmd("Convert to Paths", "", Cmd::TextToPaths), Sep, na("Check Spelling...")]),
     ("Commands", &[na("Manage Saved Commands..."), na("Run Script...")]),
     (
         "Filters",
