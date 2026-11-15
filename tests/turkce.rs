@@ -148,3 +148,25 @@ Altın nesnesine tıklanınca:
     let told = read("Ödül komutu, Kaç ile:\n    filmi durdur\n\nFilm başlayınca:\n    Ödül komutunu yap\n").unwrap_err();
     assert_eq!((told[0].line, told[0].what.as_str()), (5, "Ödül komutu 1 değer alır, 0 değer verilmiş"));
 }
+
+#[test]
+fn turning_and_giving_behaviors_read_in_turkish() {
+    set_language(Language::Turkish);
+    let text = "\
+Düğme nesnesine tıklanınca:
+    Elips nesnesini 45 derece döndür
+    Elips nesnesini yüzde 150 boyuta getir
+    Elips nesnesini yüzde 40 opak yap
+    Elips nesnesine Dön davranışını ver
+    Top nesnesine Kenarlardan Sek davranışını ver
+    Top nesnesinden Düş ve Zıpla davranışını al
+    Kedi nesnesi Fare nesnesini 120 hızla izlesin
+";
+    let found = read(text).unwrap();
+    let steps = &found.rules[0].steps;
+    assert_eq!(steps.iter().map(|s| s.b.as_str()).collect::<Vec<_>>(), vec!["", "", "", "spin", "ricochet", "gravity", "Fare"]);
+    assert_eq!((steps[0].x, steps[1].x, steps[2].x, steps[6].x), (45.0, 150.0, 40.0, 120.0));
+    assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+    let told = read("Film başlayınca:\n    Top nesnesine Uç davranışını ver\n").unwrap_err();
+    assert_eq!((told[0].line, told[0].what.as_str()), (2, "Uç adında bir davranış yok"));
+}

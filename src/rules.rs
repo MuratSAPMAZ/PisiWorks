@@ -54,6 +54,8 @@ pub enum Pick {
     Condition,
     /// A command defined in the written language.
     Command,
+    /// One of the ready behaviors, by its name in the menu.
+    Behavior,
     Variable,
     Sound,
 }
@@ -155,6 +157,18 @@ pub enum StepKind {
     RandomNumber,
     /// Makes the object blink for a moment, as a thing that has been hit does.
     Flash,
+    /// Turns the object by `x` degrees, clockwise, around its transformation point.
+    Turn,
+    /// Makes the object `x` percent of the size it was drawn at.
+    Resize,
+    /// Makes the object `x` percent opaque: 0 cannot be seen, 100 is as it was drawn.
+    Opacity,
+    /// Gives the object the behavior whose word is `b`, with the numbers that behavior starts with.
+    Give,
+    /// Takes the behavior whose word is `b` from the object.
+    Take,
+    /// Sends the object after the object `b` at `x` pixels a second; at 0 it stops going after anything.
+    Chase,
     /// Waits `x` seconds before the steps that follow it.
     Wait,
     /// Does the command called `a`: steps written once under a name, in the written language.
@@ -172,7 +186,7 @@ pub enum StepKind {
     Restart,
 }
 
-pub const STEPS: [StepKind; 25] = [
+pub const STEPS: [StepKind; 31] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -187,6 +201,12 @@ pub const STEPS: [StepKind; 25] = [
     StepKind::Random,
     StepKind::RandomTop,
     StepKind::Jump,
+    StepKind::Turn,
+    StepKind::Resize,
+    StepKind::Opacity,
+    StepKind::Give,
+    StepKind::Take,
+    StepKind::Chase,
     StepKind::Wait,
     StepKind::Call,
     StepKind::Sound,
@@ -224,6 +244,12 @@ impl StepKind {
             StepKind::Faster => "Make an object faster",
             StepKind::RandomNumber => "Set a number at random",
             StepKind::Flash => "Make an object blink for a moment",
+            StepKind::Turn => "Turn an object",
+            StepKind::Resize => "Resize an object",
+            StepKind::Opacity => "Make an object see-through",
+            StepKind::Give => "Give an object a behavior",
+            StepKind::Take => "Take a behavior from an object",
+            StepKind::Chase => "Send an object after another",
             StepKind::Wait => "Wait",
             StepKind::Call => "Do a command",
             StepKind::Repeat => "Repeat",
@@ -257,6 +283,12 @@ impl StepKind {
             StepKind::Faster => "faster",
             StepKind::RandomNumber => "rnd",
             StepKind::Flash => "flash",
+            StepKind::Turn => "turn",
+            StepKind::Resize => "size",
+            StepKind::Opacity => "alpha",
+            StepKind::Give => "give",
+            StepKind::Take => "take",
+            StepKind::Chase => "chase",
             StepKind::Wait => "wait",
             StepKind::Call => "call",
             StepKind::Repeat => "repeat",
@@ -281,6 +313,11 @@ impl StepKind {
             StepKind::RandomNumber => (Some(Pick::Variable), None, Some(("At least:", 1.0)), Some(("Up to:", 6.0))),
             StepKind::GotoFrame | StepKind::GotoFrameStop => (None, None, Some(("Frame:", 1.0)), None),
             StepKind::GotoScene => (None, None, Some(("Scene:", 1.0)), None),
+            StepKind::Turn => (Some(Pick::Object), None, Some(("Degrees:", 90.0)), None),
+            StepKind::Resize => (Some(Pick::Object), None, Some(("Percent:", 150.0)), None),
+            StepKind::Opacity => (Some(Pick::Object), None, Some(("Percent:", 50.0)), None),
+            StepKind::Give | StepKind::Take => (Some(Pick::Object), Some(Pick::Behavior), None, None),
+            StepKind::Chase => (Some(Pick::Object), Some(Pick::Object), Some(("Speed:", 100.0)), None),
             StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
             StepKind::Call => (Some(Pick::Command), None, None, None),
             StepKind::Repeat => (None, None, Some(("Times:", 3.0)), None),
@@ -513,6 +550,7 @@ pub fn choice_name(pick: Pick, value: &str) -> String {
         Pick::Compare => &COMPARES,
         Pick::Condition => &CONDITIONS,
         Pick::Object | Pick::Variable | Pick::Sound | Pick::Command => return value.to_string(),
+        Pick::Behavior => return crate::behavior::KINDS.iter().find(|kind| kind.key() == value).map_or_else(|| value.to_string(), |kind| t(kind.name()).to_string()),
     };
     list.iter().find(|(key, _)| *key == value).map_or_else(|| value.to_string(), |(_, name)| if name.len() == 1 { name.to_string() } else { t(name).to_string() })
 }
@@ -607,6 +645,12 @@ impl Step {
             StepKind::Spawn => tf("make a copy of {} at {}", &[a, &self.b]),
             StepKind::Remove => tf("remove {}", &[a]),
             StepKind::Flash => tf("make {} blink for a moment", &[a]),
+            StepKind::Turn => tf("turn {} by {} degrees", &[a, &x]),
+            StepKind::Resize => tf("make {} {} percent of its size", &[a, &x]),
+            StepKind::Opacity => tf("make {} {} percent opaque", &[a, &x]),
+            StepKind::Give => tf("give {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
+            StepKind::Take => tf("take from {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
+            StepKind::Chase => tf("send {} after {} at {}", &[a, &self.b, &x]),
             StepKind::Wait => tf("wait {} seconds", &[&x]),
             StepKind::Call if !self.args.is_empty() => tf("do the command {} with {}", &[a, &self.args.join(", ")]),
             StepKind::Call => tf("do the command {}", &[a]),

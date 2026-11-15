@@ -2526,7 +2526,7 @@ impl Workspace {
                         .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(if index == 0 { t("Do:") } else { "" })))
                         .child(raised(self.combo(Combo::RuleStep(index), t(step.kind.name()), 230., cx)))
                         .when_some(a, |d, pick| d.child(raised(self.combo(Combo::RuleStepPick(index, false), shown(pick, &step.a), 120., cx))))
-                        .when_some(b, |d, pick| d.child(label(t("at:"))).child(raised(self.combo(Combo::RuleStepPick(index, true), shown(pick, &step.b), 120., cx))))
+                        .when_some(b, |d, pick| d.when(step.kind == crate::rules::StepKind::Spawn, |d| d.child(label(t("at:")))).child(raised(self.combo(Combo::RuleStepPick(index, true), shown(pick, &step.b), 120., cx))))
                         .when_some(x, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, false), 50., cx)))
                         .when_some(y, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, true), 50., cx)))
                         .child(div().flex_1())

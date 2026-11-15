@@ -314,6 +314,9 @@ fn behaviors() -> Document {
     give(&mut e, star, &[(Kind::Pulse, 25.0, 1.0), (Kind::Draggable, 0.0, 0.0)]);
     let bee = add(&mut e, t("Bee"), Shape::Ellipse, rect(300.0, 110.0, 28.0, 20.0), Some(YELLOW), Some(Stroke { color: INK, width: 3.0 }));
     give(&mut e, bee, &[(Kind::FollowMouse, 220.0, 0.0)]);
+    // A marble that never stops: it comes back from every edge, and from the ledge too.
+    let marble = add(&mut e, t("Marble"), Shape::Ellipse, rect(250.0, 70.0, 18.0, 18.0), Some(Color::rgb(0x70, 0x40, 0xc0)), None);
+    give(&mut e, marble, &[(Kind::Ricochet, 170.0, 35.0)]);
     // A ledge the box can jump onto: it is solid.
     let ledge = boxed(&mut e, t("Ledge"), rect(330.0, 240.0, 80.0, 12.0), 4.0, TEAL);
     give(&mut e, ledge, &[(Kind::Solid, 0.0, 0.0)]);

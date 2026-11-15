@@ -3823,6 +3823,7 @@ impl Workspace {
             Pick::Variable => own(self.ed.doc.variables.iter().map(|v| v.name.clone()).collect()),
             Pick::Sound => own(self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect()),
             Pick::Command => own(self.ed.doc.commands.iter().map(|c| c.name.clone()).collect()),
+            Pick::Behavior => crate::behavior::KINDS.iter().map(|kind| (kind.key().to_string(), t(kind.name()).to_string())).collect(),
             Pick::Key => listed(&KEYS),
             Pick::Edge => listed(&EDGES),
             Pick::Compare => listed(&COMPARES),

@@ -28,12 +28,14 @@ pub enum BehaviorKind {
     ArrowKeys,
     Gravity,
     Draggable,
+    /// Flies in a straight line and bounces off the edges of the stage and off what is solid, as a ball does.
+    Ricochet,
     /// Other objects cannot pass through it: what walks or falls stops at it, and stands on it.
     Solid,
 }
 
 /// Every kind, in the order the menu lists them: first those that move by themselves, then those the viewer moves.
-pub const KINDS: [BehaviorKind; 15] = [
+pub const KINDS: [BehaviorKind; 16] = [
     BehaviorKind::Spin,
     BehaviorKind::Bounce,
     BehaviorKind::BackAndForth,
@@ -48,6 +50,7 @@ pub const KINDS: [BehaviorKind; 15] = [
     BehaviorKind::ArrowKeys,
     BehaviorKind::Gravity,
     BehaviorKind::Draggable,
+    BehaviorKind::Ricochet,
     BehaviorKind::Solid,
 ];
 
@@ -69,6 +72,7 @@ impl BehaviorKind {
             BehaviorKind::ArrowKeys => "Walk with the Arrow Keys",
             BehaviorKind::Gravity => "Fall and Jump",
             BehaviorKind::Draggable => "Can Be Dragged",
+            BehaviorKind::Ricochet => "Bounce off the Edges",
             BehaviorKind::Solid => "Is Solid",
         }
     }
@@ -90,6 +94,7 @@ impl BehaviorKind {
             BehaviorKind::ArrowKeys => "keys",
             BehaviorKind::Gravity => "gravity",
             BehaviorKind::Draggable => "drag",
+            BehaviorKind::Ricochet => "ricochet",
             BehaviorKind::Solid => "solid",
         }
     }
@@ -110,13 +115,14 @@ impl BehaviorKind {
             BehaviorKind::FollowMouse => (("Speed (pixels a second):", 200.0), None),
             BehaviorKind::ArrowKeys => (("Speed (pixels a second):", 160.0), None),
             BehaviorKind::Gravity => (("Pull (pixels a second, each second):", 900.0), Some(("Jump speed (pixels a second):", 420.0))),
+            BehaviorKind::Ricochet => (("Speed (pixels a second):", 220.0), Some(("Direction (degrees):", 50.0))),
             BehaviorKind::Draggable | BehaviorKind::Solid => (("", 0.0), None),
         }
     }
 
     /// Whether the kind waits for the viewer's mouse or keyboard, and so shows only in the published film.
     pub const fn interactive(self) -> bool {
-        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Solid)
+        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Solid)
     }
 }
 
@@ -198,7 +204,7 @@ pub fn moved(behaviors: &[Behavior], tick: usize, fps: f32, bounds: Rect, stage:
                     moved.alpha = 0.0;
                 }
             }
-            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Solid => {}
+            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Solid => {}
         }
     }
     moved

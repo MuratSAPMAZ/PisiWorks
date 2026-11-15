@@ -397,7 +397,13 @@ enum Gap {
 
 /// The sentences a step can be: the kind each gives, what its gaps hold in the order they stand, and
 /// whether the first number is taken away ("decrease", "slower").
-const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 28] = [
+const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 34] = [
+    ("turn {} by {} degrees", StepKind::Turn, &[Gap::A, Gap::X], false),
+    ("make {} {} percent of its size", StepKind::Resize, &[Gap::A, Gap::X], false),
+    ("make {} {} percent opaque", StepKind::Opacity, &[Gap::A, Gap::X], false),
+    ("give {} the behavior {}", StepKind::Give, &[Gap::A, Gap::B], false),
+    ("take from {} the behavior {}", StepKind::Take, &[Gap::A, Gap::B], false),
+    ("send {} after {} at {}", StepKind::Chase, &[Gap::A, Gap::B, Gap::X], false),
     ("do the command {} with {}", StepKind::Call, &[Gap::A, Gap::Values], false),
     ("do the command {}", StepKind::Call, &[Gap::A], false),
     ("move {} by {} right and {} down", StepKind::Move, &[Gap::A, Gap::X, Gap::Y], false),
@@ -459,6 +465,14 @@ fn step(line: &str, known: &Known) -> Result<Step, Fault> {
                 }
                 Gap::Values => made.args = split_outside(text, ",").into_iter().map(|value| value.trim().to_string()).collect(),
                 Gap::A => made.a = text.clone(),
+                // A behavior is written by its name in the menu and kept by its own word.
+                Gap::B if kind.needs().1 == Some(Pick::Behavior) => match crate::behavior::KINDS.iter().find(|known| t(known.name()).to_lowercase() == text.to_lowercase()) {
+                    Some(known) => made.b = known.key().to_string(),
+                    None => {
+                        fault = fault.or(Some(tf("there is no behavior called {}", &[text])));
+                        continue 'forms;
+                    }
+                },
                 Gap::B => made.b = text.clone(),
                 Gap::X | Gap::Y => {
                     let read = match amount(text, &known.all_numbers()) {
@@ -1100,6 +1114,36 @@ When Coin is clicked:
         let found = read(&text).unwrap();
         (e.doc.rules, e.doc.variables, e.doc.commands) = (found.rules, found.variables, found.commands);
         std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/dil.html"), crate::publish::html(&e.doc, "dil").unwrap()).unwrap();
+    }
+
+    #[test]
+    fn steps_that_turn_resize_and_give_behaviors_are_read_and_written() {
+        set_language(Language::English);
+        let text = "\
+When Button is clicked:
+    turn Box by 45 degrees
+    make Box 150 percent of its size
+    make Box 40 percent opaque
+    give Box the behavior Spin
+    take from Ring the behavior Fall and Jump
+    send Ring after Box at 120
+";
+        let found = read(text).unwrap();
+        let steps = &found.rules[0].steps;
+        assert_eq!(steps.iter().map(|s| s.kind).collect::<Vec<_>>(), vec![StepKind::Turn, StepKind::Resize, StepKind::Opacity, StepKind::Give, StepKind::Take, StepKind::Chase]);
+        // A behavior is kept by its own word, whatever the language it was written in.
+        assert_eq!((steps[3].b.as_str(), steps[4].b.as_str(), steps[5].b.as_str(), steps[5].x), ("spin", "gravity", "Box", 120.0));
+        assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+        // Both objects of "send after" are objects the page must be able to move.
+        assert_eq!(crate::rules::objects_of(steps).iter().filter(|name| **name == "Box").count(), 5);
+        let told = read("When Box is clicked:\n    give Box the behavior Dance\n").unwrap_err();
+        assert_eq!((told[0].line, told[0].what.as_str()), (2, "there is no behavior called Dance"));
+        // The page carries the steps, and the numbers a behavior given by a rule starts with.
+        let mut doc = crate::model::Document::new(100, 100);
+        doc.page_mut().start_timeline(20.0);
+        doc.rules = found.rules;
+        let page = crate::publish::html(&doc, "x").unwrap();
+        assert!(page.contains(r#"["give","Box",0,0,"spin"]"#) && page.contains(r#""spin":[2,0]"#) && page.contains(r#""ricochet":[220,50]"#), "{}", &page[page.find("rules:").unwrap()..][..600]);
     }
 
     #[test]

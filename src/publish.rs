@@ -328,8 +328,17 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
         })
         .collect();
     let numbers: Vec<String> = doc.variables.iter().map(|v| format!("{}:{}", serde_json::to_string(&v.name).unwrap_or_default(), v.start)).collect();
+    // The numbers each behavior starts with, for the rules that give an object a behavior.
+    let defaults: Vec<String> = crate::behavior::KINDS
+        .iter()
+        .map(|kind| {
+            let (first, second) = kind.settings();
+            format!("\"{}\":[{},{}]", kind.key(), first.1, second.map_or(0.0, |second| second.1))
+        })
+        .collect();
     Ok(PAGE
         .replace("{title}", &escape(title))
+        .replace("{defaults}", &defaults.join(","))
         .replace("{width}", &width.to_string())
         .replace("{height}", &height.to_string())
         .replace("{fps}", &fps.to_string())
@@ -376,6 +385,7 @@ const PAGE: &str = r#"<!doctype html>
 // carries them after its own five parts: its body, its conditions, and what to do otherwise.
 // commands: steps (s) under a name, with the names of the values they take (p), done by the step "call",
 // which carries the values after its five parts. numbers: the numbers by name, as they start.
+// defaults: the two numbers each behavior starts with, for the rules that give an object a behavior.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
@@ -384,6 +394,7 @@ var movie = {
   rules: [{rules}],
   commands: {{commands}},
   numbers: {{numbers}},
+  defaults: {{defaults}},
   scenes: [{scenes}]
 };
 var canvas = document.getElementById("stage"), stage = canvas.getContext("2d");
@@ -464,15 +475,38 @@ function blocked(key, box, a) {
 }
 function span(seconds) { return Math.abs(seconds) < 0.01 ? 0.01 : seconds; }
 function wrapped(at, size, room) { var m = room + size; return (((at + size) % m) + m) % m - size; }
-function has(b, kind) { return b.l.some(function (l) { return l[0] === kind; }); }
+// The behaviors an object has now: those it was drawn with, less what rules have taken from it (off),
+// and those rules have given it (extra), each with the moment it was given at as its fourth part.
+function acts(key, b) {
+  var a = actors[key];
+  if (!a || (!a.off && !a.extra)) return b.l;
+  var list = a.off ? b.l.filter(function (l) { return !a.off[l[0]]; }) : b.l;
+  return a.extra ? list.concat(a.extra) : list;
+}
+function has(key, b, kind) { return acts(key, b).some(function (l) { return l[0] === kind; }); }
+// Where the middle of the first object of a name is now, if it is on the stage and not hidden.
+function middleOf(name) {
+  var list = ops();
+  for (var i = 0; i < list.length; i += 1) {
+    var b = behaviorsOf(list[i]);
+    if (!b || b.n !== name || actor(keyOf(list[i])).hidden) continue;
+    var m = moved(keyOf(list[i]), b);
+    return { x: b.box[0] + b.box[2] / 2 + m.dx, y: b.box[1] + b.box[3] / 2 + m.dy };
+  }
+  return null;
+}
 // What its behaviors have done to an object by now: moved it (dx, dy), turned it (angle) and
 // resized it (scale) around its point, and let it through by a part (alpha). The first nine
 // kinds follow the same rules as playing inside PisiSahne does.
 function moved(key, b) {
   var a = actor(key), t = a.n / movie.fps, box = b.box, TAU = Math.PI * 2;
-  var m = { dx: a.x, dy: a.y, angle: 0, scale: 1, alpha: 1 };
-  b.l.forEach(function (l) {
+  // What rules have done to it comes first: turned it, resized it, let it through by a part.
+  var m = { dx: a.x, dy: a.y, angle: a.turn || 0, scale: a.size === undefined ? 1 : a.size, alpha: a.alpha === undefined ? 1 : a.alpha };
+  var whole = t;
+  acts(key, b).forEach(function (l) {
     var k = l[0], p = l[1], q = l[2];
+    // A behavior a rule gave starts when it was given, not when the object came on.
+    t = l[3] ? whole - l[3] / movie.fps : whole;
     if (k === "spin") m.angle += TAU * t / span(p);
     else if (k === "bounce") m.dy -= p * Math.abs(Math.sin(Math.PI * t / span(q)));
     else if (k === "swing") m.dx += p * (1 - Math.cos(TAU * t / span(q))) / 2;
@@ -497,14 +531,15 @@ function step(key, b) {
   var a = actor(key), dt = a.rate * pace / movie.fps, box = b.box;
   a.n += a.rate * pace;
   // What is to disappear after a while is gone when its time is up; a copy is gone for good.
-  if (b.l.some(function (l) { return l[0] === "expire" && a.n / movie.fps >= l[1]; })) {
+  var list = acts(key, b);
+  if (list.some(function (l) { return l[0] === "expire" && (a.n - (l[3] || 0)) / movie.fps >= l[1]; })) {
     a.hidden = true;
     clones = clones.filter(function (c) { return keyOf(c.op) !== key; });
     return;
   }
   if (dragging && dragging.key === key) return;
-  var falls = has(b, "gravity"), fromX = a.x, fromY = a.y;
-  b.l.forEach(function (l) {
+  var falls = has(key, b, "gravity"), fromX = a.x, fromY = a.y, flies = false;
+  list.forEach(function (l) {
     var k = l[0], p = l[1], q = l[2];
     if (k === "mouse" && mouse) {
       var dx = mouse.x - (box[0] + box[2] / 2 + a.x), dy = mouse.y - (box[1] + box[3] / 2 + a.y);
@@ -523,17 +558,42 @@ function step(key, b) {
       a.y += a.vy * dt;
       var floor = movie.height - box[1] - box[3];
       if (a.y >= floor) { a.y = floor; a.vy = 0; a.ground = true; } else a.ground = false;
+    } else if (k === "ricochet") {
+      // It flies straight on, at its own speed, and comes back from every edge of the stage as a ball does.
+      // A speed that has been changed keeps the way it was going.
+      var pace2 = a.rx === undefined ? 0 : Math.sqrt(a.rx * a.rx + a.ry * a.ry);
+      if (a.rx === undefined || pace2 < 0.001) { var way = q * Math.PI / 180; a.rx = p * Math.cos(way); a.ry = -p * Math.sin(way); }
+      else if (Math.abs(pace2 - Math.abs(p)) > 0.001) { a.rx *= Math.abs(p) / pace2; a.ry *= Math.abs(p) / pace2; }
+      flies = true;
+      a.x += a.rx * dt; a.y += a.ry * dt;
+      var lowX = -box[0], highX = movie.width - box[0] - box[2], lowY = -box[1], highY = movie.height - box[1] - box[3];
+      if (a.x < lowX) { a.x = lowX; a.rx = Math.abs(a.rx); } else if (a.x > highX) { a.x = highX; a.rx = -Math.abs(a.rx); }
+      if (a.y < lowY) { a.y = lowY; a.ry = Math.abs(a.ry); } else if (a.y > highY) { a.y = highY; a.ry = -Math.abs(a.ry); }
     }
   });
+  // What a rule has sent after another object goes straight towards its middle, and stops on reaching it.
+  if (a.chase) {
+    var goal = middleOf(a.chase.name);
+    if (goal) {
+      var cx = goal.x - (box[0] + box[2] / 2 + a.x), cy = goal.y - (box[1] + box[3] / 2 + a.y);
+      var gap = Math.sqrt(cx * cx + cy * cy), reach = Math.min(gap, a.chase.speed * dt);
+      if (gap > 0.5) { a.x += cx / gap * reach; a.y += cy / gap * reach; }
+    }
+  }
   // What is solid stops it: first sideways, then up or down, where it lands on top or bumps its head.
   if (walls.length && (a.x !== fromX || a.y !== fromY)) {
     var toX = a.x, toY = a.y, w;
     a.y = fromY;
-    if ((w = blocked(key, box, a))) a.x = toX > fromX ? w[0] - box[2] - box[0] : toX < fromX ? w[0] + w[2] - box[0] : fromX;
+    if ((w = blocked(key, box, a))) {
+      a.x = toX > fromX ? w[0] - box[2] - box[0] : toX < fromX ? w[0] + w[2] - box[0] : fromX;
+      // What bounces off the edges bounces off what is solid too.
+      if (flies) a.rx = toX > fromX ? -Math.abs(a.rx) : Math.abs(a.rx);
+    }
     a.y = toY;
     if ((w = blocked(key, box, a))) {
       if (toY > fromY) { a.y = w[1] - box[3] - box[1]; a.ground = true; } else a.y = w[1] + w[3] - box[1];
       a.vy = 0;
+      if (flies) a.ry = toY > fromY ? -Math.abs(a.ry) : Math.abs(a.ry);
     }
   }
 }
@@ -653,10 +713,28 @@ function take(step, who, players) {
     else if (k === "jump") {
       // As high as asked: the speed that the pull of Fall and Jump takes that long a way to stop. What has
       // no such pull cannot jump.
-      var pull = p.b.l.filter(function (l) { return l[0] === "gravity"; })[0];
+      var pull = acts(p.key, p.b).filter(function (l) { return l[0] === "gravity"; })[0];
       if (pull && x > 0) { a.vy = -Math.sqrt(2 * Math.max(pull[1], 1) * x); a.ground = false; }
     }
     else if (k === "flash") a.flash = ticks + movie.fps * 1.2;
+    else if (k === "turn") a.turn = (a.turn || 0) + x * Math.PI / 180;
+    else if (k === "size") a.size = Math.max(0, x / 100);
+    else if (k === "alpha") a.alpha = Math.max(0, Math.min(x / 100, 1));
+    else if (k === "give") {
+      // Given once, with the numbers the behavior starts with; what the object was drawn with comes back as it was.
+      var kind = step[4], first = movie.defaults[kind];
+      if (a.off) delete a.off[kind];
+      if (first && !has(p.key, p.b, kind)) (a.extra = a.extra || []).push([kind, first[0], first[1], a.n]);
+    }
+    else if (k === "take") {
+      var gone = step[4];
+      // What stops spinning stays turned the way it was.
+      acts(p.key, p.b).forEach(function (l) { if (l[0] === gone && gone === "spin") a.turn = (a.turn || 0) + Math.PI * 2 * (a.n - (l[3] || 0)) / movie.fps / span(l[1]); });
+      (a.off = a.off || {})[gone] = true;
+      if (a.extra) a.extra = a.extra.filter(function (l) { return l[0] !== gone; });
+      if (gone === "ricochet") { a.rx = undefined; a.ry = undefined; }
+    }
+    else if (k === "chase") a.chase = x > 0 ? { name: named(step[4]), speed: x } : null;
     else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
     else if (k === "remove") {
       // A copy is gone for good; anything else stays hidden until the film starts again.
@@ -823,7 +901,7 @@ function draw() {
     if (b && actor(keyOf(op)).hidden) return;
     // What has just been hit blinks: it is left out of every other pair of frames for a little over a second.
     if (b && actor(keyOf(op)).flash > ticks && Math.floor(ticks / 2) % 2 === 0) return;
-    if (b && has(b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+    if (b && has(keyOf(op), b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
     if (op[0] === "t") {
       if (m) place(m, b); else stage.setTransform(1, 0, 0, 1, 0, 0);
       stage.globalAlpha = m ? m.alpha : 1;
@@ -865,7 +943,7 @@ function tick(now) {
   walls = [];
   ops().forEach(function (op) {
     var b = behaviorsOf(op);
-    if (!b || !has(b, "solid") || actor(keyOf(op)).hidden) return;
+    if (!b || !has(keyOf(op), b, "solid") || actor(keyOf(op)).hidden) return;
     var m = moved(keyOf(op), b);
     walls.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
   });
