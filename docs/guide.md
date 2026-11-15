@@ -272,6 +272,7 @@ The first ten show when you play inside the program (Enter): the film then plays
 | Event | Happens |
 |---|---|
 | When the film starts | Once, at the beginning and after "start again" |
+| When a scene starts | At the beginning, and whenever the film goes to another scene |
 | When a key is pressed | Space, the arrows, Enter, a letter or a digit goes down |
 | When an object is clicked | The viewer clicks an object of that name |
 | When an object touches another | The boxes of the two come to overlap |
@@ -280,9 +281,11 @@ The first ten show when you play inside the program (Enter): the film then plays
 | After so many seconds | Once |
 | When a number reaches a value | It becomes, goes above or goes below the value |
 
-- *Add a Step* lists what to do: change or set a number, or set it at random; hide, show or move an object, put it at a place, somewhere at random, or at the top at random; make a copy of an object where another is; remove an object; make an object faster or slower; make it jump; play a sound; go to the next scene, to a scene or to a frame; stop or play the film; stop everything; start again. A rule can have several steps; they are done in order.
+- *Add a Step* lists what to do: change or set a number, or set it at random; hide, show or move an object, put it at a place, somewhere at random, or at the top at random; make a copy of an object where another is; remove an object; make an object blink for a moment; make an object faster or slower; make it jump; play a sound; go to the next scene, to a scene or to a frame; stop or play the film; stop everything; start again. A rule can have several steps; they are done in order.
 - *Only if.* Under the event, **Only if** can hold a number against a value: "When Hero touches Door, if Score is more than 2". The rule is then followed only when that is so as well.
 - *Copies.* **Make a copy of an object** makes another of the same name, with the same behaviors, where a second object is: a bullet where the ship is. Draw the one bullet, and hide it when the film starts; every shot is a copy. **Remove an object** takes a copy away for good, and hides anything else until the film starts again.
+- *A copy for each.* When the second name is that of several objects, each gets a copy: "Every 2 seconds: make a copy of Shot at Rat" makes every rat shoot. A gate is an object drawn just off the stage for copies to appear at: "Every 3 seconds: make a copy of Rat at Gate".
+- *Blinking.* **Make an object blink for a moment** shows that it was hit. While it blinks nothing can touch it, which gives the player a moment to get away.
 - *Faster.* **Make an object faster** quickens everything the object does by itself: falling, going, turning. This is how a game gets harder as it goes.
 - *Touching.* Two objects touch when their boxes meet; an ellipse that has not been turned is taken by its outline. What stands on a solid object touches it.
 - *Which object?* When a rule says "When Apple touches Basket: hide Apple", it is the apple that touched that is hidden, not every apple.
@@ -332,6 +335,16 @@ The first ten show when you play inside the program (Enter): the film then plays
 - *Scenery that moves.* Clouds with **Keep Going**, a sun with **Spin**, stars streaming past at three speeds, lamps with **Blink**. None of it is in a rule.
 - *Harder as it goes.* Add *make … faster by 5 percent* to the rule that gives a point.
 
+**The showcase: Pisi: Iron Claw.** The first entry of the Examples menu is a game of some length: Pisi, a robot leopard with a blaster, goes through a city, a factory and a rooftop, and meets a giant rat at the end. Robot rats roll in and shoot, drones drop bombs, a turret guards the roof, hearts fall now and then. It is made of nothing the lessons do not teach, only more of it, and it is worth taking apart:
+
+- *Pisi runs.* Pisi is a movie clip of four steps, three frames each. A copy of the clip on the stage has the behaviors **Walk with the Arrow Keys** and **Fall and Jump**: a clip can have behaviors and a name like anything else.
+- *The world comes to Pisi.* PisiSahne has no camera. Each layer of scenery is a strip as wide as the stage with **Keep Going** to the left, and a second strip after it; the far ones go slowly and the near ones fast, so the town seems to pass by.
+- *Enemies come from a gate.* One rat is drawn off the left edge and hidden when the scene starts. *Every 2.6 seconds: make a copy of Rat at Gate*. *Every 2.3 seconds: make a copy of Shot at Rat*. *When Bullet touches Rat: increase Score by 1; make a copy of Explosion at Rat; remove Bullet; remove Rat*.
+- *Stages.* *When Score becomes 10: go to scene 2*. Every scene has objects of the same names, so the same rules hold in all of them; a scene with no Sky gate has no drones.
+- *The giant rat.* A number, Armor, starts at 30. *When Bullet touches Giant Rat: decrease Armor by 1; … make Giant Rat blink for a moment*. *When Armor goes below 1: go to scene 5*.
+
+All twenty-eight rules can be read in **Rules > Rules and Numbers**.
+
 What rules do not do yet: a moving platform does not carry what stands on it; touching goes by boxes, except for ellipses; a number is whole or decimal, there are no words to keep; a rule has one "only if" and no "otherwise". Levels larger than the stage, a camera and a character with several animations belong to a game studio, not to rules.
 
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
@@ -367,4 +380,4 @@ What rules do not do yet: a moving platform does not carry what stands on it; to
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has fourteen ready films (the five games drawn with characters, scenery, bursts and sounds), each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has fifteen ready films (first the showcase, Pisi: Iron Claw; the five small games drawn with characters, scenery, bursts and sounds), each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.

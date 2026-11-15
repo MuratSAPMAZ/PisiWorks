@@ -14,27 +14,27 @@ use crate::model::{Color, Document, Editor, FillKind, Rect, Shape, Stroke, TextS
 use crate::rules::{Condition, EventKind, Rule, StepKind, Variable};
 use crate::sahne_examples::{counter, give, last_scene, rule, start, stop_here};
 
-const RED: Color = Color::rgb(0xd8, 0x30, 0x38);
-const GREEN: Color = Color::rgb(0x4c, 0xb8, 0x50);
-const DARK_GREEN: Color = Color::rgb(0x2c, 0x8a, 0x3c);
-const BROWN: Color = Color::rgb(0x9a, 0x64, 0x30);
-const DARK_BROWN: Color = Color::rgb(0x6a, 0x40, 0x1c);
-const NIGHT: Color = Color::rgb(0x0c, 0x10, 0x28);
+pub(crate) const RED: Color = Color::rgb(0xd8, 0x30, 0x38);
+pub(crate) const GREEN: Color = Color::rgb(0x4c, 0xb8, 0x50);
+pub(crate) const DARK_GREEN: Color = Color::rgb(0x2c, 0x8a, 0x3c);
+pub(crate) const BROWN: Color = Color::rgb(0x9a, 0x64, 0x30);
+pub(crate) const DARK_BROWN: Color = Color::rgb(0x6a, 0x40, 0x1c);
+pub(crate) const NIGHT: Color = Color::rgb(0x0c, 0x10, 0x28);
 
-fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
+pub(crate) fn r(x: f32, y: f32, w: f32, h: f32) -> Rect {
     Rect { x, y, w, h }
 }
 
-fn oval(e: &mut Editor, x: f32, y: f32, w: f32, h: f32, fill: Color) -> u64 {
+pub(crate) fn oval(e: &mut Editor, x: f32, y: f32, w: f32, h: f32, fill: Color) -> u64 {
     add(e, "", Shape::Ellipse, r(x, y, w, h), Some(fill), None)
 }
 
-fn block(e: &mut Editor, x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Color) -> u64 {
+pub(crate) fn block(e: &mut Editor, x: f32, y: f32, w: f32, h: f32, radius: f32, fill: Color) -> u64 {
     add(e, "", Shape::Rect { radius }, r(x, y, w, h), Some(fill), None)
 }
 
 /// A closed shape through the points given.
-fn poly(e: &mut Editor, points: &[(f32, f32)], fill: Color) -> u64 {
+pub(crate) fn poly(e: &mut Editor, points: &[(f32, f32)], fill: Color) -> u64 {
     let points: Vec<Vec2> = points.iter().map(|(x, y)| Vec2 { x: *x, y: *y }).collect();
     let id = add(e, "", Shape::Path { closed: true }, Rect::of_points(&points), Some(fill), None);
     if let Some(object) = e.object_mut(id) {
@@ -43,30 +43,30 @@ fn poly(e: &mut Editor, points: &[(f32, f32)], fill: Color) -> u64 {
     id
 }
 
-fn star(e: &mut Editor, x: f32, y: f32, size: f32, points: u32, depth: f32, fill: Color) -> u64 {
+pub(crate) fn star(e: &mut Editor, x: f32, y: f32, size: f32, points: u32, depth: f32, fill: Color) -> u64 {
     add(e, "", Shape::Auto { kind: AutoKind::Star, a: depth, b: 0.0, count: points }, r(x, y, size, size), Some(fill), None)
 }
 
 /// Lighter at the top, darker at the bottom.
-fn shaded(e: &mut Editor, id: u64, top: Color, bottom: Color) -> u64 {
+pub(crate) fn shaded(e: &mut Editor, id: u64, top: Color, bottom: Color) -> u64 {
     gradient(e, id, FillKind::Linear, top, bottom, (0.5, 0.0), (0.5, 1.0));
     id
 }
 
 /// Lit from the upper left, as a ball is.
-fn rounded(e: &mut Editor, id: u64, light: Color, dark: Color) -> u64 {
+pub(crate) fn rounded(e: &mut Editor, id: u64, light: Color, dark: Color) -> u64 {
     gradient(e, id, FillKind::Radial, light, dark, (0.35, 0.3), (1.0, 0.6));
     id
 }
 
-fn faint(e: &mut Editor, id: u64, opacity: f32) -> u64 {
+pub(crate) fn faint(e: &mut Editor, id: u64, opacity: f32) -> u64 {
     if let Some(object) = e.object_mut(id) {
         object.opacity = opacity;
     }
     id
 }
 
-fn outlined(e: &mut Editor, id: u64, color: Color, width: f32) -> u64 {
+pub(crate) fn outlined(e: &mut Editor, id: u64, color: Color, width: f32) -> u64 {
     if let Some(object) = e.object_mut(id) {
         object.stroke = Some(Stroke { color, width });
     }
@@ -74,7 +74,7 @@ fn outlined(e: &mut Editor, id: u64, color: Color, width: f32) -> u64 {
 }
 
 /// A glow of a color of its own around an object.
-fn glowing(e: &mut Editor, id: u64, color: Color) -> u64 {
+pub(crate) fn glowing(e: &mut Editor, id: u64, color: Color) -> u64 {
     filter(e, id, FilterKind::Glow, &[]);
     if let Some(made) = e.object_mut(id).and_then(|object| object.filters.last_mut()) {
         made.color = Some(color);
@@ -83,7 +83,7 @@ fn glowing(e: &mut Editor, id: u64, color: Color) -> u64 {
 }
 
 /// Parts made into one object with a name: what a rule knows, and what a behavior moves.
-fn grouped(e: &mut Editor, name: &str, parts: Vec<u64>) -> u64 {
+pub(crate) fn grouped(e: &mut Editor, name: &str, parts: Vec<u64>) -> u64 {
     e.selection = parts;
     e.group_selected();
     let id = e.selection.first().copied().unwrap_or_default();
@@ -92,7 +92,7 @@ fn grouped(e: &mut Editor, name: &str, parts: Vec<u64>) -> u64 {
 }
 
 /// Two eyes looking the way `look` says: -1 left, 0 ahead, 1 right.
-fn eyes(e: &mut Editor, x: f32, y: f32, gap: f32, size: f32, look: f32) -> Vec<u64> {
+pub(crate) fn eyes(e: &mut Editor, x: f32, y: f32, gap: f32, size: f32, look: f32) -> Vec<u64> {
     let mut parts = Vec::new();
     for side in [0.0, 1.0] {
         let left = x + side * gap;
@@ -106,7 +106,7 @@ fn eyes(e: &mut Editor, x: f32, y: f32, gap: f32, size: f32, look: f32) -> Vec<u
 
 /// A short sound made of notes, each a pitch in hertz and a length in milliseconds, as a WAV file.
 /// A pitch of 0 is a burst of noise. Every note dies away, so the sound is a pluck and not a drone.
-fn wav(notes: &[(f32, u32)]) -> Vec<u8> {
+pub(crate) fn wav(notes: &[(f32, u32)]) -> Vec<u8> {
     const RATE: u32 = 11025;
     let mut samples: Vec<u8> = Vec::new();
     let mut noise: u32 = 0x1234_5678;
@@ -145,15 +145,15 @@ fn wav(notes: &[(f32, u32)]) -> Vec<u8> {
 }
 
 /// The sounds the games share, added to the document under the names the rules call them by.
-struct Sounds {
-    ding: &'static str,
-    zap: &'static str,
-    boom: &'static str,
-    oops: &'static str,
-    win: &'static str,
+pub(crate) struct Sounds {
+    pub ding: &'static str,
+    pub zap: &'static str,
+    pub boom: &'static str,
+    pub oops: &'static str,
+    pub win: &'static str,
 }
 
-fn sounds(e: &mut Editor) -> Sounds {
+pub(crate) fn sounds(e: &mut Editor) -> Sounds {
     let names = Sounds { ding: t("ding"), zap: t("zap"), boom: t("boom"), oops: t("oops"), win: t("fanfare") };
     e.add_sound(names.ding, "audio/wav", &wav(&[(988.0, 60), (1319.0, 160)]));
     e.add_sound(names.zap, "audio/wav", &wav(&[(880.0, 40), (660.0, 40), (440.0, 50)]));
@@ -164,12 +164,12 @@ fn sounds(e: &mut Editor) -> Sounds {
 }
 
 /// A step that plays a sound.
-fn sound(name: &str) -> (StepKind, &str, f32, f32) {
+pub(crate) fn sound(name: &str) -> (StepKind, &str, f32, f32) {
     (StepKind::Sound, name, 0.0, 0.0)
 }
 
 /// A rule whose copies appear where another object is: `at` for each Spawn step, in order.
-fn placed(mut made: Rule, at: &[&str]) -> Rule {
+pub(crate) fn placed(mut made: Rule, at: &[&str]) -> Rule {
     for (step, place) in made.steps.iter_mut().filter(|step| step.kind == StepKind::Spawn).zip(at) {
         step.b = place.to_string();
     }
@@ -178,7 +178,7 @@ fn placed(mut made: Rule, at: &[&str]) -> Rule {
 
 // ---- Scenery --------------------------------------------------------------------------------
 
-fn sky(e: &mut Editor, width: f32, height: f32, top: Color, bottom: Color) {
+pub(crate) fn sky(e: &mut Editor, width: f32, height: f32, top: Color, bottom: Color) {
     let id = block(e, 0.0, 0.0, width, height, 0.0, top);
     shaded(e, id, top, bottom);
     e.for_selected(|o| o.name = t("Sky").to_string());
@@ -215,7 +215,7 @@ fn turf(e: &mut Editor, name: &str, x: f32, y: f32, w: f32, h: f32) -> u64 {
 }
 
 /// A burst that flashes where something was hit: it swells, fades, and is gone in a third of a second.
-fn burst(e: &mut Editor, name: &str, x: f32, y: f32, size: f32, outer: Color, inner: Color) -> u64 {
+pub(crate) fn burst(e: &mut Editor, name: &str, x: f32, y: f32, size: f32, outer: Color, inner: Color) -> u64 {
     let parts = vec![star(e, x, y, size, 10, 0.5, outer), star(e, x + size * 0.22, y + size * 0.22, size * 0.56, 8, 0.45, inner)];
     let id = grouped(e, name, parts);
     give(e, id, &[(Kind::Pulse, 90.0, 0.7), (Kind::Spin, 1.4, 0.0), (Kind::Expire, 0.35, 0.0)]);

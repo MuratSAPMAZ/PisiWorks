@@ -22,6 +22,8 @@ use crate::i18n::{t, tf};
 pub enum EventKind {
     /// The film starts, or starts again.
     Start,
+    /// A scene starts: at the beginning of the film, and whenever the film goes to another scene.
+    Scene,
     /// A key goes down: `a` is the key.
     Key,
     /// An object is clicked: `a` is its name.
@@ -38,7 +40,7 @@ pub enum EventKind {
     Number,
 }
 
-pub const EVENTS: [EventKind; 8] = [EventKind::Start, EventKind::Key, EventKind::Click, EventKind::Touch, EventKind::Edge, EventKind::Every, EventKind::After, EventKind::Number];
+pub const EVENTS: [EventKind; 9] = [EventKind::Start, EventKind::Scene, EventKind::Key, EventKind::Click, EventKind::Touch, EventKind::Edge, EventKind::Every, EventKind::After, EventKind::Number];
 
 /// What a name in a rule is chosen from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,6 +60,7 @@ impl EventKind {
     pub const fn name(self) -> &'static str {
         match self {
             EventKind::Start => "When the film starts",
+            EventKind::Scene => "When a scene starts",
             EventKind::Key => "When a key is pressed",
             EventKind::Click => "When an object is clicked",
             EventKind::Touch => "When an object touches another",
@@ -72,6 +75,7 @@ impl EventKind {
     pub const fn key(self) -> &'static str {
         match self {
             EventKind::Start => "start",
+            EventKind::Scene => "scene-start",
             EventKind::Key => "key",
             EventKind::Click => "click",
             EventKind::Touch => "touch",
@@ -85,7 +89,7 @@ impl EventKind {
     /// What the kind's first and second names are chosen from, and what its number is called, if it has them.
     pub const fn needs(self) -> (Option<Pick>, Option<Pick>, Option<&'static str>) {
         match self {
-            EventKind::Start => (None, None, None),
+            EventKind::Start | EventKind::Scene => (None, None, None),
             EventKind::Key => (Some(Pick::Key), None, None),
             EventKind::Click => (Some(Pick::Object), None, None),
             EventKind::Touch => (Some(Pick::Object), Some(Pick::Object), None),
@@ -145,13 +149,15 @@ pub enum StepKind {
     Faster,
     /// Makes the number `a` a whole number picked at random from `x` to `y`.
     RandomNumber,
+    /// Makes the object blink for a moment, as a thing that has been hit does.
+    Flash,
     /// Stops the film and everything that moves in it.
     StopAll,
     /// Starts the film again from the beginning, with every number as it started.
     Restart,
 }
 
-pub const STEPS: [StepKind; 22] = [
+pub const STEPS: [StepKind; 23] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -159,6 +165,7 @@ pub const STEPS: [StepKind; 22] = [
     StepKind::Show,
     StepKind::Spawn,
     StepKind::Remove,
+    StepKind::Flash,
     StepKind::Faster,
     StepKind::Move,
     StepKind::GoTo,
@@ -199,6 +206,7 @@ impl StepKind {
             StepKind::Remove => "Remove an object",
             StepKind::Faster => "Make an object faster",
             StepKind::RandomNumber => "Set a number at random",
+            StepKind::Flash => "Make an object blink for a moment",
             StepKind::StopAll => "Stop everything",
             StepKind::Restart => "Start again",
         }
@@ -226,6 +234,7 @@ impl StepKind {
             StepKind::Remove => "remove",
             StepKind::Faster => "faster",
             StepKind::RandomNumber => "rnd",
+            StepKind::Flash => "flash",
             StepKind::StopAll => "halt",
             StepKind::Restart => "restart",
         }
@@ -236,7 +245,7 @@ impl StepKind {
         match self {
             StepKind::Move => (Some(Pick::Object), None, Some(("Rightwards:", 10.0)), Some(("Down:", 0.0))),
             StepKind::GoTo => (Some(Pick::Object), None, Some(("X:", 0.0)), Some(("Y:", 0.0))),
-            StepKind::Random | StepKind::RandomTop | StepKind::Show | StepKind::Hide | StepKind::Remove => (Some(Pick::Object), None, None, None),
+            StepKind::Random | StepKind::RandomTop | StepKind::Show | StepKind::Hide | StepKind::Remove | StepKind::Flash => (Some(Pick::Object), None, None, None),
             StepKind::Spawn => (Some(Pick::Object), Some(Pick::Object), None, None),
             StepKind::Jump => (Some(Pick::Object), None, Some(("Speed:", 400.0)), None),
             StepKind::Faster => (Some(Pick::Object), None, Some(("Percent:", 10.0)), None),
@@ -372,6 +381,7 @@ impl Event {
         let (a, n) = (&self.a, plain(self.n));
         match self.kind {
             EventKind::Start => t("When the film starts").to_string(),
+            EventKind::Scene => t("When a scene starts").to_string(),
             EventKind::Key => tf("When the {} key is pressed", &[&choice_name(Pick::Key, a)]),
             EventKind::Click => tf("When {} is clicked", &[a]),
             EventKind::Touch => tf("When {} touches {}", &[a, &self.b]),
@@ -415,6 +425,7 @@ impl Step {
             StepKind::Add => tf("increase {} by {}", &[a, &x]),
             StepKind::Spawn => tf("make a copy of {} at {}", &[a, &self.b]),
             StepKind::Remove => tf("remove {}", &[a]),
+            StepKind::Flash => tf("make {} blink for a moment", &[a]),
             StepKind::Faster if self.x < 0.0 => tf("make {} slower by {} percent", &[a, &plain(-self.x)]),
             StepKind::Faster => tf("make {} faster by {} percent", &[a, &x]),
             StepKind::RandomNumber => tf("set {} at random from {} to {}", &[a, &x, &y]),

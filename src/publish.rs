@@ -395,10 +395,13 @@ if (movie.pictures.length === 0) start();
 // Goes to a frame of a scene, both counted from 0, playing on from there or stopping.
 function go(toScene, toFrame, play) {
   if (toScene < 0 || toScene >= movie.scenes.length) return;
+  var other = toScene !== scene;
   scene = toScene;
   frame = Math.max(0, Math.min(toFrame, movie.scenes[scene].length - 1));
   playing = play;
   enter();
+  // A scene that starts has its own rules to follow: hiding what copies are made from, setting a clock.
+  if (other) happen("scene-start", function () { return true; });
 }
 // Does what an action says. Frames and scenes are written counted from 1.
 function act(action) {
@@ -563,17 +566,19 @@ function take(step, who, players) {
     // The copy is made from the object as it was drawn, hidden or not, and put where the other object is now.
     var source = null;
     movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (!source && b && b.n === name && (op[0] === "m" || op[0] === "c")) source = op; });
-    var at = players.filter(function (p) { return meant(p, step[4]); })[0];
-    if (source) {
-      var sb = behaviorsOf(source), ox = 0, oy = 0;
-      if (at) { ox = at.box[0] + at.box[2] / 2 - (sb.box[0] + sb.box[2] / 2); oy = at.box[1] + at.box[3] / 2 - (sb.box[1] + sb.box[3] / 2); }
+    // One copy for each object of the second name that is meant: "a shot at Soldier" gives every soldier a shot.
+    var places = players.filter(function (p) { return meant(p, step[4]); });
+    if (source) places.forEach(function (at) {
+      if (clones.length >= 300) return;
+      var sb = behaviorsOf(source);
+      var ox = at.box[0] + at.box[2] / 2 - (sb.box[0] + sb.box[2] / 2), oy = at.box[1] + at.box[3] / 2 - (sb.box[1] + sb.box[3] / 2);
       var nb = { p: [sb.p[0] + ox, sb.p[1] + oy], box: [sb.box[0] + ox, sb.box[1] + oy, sb.box[2], sb.box[3]], l: sb.l, n: sb.n, r: sb.r };
       made += 1;
       var copy = source[0] === "m"
         ? ["m", [source[1][0], source[1][1] + ox, source[1][2] + oy], "k" + made, nb]
         : ["c", source[1], [source[2][0], source[2][1], source[2][2], source[2][3], source[2][4] + ox, source[2][5] + oy], source[3], "k" + made, nb];
       clones.push({ scene: scene, op: copy });
-    }
+    });
   }
   them.forEach(function (p) {
     var a = actor(p.key), box = p.b.box;
@@ -583,6 +588,7 @@ function take(step, who, players) {
     else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
     else if (k === "hide") a.hidden = true;
     else if (k === "jump") { a.vy = -x; a.ground = false; }
+    else if (k === "flash") a.flash = ticks + Math.round(movie.fps * 1.2);
     else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
     else if (k === "remove") {
       // A copy is gone for good; anything else stays hidden until the film starts again.
@@ -640,7 +646,9 @@ function judge() {
         if (p.name !== e[1]) return;
         players.forEach(function (q) {
           if (q.name !== e[2] || q.key === p.key) return;
-          if (came("t" + index + ":" + p.key + ":" + q.key, meets(p, q))) { var who = {}; who[q.name] = q.key; who[p.name] = p.key; follow(rule, who); }
+          // What is blinking from a hit cannot be touched until it stops: a moment to get away in.
+          var safe = actor(p.key).flash > ticks || actor(q.key).flash > ticks;
+          if (came("t" + index + ":" + p.key + ":" + q.key, !safe && meets(p, q))) { var who = {}; who[q.name] = q.key; who[p.name] = p.key; follow(rule, who); }
         });
       });
     }
@@ -650,8 +658,10 @@ function judge() {
 function restart() {
   actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null; clones = [];
   startNumbers();
+  var same = scene === 0;
   go(0, 0, true);
   happen("start", function () { return true; });
+  if (same) happen("scene-start", function () { return true; });
 }
 // Writes a text that shows numbers, each in place of its {name}.
 function write(spec) {
@@ -680,6 +690,8 @@ function draw() {
     }
     var b = behaviorsOf(op), m = b ? moved(keyOf(op), b) : null;
     if (b && actor(keyOf(op)).hidden) return;
+    // What has just been hit blinks: it is left out of every other pair of frames for a little over a second.
+    if (b && actor(keyOf(op)).flash > ticks && Math.floor(ticks / 2) % 2 === 0) return;
     if (b && has(b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
     if (op[0] === "t") {
       if (m) place(m, b); else stage.setTransform(1, 0, 0, 1, 0, 0);
@@ -739,6 +751,7 @@ function start() {
   depth = 0;
   enter();
   happen("start", function () { return true; });
+  happen("scene-start", function () { return true; });
   draw();
   setInterval(tick, 1000 / movie.fps);
 }

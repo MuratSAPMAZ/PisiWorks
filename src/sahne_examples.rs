@@ -11,6 +11,7 @@ use crate::rules::{Event, EventKind, Rule, Step, StepKind};
 use crate::model::{Action, Color, Document, Editor, FillKind, LayerKind, Object, Shape, Span, Stroke, SymbolKind, TextStyle, Tween, Vec2, WebKind};
 
 pub const EXAMPLES: &[Example] = &[
+    Example { name: "Pisi: Iron Claw", about: "The showcase: a robot leopard, three stages and a giant rat, made with nothing but behaviors and rules", build: crate::sahne_showcase::iron_claw },
     Example { name: "Bouncing ball", about: "Motion tweens with easing: the ball speeds up as it falls and slows as it rises", build: bouncing_ball },
     Example { name: "Changing shapes", about: "Shape tweens: a square becomes a circle, and the circle a star", build: changing_shapes },
     Example { name: "Along a path", about: "A guide layer: the arrow follows the path and turns to face the way it goes", build: along_a_path },
@@ -626,8 +627,10 @@ mod tests {
         // The published page as well, to open in a browser.
         std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/example.html"), crate::publish::html(&doc, &name).unwrap()).unwrap();
         let frames = std::env::var("FRAMES").unwrap_or_else(|_| "0".to_string());
+        // PAGE picks another page than the first: a later scene, or the page of a movie clip.
+        let page = std::env::var("PAGE").ok().and_then(|p| p.parse::<usize>().ok()).unwrap_or(0).min(doc.pages.len() - 1);
         for frame in frames.split(',').filter_map(|f| f.trim().parse::<usize>().ok()) {
-            let picture = crate::export::render_page(&doc.pages[0].at_frame(frame).played()).unwrap();
+            let picture = crate::export::render_page(&doc.pages[page].at_frame(frame).played()).unwrap();
             picture.save_png(format!(concat!(env!("CARGO_MANIFEST_DIR"), "/target/example-{:03}.png"), frame)).unwrap();
         }
     }
