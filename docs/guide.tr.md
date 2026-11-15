@@ -45,6 +45,10 @@ Metin dönüştürüldüğünde metin olarak kalır; düzenlemeye ve boyutunu de
 
 Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bıçak (Y, Kurşun Kalem seçiliyken yeniden basın) seçili vektörleri sürüklenen çizgi boyunca keser. Hiçbir şey seçili değilken Bıçak, kestiği her vektörü böler. İkisi de dikdörtgenleri ve elipsleri yola dönüştürür.
 
+## Canlı filtreler
+
+Özellikler panelindeki Filtreler, seçili nesnelere efekt ekler: renk ayarları, eğim ve kabartmalar, bulanıklaştırmalar, parazit, gölge ve ışımalar, keskinleştirme. Eklemek ve ayarlamak için listeden birini seçin. Her filtre; onu kapatan bir kutu, ayarlarını yeniden açan adı ve onu kaldıran bir eksi ile listelenir. Filtreler eklendikleri sırayla, nesne her çizildiğinde uygulanır; bu yüzden nesnenin kendisi düzenlenebilir kalır. Bir nesneden oluşturulan stil, nesnenin filtrelerini de saklar.
+
 ## Maskeler
 
 Maske, bir nesnenin bir bölümünü gizler. Komutlar Değiştir > Maske menüsündedir:

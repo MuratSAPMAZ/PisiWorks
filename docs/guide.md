@@ -43,6 +43,10 @@ Text stays text when it is transformed, so you can still edit it and change its 
 
 Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again from Pencil) cuts selected vectors along a dragged line. With nothing selected, Knife cuts every vector it crosses. Both turn rectangles and ellipses into paths.
 
+## Live filters
+
+Filters in Properties adds effects to the selected objects: color adjustments, bevels and embosses, blurs, noise, shadows and glows, and sharpening. Pick one from the list to add it and set it. Each filter is listed with a box that switches it off, its name, which opens its settings again, and a minus that removes it. Filters are applied in the order they were added, every time the object is drawn, so the object itself can still be edited. A style made from an object keeps its filters.
+
 ## Masks
 
 A mask hides part of an object. Modify > Mask has the commands:

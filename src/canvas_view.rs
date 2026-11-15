@@ -591,6 +591,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
+        filters: Vec::new(),
         fill: None,
         stroke: None,
         opacity: 1.0,

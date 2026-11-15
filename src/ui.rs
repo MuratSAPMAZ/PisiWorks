@@ -770,6 +770,92 @@ impl Workspace {
     }
 
     /// The small preview of the page shown when nothing is selected.
+    /// The live filters of the selection: a list to add from, and each filter with a box
+    /// that switches it off, its name, which opens its settings, and a button that removes it.
+    fn filters_column(&self, cx: &mut Context<Self>) -> Div {
+        let rows: Vec<AnyElement> = self
+            .current_filters()
+            .into_iter()
+            .enumerate()
+            .map(|(index, filter)| {
+                div()
+                    .h(px(17.))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .gap_1()
+                    .child(
+                        div()
+                            .size(px(12.))
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .bg(rgb(INPUT))
+                            .border_1()
+                            .border_color(rgb(INPUT_BORDER))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.change_filters(|filters| {
+                                        if let Some(filter) = filters.get_mut(index) {
+                                            filter.enabled = !filter.enabled;
+                                        }
+                                    });
+                                    cx.notify();
+                                }),
+                            )
+                            .when(filter.enabled, |d| d.child(icon("check", 8., TEXT))),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .hover(|s| s.bg(rgb(HOVER)))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.open_filter(index);
+                                    cx.notify();
+                                }),
+                            )
+                            .child(filter.kind.label()),
+                    )
+                    .child(
+                        div()
+                            .size(px(14.))
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .hover(|s| s.bg(rgb(HOVER)))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.change_filters(|filters| {
+                                        if index < filters.len() {
+                                            filters.remove(index);
+                                        }
+                                    });
+                                    cx.notify();
+                                }),
+                            )
+                            .child(icon("minus", 9., TEXT)),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        div()
+            .w(px(170.))
+            .flex()
+            .flex_col()
+            .flex_none()
+            .gap_1()
+            .child(div().flex().items_center().gap_1().child(label(t("Filters:"))).child(self.combo(Combo::AddFilter, "+", 34., cx).bg(rgb(PANEL_RAISED))))
+            .child(div().id("live-filters").flex().flex_col().max_h(px(54.)).overflow_y_scroll().children(rows))
+    }
+
     fn document_thumbnail(&self, size: f32) -> Div {
         let page = self.ed.doc.page();
         let background = Object {
@@ -783,6 +869,7 @@ impl Workspace {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
             opacity: 1.0,
@@ -948,6 +1035,7 @@ impl Workspace {
                 })
             })
             .child(extra)
+            .child(self.filters_column(cx))
             .children(brush_size)
             .into_any_element()
     }
@@ -1566,6 +1654,7 @@ impl Render for Workspace {
             .children(self.size_dialog_view(cx))
             .children(self.numeric_dialog_view(cx))
             .children(self.jpeg_dialog_view(cx))
+            .children(self.filter_dialog_view(cx))
             .children(self.color_popup_view(cx))
             .children(self.combo_popup(cx))
     }

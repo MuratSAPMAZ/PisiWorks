@@ -62,6 +62,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
+        filters: Vec::new(),
         fill,
         stroke,
         opacity,
@@ -374,6 +375,30 @@ impl Workspace {
                     )
                 })
                 .collect(),
+            Combo::AddFilter => crate::effects::MENU
+                .iter()
+                .flat_map(|(group, kinds)| {
+                    // The name of the group, then its filters.
+                    let heading = div().h(px(18.)).px_2().flex().flex_none().items_center().text_color(rgb(TEXT_DISABLED)).child(t(group)).into_any_element();
+                    let entries = kinds.iter().map(|kind| {
+                        let kind = *kind;
+                        item(kind.label().into(), false, cx, Box::new(move |this, _, _| this.add_filter(kind)))
+                    });
+                    std::iter::once(heading).chain(entries).collect::<Vec<_>>()
+                })
+                .collect(),
+            Combo::FilterChoice(setting) => {
+                let current = self.edited_filter().map_or(0, |(_, filter)| filter.value(setting).round() as usize);
+                let names: Vec<&'static str> = match self.edited_filter().map(|(_, filter)| filter.kind) {
+                    Some(crate::effects::FilterKind::ColorFill) => crate::blend::BlendMode::ALL.iter().map(|mode| mode.label()).collect(),
+                    _ => crate::effects::BEVEL_SHAPES.iter().map(|name| t(name)).collect(),
+                };
+                names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, name)| item(name.into(), index == current, cx, Box::new(move |this, _, _| this.set_filter_value(setting, index as f32))))
+                    .collect()
+            }
             Combo::MaskKind => {
                 use crate::model::MaskKind;
                 let current = self.current_mask().map(|mask| mask.kind);
@@ -750,6 +775,80 @@ impl Workspace {
                     .when(on, |d| d.child(icon("check", 9., TEXT))),
             )
             .child(text)
+    }
+
+    /// The settings of a live filter: a field for each number, a box for each switch,
+    /// a list for each choice and the color, if the filter has one.
+    pub(crate) fn filter_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (_, filter) = self.edited_filter()?;
+        let settings = filter.kind.settings();
+        let name_width = label_width(&settings.iter().map(|s| t(s.name)).collect::<Vec<_>>(), 60.);
+        let mut rows: Vec<AnyElement> = Vec::new();
+        for (index, setting) in settings.iter().enumerate() {
+            let chosen_from_list = matches!((filter.kind, setting.name), (_, "Edge shape") | (crate::effects::FilterKind::ColorFill, "Blend Mode"));
+            if setting.toggle {
+                let on = filter.value(index) >= 0.5;
+                rows.push(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.commit_field();
+                                this.set_filter_value(index, if on { 0.0 } else { 1.0 });
+                                cx.notify();
+                            }),
+                        )
+                        .child(div().size(px(13.)).flex().flex_none().items_center().justify_center().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).when(on, |d| d.child(icon("check", 9., TEXT))))
+                        .child(t(setting.name))
+                        .into_any_element(),
+                );
+            } else if chosen_from_list {
+                let current = filter.value(index).round() as usize;
+                let value = if setting.name == "Blend Mode" {
+                    crate::blend::BlendMode::ALL[current.min(crate::blend::BlendMode::ALL.len() - 1)].label()
+                } else {
+                    t(crate::effects::BEVEL_SHAPES[current.min(crate::effects::BEVEL_SHAPES.len() - 1)])
+                };
+                rows.push(labelled_row(t(setting.name), name_width, self.combo(Combo::FilterChoice(index), value, 130., cx).bg(rgb(PANEL_RAISED))).into_any_element());
+            } else {
+                rows.push(labelled_row(t(setting.name), name_width, self.field(FieldId::FilterValue(index), 60., cx)).into_any_element());
+            }
+        }
+        Some(
+            deferred(
+                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                    div()
+                        .w(px(280.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .bg(rgb(PANEL))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_lg()
+                        .child(div().pb_1().font_weight(FontWeight::BOLD).child(filter.kind.label()))
+                        .children(rows)
+                        .when(filter.kind.start_color().is_some(), |d| {
+                            d.child(labelled_row(t("Color"), name_width, self.swatch(ColorTarget::Filter, 18., cx)))
+                        })
+                        .child(
+                            div()
+                                .pt_1()
+                                .flex()
+                                .justify_end()
+                                .gap_1()
+                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_filter_dialog(true)))
+                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_filter_dialog(false))),
+                        ),
+                ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
     }
 
     pub(crate) fn jpeg_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {

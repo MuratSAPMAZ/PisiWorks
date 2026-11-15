@@ -471,6 +471,9 @@ pub struct Object {
     /// it is not drawn, and it never reaches a file.
     #[serde(skip)]
     pub mask_of: Option<u64>,
+    /// Live filters, applied in this order each time the object is drawn.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<crate::effects::LiveFilter>,
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     /// 0.0 to 1.0.
@@ -504,6 +507,7 @@ impl Object {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -527,6 +531,7 @@ impl Object {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -759,6 +764,7 @@ impl Object {
                     blend: crate::blend::BlendMode::Normal,
                     mask: None,
                     mask_of: None,
+                    filters: Vec::new(),
                     fill: self.fill,
                     stroke: None,
                     opacity: 1.0,
@@ -1766,6 +1772,9 @@ pub struct Style {
     pub fill: Option<Color>,
     pub stroke: Option<Stroke>,
     pub opacity: f32,
+    /// The live filters the style gives an object.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<crate::effects::LiveFilter>,
 }
 
 pub fn default_styles() -> Vec<Style> {
@@ -1774,6 +1783,7 @@ pub fn default_styles() -> Vec<Style> {
         fill,
         stroke: stroke.map(|(color, width)| Stroke { color, width }),
         opacity,
+        filters: Vec::new(),
     };
     let ink = Color::rgb(0x22, 0x22, 0x22);
     let blue = Color::rgb(0x1e, 0x78, 0xd2);
@@ -2128,7 +2138,7 @@ impl Editor {
     /// it has to be shown as the exporter renders it.
     pub fn needs_compositing(&self) -> bool {
         fn special(object: &Object) -> bool {
-            !object.blend.is_normal() || object.mask.is_some() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
         self.doc.page().objects().any(|o| o.visible && special(o))
     }
@@ -2491,6 +2501,7 @@ impl Editor {
                 o.fill = style.fill;
                 o.stroke = style.stroke;
                 o.opacity = style.opacity;
+                o.filters = style.filters.clone();
             }
         });
     }
@@ -2499,7 +2510,7 @@ impl Editor {
     pub fn add_style_from_selection(&mut self) -> bool {
         let Some(source) = self.selected().into_iter().find(|o| o.takes_color()).cloned() else { return false };
         let name = tf("Style {}", &[&(self.doc.styles.len() + 1)]);
-        self.doc.styles.push(Style { name, fill: source.fill, stroke: source.stroke, opacity: source.opacity });
+        self.doc.styles.push(Style { name, fill: source.fill, stroke: source.stroke, opacity: source.opacity, filters: source.filters.clone() });
         true
     }
 
@@ -2527,6 +2538,7 @@ impl Editor {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -2837,6 +2849,7 @@ impl Editor {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: None,
             stroke: None,
             opacity: 1.0,
@@ -3041,6 +3054,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,
             opacity: 1.0,

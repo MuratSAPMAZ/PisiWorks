@@ -83,7 +83,7 @@ cargo test
 
 Emberframe is at version 0.1, so some things are still missing:
 
-- Live effects in Styles.
+- The Curves and Photoshop Live Effects filters.
 - Printing, which appears greyed out.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - macOS and Linux builds.

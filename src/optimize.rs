@@ -474,6 +474,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: Some(Color::rgb(200, 10, 10)),
             stroke: None,
             opacity: 1.0,

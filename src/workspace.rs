@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crate::blend::BlendMode;
+use crate::effects::{FilterKind, LiveFilter};
 use crate::i18n::{t, tc, tf};
 use crate::settings::Settings;
 use crate::bitmap::{Bitmap, Mask, MaskMode, FILL_TOLERANCE};
@@ -65,6 +66,8 @@ pub enum ColorTarget {
     Matte,
     /// The tint that shows the JPEG mask.
     JpegMask,
+    /// The color of the live filter being edited.
+    Filter,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -78,6 +81,10 @@ pub enum Combo {
     State,
     Align,
     PanelMenu(usize),
+    /// The list of live filters to add.
+    AddFilter,
+    /// A setting of the filter being edited that is a choice from a list, by its place among the settings.
+    FilterChoice(usize),
     /// How the mask of the selection works.
     MaskKind,
     /// The blend mode of the selection.
@@ -208,6 +215,8 @@ pub enum FieldId {
     PathAmount,
     OptimizeQuality,
     OptimizeSelective,
+    /// A number of the live filter being edited, by its place among the settings.
+    FilterValue(usize),
     OptimizeSmoothing,
     OptimizeColors,
     Mixer(usize),
@@ -439,6 +448,8 @@ pub struct Workspace {
     pub numeric_dialog: Option<NumericDialog>,
     /// The Selective JPEG Settings dialog, holding the settings to go back to on Cancel.
     pub jpeg_dialog: Option<(ExportSettings, Option<Color>)>,
+    /// The live filter whose settings are open: its place in the list, and the list to go back to on Cancel.
+    pub filter_dialog: Option<(usize, Vec<LiveFilter>)>,
     /// The JPEG mask as rectangles to tint, kept until the mask changes.
     jpeg_tint: std::cell::RefCell<Option<(usize, Arc<Vec<Rect>>)>>,
     pub collapsed_layers: Vec<usize>,
@@ -649,6 +660,7 @@ impl Workspace {
             size_dialog: None,
             numeric_dialog: None,
             jpeg_dialog: None,
+            filter_dialog: None,
             jpeg_tint: std::cell::RefCell::new(None),
             collapsed_layers: Vec::new(),
             properties_collapsed: false,
@@ -758,6 +770,56 @@ impl Workspace {
         }
         for image in self.stale_previews.drain(..) {
             cx.drop_image(image, Some(window));
+        }
+    }
+
+    /// The live filters of the selection.
+    pub fn current_filters(&self) -> Vec<LiveFilter> {
+        self.ed.selected().first().map_or_else(Vec::new, |o| o.filters.clone())
+    }
+
+    /// Changes the live filters of every selected object.
+    pub fn change_filters(&mut self, change: impl Fn(&mut Vec<LiveFilter>)) {
+        self.ed.for_selected(|o| change(&mut o.filters));
+        self.ed.commit(t("Live Filters"));
+    }
+
+    /// Adds a filter to the selection and opens its settings, if it has any.
+    pub fn add_filter(&mut self, kind: FilterKind) {
+        let before = self.current_filters();
+        self.change_filters(|filters| filters.push(LiveFilter::new(kind)));
+        if !kind.settings().is_empty() || kind.start_color().is_some() {
+            self.filter_dialog = Some((before.len(), before));
+        }
+    }
+
+    pub fn open_filter(&mut self, index: usize) {
+        let filters = self.current_filters();
+        if filters.get(index).is_some_and(|f| !f.kind.settings().is_empty() || f.kind.start_color().is_some()) {
+            self.filter_dialog = Some((index, filters));
+        }
+    }
+
+    /// The filter whose settings are open.
+    pub fn edited_filter(&self) -> Option<(usize, LiveFilter)> {
+        let (index, _) = self.filter_dialog.as_ref()?;
+        Some((*index, self.current_filters().get(*index)?.clone()))
+    }
+
+    pub fn set_filter_value(&mut self, setting: usize, value: f32) {
+        let Some((index, _)) = self.filter_dialog.as_ref().map(|(index, before)| (*index, before.len())) else { return };
+        self.change_filters(|filters| {
+            if let Some(filter) = filters.get_mut(index) {
+                filter.set_value(setting, value);
+            }
+        });
+    }
+
+    /// Closes the filter settings, putting the filters back as they were unless `keep` is set.
+    pub fn close_filter_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        if let Some((_, before)) = self.filter_dialog.take().filter(|_| !keep) {
+            self.change_filters(|filters| *filters = before.clone());
         }
     }
 
@@ -2706,6 +2768,7 @@ impl Workspace {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
             opacity: 1.0,
@@ -3175,6 +3238,12 @@ impl Workspace {
                 "enter" => self.edit_text(|t| t.push('\n')),
                 _ => {}
             }
+        } else if self.filter_dialog.is_some() {
+            match key {
+                "enter" => self.close_filter_dialog(true),
+                "escape" => self.close_filter_dialog(false),
+                _ => {}
+            }
         } else if self.jpeg_dialog.is_some() {
             match key {
                 "enter" => self.close_jpeg_dialog(true),
@@ -3388,6 +3457,7 @@ impl Workspace {
             FieldId::PathAmount => number(self.path_amount),
             FieldId::OptimizeQuality => page.export.quality.to_string(),
             FieldId::OptimizeSelective => page.export.selective_quality.to_string(),
+            FieldId::FilterValue(setting) => self.edited_filter().map_or_else(String::new, |(_, filter)| number(filter.value(setting))),
             FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
             FieldId::OptimizeColors => page.export.colors.to_string(),
             FieldId::Mixer(channel) => {
@@ -3605,6 +3675,10 @@ impl Workspace {
                 let Some(v) = number else { return };
                 self.set_export(|s| s.quality = v.clamp(1.0, 100.0) as u8);
             }
+            FieldId::FilterValue(setting) => {
+                let Some(v) = number else { return };
+                self.set_filter_value(setting, v);
+            }
             FieldId::OptimizeSelective => {
                 let Some(v) = number else { return };
                 self.set_export(|s| s.selective_quality = v.clamp(1.0, 100.0) as u8);
@@ -3680,6 +3754,7 @@ impl Workspace {
             ColorTarget::Canvas => self.ed.doc.page().canvas,
             ColorTarget::Matte => self.ed.doc.page().export.matte,
             ColorTarget::JpegMask => Some(self.ed.doc.page().jpeg_mask_color.unwrap_or(JPEG_MASK_COLOR)),
+            ColorTarget::Filter => self.edited_filter().and_then(|(_, filter)| filter.color.or(filter.kind.start_color())),
         }
     }
 
@@ -3710,6 +3785,15 @@ impl Workspace {
                 self.ed.commit(t("Canvas Color"));
             }
             ColorTarget::Matte => self.set_export(|s| s.matte = color),
+            ColorTarget::Filter => {
+                if let Some(index) = self.filter_dialog.as_ref().map(|(index, _)| *index) {
+                    self.change_filters(|filters| {
+                        if let Some(filter) = filters.get_mut(index) {
+                            filter.color = color;
+                        }
+                    });
+                }
+            }
             ColorTarget::JpegMask => {
                 self.ed.doc.page_mut().jpeg_mask_color = color;
                 self.ed.commit(t("Optimize"));

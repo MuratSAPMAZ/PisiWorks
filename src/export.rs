@@ -221,7 +221,7 @@ fn mask_coverage(mask: &ObjectMask, width: u32, height: u32) -> Option<Vec<f32>>
 /// One object drawn on nothing, as a bitmap, with where it sits in the document.
 pub fn render_object(object: &Object) -> Option<(Bitmap, Rect)> {
     let b = object.bounds;
-    let reach = object.stroke.map_or(0.0, |s| s.width / 2.0).ceil();
+    let reach = (object.stroke.map_or(0.0, |s| s.width / 2.0) + object.filters.iter().filter(|f| f.enabled).map(crate::effects::reach).sum::<f32>()).ceil();
     let (left, top) = ((b.x - reach).floor(), (b.y - reach).floor());
     let (width, height) = (((b.right() + reach).ceil() - left).max(1.0) as u32, ((b.bottom() + reach).ceil() - top).max(1.0) as u32);
     let mut pixmap = Pixmap::new(width, height)?;
@@ -248,6 +248,39 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
         plain.blend = crate::blend::BlendMode::Normal;
         draw_object(&mut layer, &plain);
         crate::blend::composite(pixmap, &layer, object.blend);
+        return;
+    }
+    // Live filters work on the object drawn alone, in the part of the page it can reach.
+    if object.filters.iter().any(|filter| filter.enabled) {
+        let reach: f32 = object.filters.iter().filter(|f| f.enabled).map(crate::effects::reach).sum::<f32>() + object.stroke.map_or(0.0, |s| s.width) + 2.0;
+        let (page_w, page_h) = (pixmap.width() as f32, pixmap.height() as f32);
+        let b = object.bounds;
+        let (x0, y0) = ((b.x - reach).floor().clamp(0.0, page_w), (b.y - reach).floor().clamp(0.0, page_h));
+        let (x1, y1) = ((b.right() + reach).ceil().clamp(0.0, page_w), (b.bottom() + reach).ceil().clamp(0.0, page_h));
+        let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
+        let Some(mut drawn) = Pixmap::new(width.max(1), height.max(1)).filter(|_| width > 0 && height > 0) else { return };
+        let mut bare = object.clone();
+        bare.filters.clear();
+        bare.translate(-x0, -y0);
+        draw_object(&mut drawn, &bare);
+        let mut layer = crate::effects::Layer {
+            width: width as usize,
+            height: height as usize,
+            pixels: drawn.pixels().iter().map(|px| {
+                let c = px.demultiply();
+                [c.red() as f32 / 255.0, c.green() as f32 / 255.0, c.blue() as f32 / 255.0, c.alpha() as f32 / 255.0]
+            }).collect(),
+        };
+        for filter in object.filters.iter().filter(|f| f.enabled) {
+            layer = crate::effects::apply(&layer, filter);
+        }
+        for (px, value) in drawn.pixels_mut().iter_mut().zip(&layer.pixels) {
+            let alpha = value[3].clamp(0.0, 1.0);
+            let a = (alpha * 255.0).round() as u8;
+            let channel = |v: f32| ((v.clamp(0.0, 1.0) * alpha * 255.0).round() as u8).min(a);
+            *px = PremultipliedColorU8::from_rgba(channel(value[0]), channel(value[1]), channel(value[2]), a).unwrap_or(PremultipliedColorU8::TRANSPARENT);
+        }
+        pixmap.draw_pixmap(x0 as i32, y0 as i32, drawn.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
         return;
     }
     // A masked object is drawn on a layer of its own, and the mask takes away what it hides.
@@ -458,6 +491,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            filters: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
             opacity: 1.0,
