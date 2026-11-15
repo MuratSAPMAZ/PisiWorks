@@ -53,6 +53,14 @@ install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/ex
 } > "$stage/usr/share/doc/pisiworks/copyright"
 chmod 644 "$stage/usr/share/doc/pisiworks/copyright"
 
+# The notices of the libraries compiled into the program: the list, and every
+# library's own license files as its authors ship them.
+python3 packaging/third-party.py --texts "$stage/usr/share/doc/pisiworks/third-party-licenses.txt"
+gzip -9n "$stage/usr/share/doc/pisiworks/third-party-licenses.txt"
+chmod 644 "$stage/usr/share/doc/pisiworks/third-party-licenses.txt.gz"
+install -Dm644 docs/THIRD-PARTY.md "$stage/usr/share/doc/pisiworks/THIRD-PARTY.md"
+install -Dm644 docs/lisans-ve-telif.md "$stage/usr/share/doc/pisiworks/lisans-ve-telif.md"
+
 # The oldest C library the program runs with is the newest one it asks for a symbol from.
 glibc=$(objdump -T "$stage/usr/bin/pisiworks" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -n 1)
 installed=$(du -sk "$stage/usr" | cut -f1)

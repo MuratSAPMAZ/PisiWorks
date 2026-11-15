@@ -169,6 +169,6 @@ The program has not been tested side by side with Adobe Fireworks itself; the pi
 - Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [project page](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-**License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
+**License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. Where the code comes from, the licenses of the libraries compiled into it ([list](docs/THIRD-PARTY.md)) and how it stands toward Adobe are set out in the [license and copyright statement](docs/lisans-ve-telif.md) (in Turkish). The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
 
 Adobe and Fireworks are trademarks of Adobe Inc. PisiWorks contains no code or artwork of Adobe's.

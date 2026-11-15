@@ -170,6 +170,6 @@ Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı;
 - Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [proje sayfası](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-**Lisans.** PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır. Lisans dosyası Emberframe'in yazarının telif satırını korur ve PisiWorks için yazılanların telif satırını onun yanına ekler.
+**Lisans.** PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır. Kodun kökeni, içine derlenen kitaplıkların lisansları ve Adobe ile ilişkisi [lisans ve telif bildirimi](docs/lisans-ve-telif.md) belgesinde ayrıntısıyla yazılıdır. Lisans dosyası Emberframe'in yazarının telif satırını korur ve PisiWorks için yazılanların telif satırını onun yanına ekler.
 
 Adobe ve Fireworks, Adobe Inc.'in ticari markalarıdır. PisiWorks Adobe'ye ait hiçbir kod ya da görsel içermez.
