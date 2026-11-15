@@ -56,6 +56,91 @@ fn sprite_text(sprite: Option<(usize, f32, f32)>) -> String {
     }
 }
 
+/// The longest run of frames a movie clip's pictures are made for.
+const MAX_CLIP_FRAMES: usize = 600;
+
+fn gcd(a: usize, b: usize) -> usize {
+    if b == 0 { a } else { gcd(b, a % b) }
+}
+
+/// The frames of a movie clip's own timeline, if it has more than one.
+fn clip_frames(doc: &Document, symbol: u64) -> Option<(&Page, usize)> {
+    let page = doc.clip_page(symbol).map(|index| &doc.pages[index])?;
+    let count = page.timeline.as_ref()?.frame_count();
+    (count > 1).then_some((page, count))
+}
+
+/// What a clip's page shows on a frame, as the finished film shows it.
+fn clip_shown(page: &Page, frame: usize) -> Vec<Object> {
+    page.at_frame(frame).played().objects().filter(|o| o.visible && !o.is_web()).cloned().collect()
+}
+
+/// After how many frames a movie clip looks as it did at the start: its own length,
+/// stretched until the clips inside it have come round as well.
+fn clip_period(doc: &Document, symbol: u64, depth: usize) -> usize {
+    let Some((page, count)) = clip_frames(doc, symbol) else { return 1 };
+    if depth >= 4 {
+        return count;
+    }
+    let mut period = count;
+    for frame in 0..count {
+        for object in clip_shown(page, frame) {
+            if let Shape::Instance { symbol: inner, .. } = object.shape {
+                if inner != symbol && doc.symbols.iter().any(|s| s.id == inner && s.kind == SymbolKind::Animation) {
+                    let other = clip_period(doc, inner, depth + 1);
+                    period = (period / gcd(period, other)).saturating_mul(other);
+                }
+            }
+        }
+    }
+    period.min(MAX_CLIP_FRAMES)
+}
+
+/// What a movie clip shows after `tick` frames of playing, placed against the top left of its
+/// first frame. The clips inside it are shown at the frame they have reached by then, each
+/// by its own timeline, so that a clip within a clip keeps playing.
+fn clip_frame(doc: &Document, symbol: u64, tick: usize, depth: usize) -> Vec<Object> {
+    let Some(entry) = doc.symbols.iter().find(|s| s.id == symbol) else { return Vec::new() };
+    let Some((page, count)) = clip_frames(doc, symbol) else { return entry.objects.clone() };
+    let origin = clip_shown(page, 0).iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
+    let mut shown = Vec::new();
+    for mut object in clip_shown(page, tick % count) {
+        let inner = match object.shape {
+            Shape::Instance { symbol: inner, .. } if depth < 4 && inner != symbol && clip_frames(doc, inner).is_some() => Some(inner),
+            _ => None,
+        };
+        match inner {
+            None => {
+                object.translate(-origin.x, -origin.y);
+                shown.push(object);
+            }
+            Some(inner) => {
+                // The inner clip's frame, carried into the box its copy has here as the copy's own first frame would be.
+                let natural = doc.symbols.iter().find(|s| s.id == inner).and_then(|s| s.objects.iter().map(|o| o.bounds).reduce(Rect::union)).unwrap_or_default();
+                let frame_box = object.placement.map_or(object.bounds, |p| p.frame);
+                let fit = Warp::fit(Rect { x: 0.0, y: 0.0, w: natural.w, h: natural.h }, frame_box);
+                let carry = object.placement.map_or(fit, |p| fit.then(&p.warp));
+                for mut part in clip_frame(doc, inner, tick, depth + 1) {
+                    part.warp(&carry);
+                    part.opacity *= object.opacity;
+                    part.translate(-origin.x, -origin.y);
+                    shown.push(part);
+                }
+            }
+        }
+    }
+    shown
+}
+
+/// Objects with the live filters of the copy they are shown through, as one object the filters work on.
+fn filtered(objects: Vec<Object>, filters: &[crate::effects::LiveFilter]) -> Vec<Object> {
+    let Some(bounds) = objects.iter().map(|o| o.bounds).reduce(Rect::union).filter(|_| !filters.is_empty()) else { return objects };
+    let mut group = Object::new_web(u64::MAX, crate::model::WebKind::Slice, bounds);
+    group.shape = Shape::Group { objects: std::sync::Arc::new(objects) };
+    group.filters = filters.to_vec();
+    vec![group]
+}
+
 /// What a copy of a symbol is in the finished animation.
 enum Moving {
     /// A movie clip with frames of its own: the number of its set of pictures.
@@ -74,47 +159,39 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
 
     // The sets of pictures of the movie clips and the buttons, made when a copy of one is first met.
     let mut sets: Vec<String> = Vec::new();
-    let mut set_of: HashMap<u64, Option<usize>> = HashMap::new();
-    let mut moving = |symbol: u64, pictures: &mut Pictures, sets: &mut Vec<String>| -> Result<Option<Moving>> {
+    // A copy with live filters has pictures of its own, with the filters at work in them.
+    let mut set_of: HashMap<(u64, String), Option<usize>> = HashMap::new();
+    let mut moving = |symbol: u64, filters: &[crate::effects::LiveFilter], pictures: &mut Pictures, sets: &mut Vec<String>| -> Result<Option<Moving>> {
         let Some(entry) = doc.symbols.iter().find(|s| s.id == symbol) else { return Ok(None) };
-        let known = set_of.get(&symbol).copied();
+        let key = (symbol, if filters.is_empty() { String::new() } else { format!("{filters:?}") });
+        let known = set_of.get(&key).copied();
         let made = match (entry.kind, known) {
             (SymbolKind::Graphic, _) => return Ok(None),
             (_, Some(set)) => set,
             (SymbolKind::Animation, None) => {
-                // A clip's frames, each drawn against the top left of its first frame.
-                let frames = doc.clip_page(symbol).map(|index| &doc.pages[index]).and_then(|page| {
-                    let count = page.timeline.as_ref()?.frame_count();
-                    (count > 1).then_some((page, count))
-                });
-                let set = match frames {
-                    None => None,
-                    Some((page, count)) => {
-                        let shown = |frame: usize| -> Vec<Object> { page.at_frame(frame).played().objects().filter(|o| o.visible && !o.is_web()).cloned().collect() };
-                        let origin = shown(0).iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
-                        let mut texts = Vec::with_capacity(count);
-                        for frame in 0..count.min(MAX_PUBLISHED) {
-                            let mut objects = shown(frame);
-                            for object in &mut objects {
-                                object.translate(-origin.x, -origin.y);
-                            }
-                            texts.push(sprite_text(pictures.sprite(&objects)?));
-                        }
-                        sets.push(format!("[{}]", texts.join(",")));
-                        Some(sets.len() - 1)
+                // A clip's pictures, one for each frame until it and the clips inside it have come round.
+                let period = clip_period(doc, symbol, 0);
+                let set = if period <= 1 {
+                    None
+                } else {
+                    let mut texts = Vec::with_capacity(period);
+                    for tick in 0..period {
+                        texts.push(sprite_text(pictures.sprite(&filtered(clip_frame(doc, symbol, tick, 0), filters))?));
                     }
+                    sets.push(format!("[{}]", texts.join(",")));
+                    Some(sets.len() - 1)
                 };
-                set_of.insert(symbol, set);
+                set_of.insert(key, set);
                 set
             }
             (SymbolKind::Button, None) => {
                 // Up, Over and Down, each placed against the Up look.
-                let mut texts = vec![sprite_text(pictures.sprite(&entry.objects)?)];
+                let mut texts = vec![sprite_text(pictures.sprite(&filtered(entry.objects.clone(), filters))?)];
                 for look in entry.looks.iter().take(2) {
-                    texts.push(if look.is_empty() { "null".to_string() } else { sprite_text(pictures.sprite(look)?) });
+                    texts.push(if look.is_empty() { "null".to_string() } else { sprite_text(pictures.sprite(&filtered(look.clone(), filters))?) });
                 }
                 sets.push(format!("[{}]", texts.join(",")));
-                set_of.insert(symbol, Some(sets.len() - 1));
+                set_of.insert(key, Some(sets.len() - 1));
                 Some(sets.len() - 1)
             }
         };
@@ -144,7 +221,7 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
             let mut run: Vec<Object> = Vec::new();
             for object in shown.layers.iter().filter(|l| l.visible).flat_map(|l| l.objects.iter()).filter(|o| o.visible && !o.is_web()) {
                 let kind = match object.shape {
-                    Shape::Instance { symbol, .. } => moving(symbol, &mut pictures, &mut sets)?.map(|kind| (kind, symbol)),
+                    Shape::Instance { symbol, .. } => moving(symbol, &object.filters, &mut pictures, &mut sets)?.map(|kind| (kind, symbol)),
                     _ => None,
                 };
                 let Some((kind, symbol)) = kind else {
@@ -432,5 +509,46 @@ mod tests {
         assert_eq!(scenes.matches("\"a\":").count(), 6, "five frames and one");
         // The page is left among the build's own files, to be looked at in a browser.
         let _ = std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/pisisahne-test.html"), &html);
+
+        // A clip within a clip keeps playing: the outer clip, of three frames, holds a copy of an inner one of two,
+        // so the outer comes round after six frames, and its pictures show the inner one at both of its frames.
+        let inner = {
+            e.add_object(boxed(0, 0.0, 0.0, 10.0, 10.0, Color::BLACK));
+            let id = e.make_symbol().unwrap();
+            e.doc.symbols.iter_mut().find(|s| s.id == id).unwrap().kind = SymbolKind::Animation;
+            e.open_clip(id);
+            e.goto_frame(1);
+            e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+            let part = e.doc.page().objects().next().unwrap().id;
+            e.selection = vec![part];
+            e.for_selected(|o| o.translate(0.0, 7.0));
+            e.leave_clip();
+            let copy = e.selection.first().copied();
+            e.selection = copy.into_iter().collect();
+            e.delete_selected();
+            id
+        };
+        e.open_clip(clip);
+        e.goto_frame(0);
+        e.place_symbol_at(inner, crate::model::Vec2 { x: 40.0, y: 80.0 });
+        e.leave_clip();
+        assert_eq!((clip_period(&e.doc, inner, 0), clip_period(&e.doc, clip, 0)), (2, 6));
+        let lowest = |tick: usize| clip_frame(&e.doc, clip, tick, 0).iter().map(|o| o.bounds.bottom()).fold(0.0, f32::max);
+        assert_eq!(lowest(1) - lowest(0), 7.0, "the inner clip has moved on by a frame of its own");
+        // Back on its own first frame after three, the outer clip shows the inner one on its second frame;
+        // after six, both are where they started.
+        assert_eq!(lowest(3) - lowest(0), 7.0);
+        assert_eq!(lowest(6), lowest(0));
+        // A copy of the clip with a live filter gets pictures of its own, larger by the filter's reach.
+        let plain = sprite_sizes(&super::html(&e.doc, "x").unwrap());
+        e.selection = vec![clip_copy];
+        e.for_selected(|o| o.filters.push(crate::effects::LiveFilter::new(crate::effects::FilterKind::Glow)));
+        let glowing = sprite_sizes(&super::html(&e.doc, "x").unwrap());
+        assert!(glowing > plain, "{glowing} pictures' worth against {plain}");
+    }
+
+    /// How much picture data a page carries: a measure that grows when pictures do.
+    fn sprite_sizes(html: &str) -> usize {
+        html.len()
     }
 }

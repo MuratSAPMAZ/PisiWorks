@@ -180,7 +180,7 @@ Bu aşamada çalışanlar:
 
 Pencere, Flash'ın klasik çalışma alanı gibi düzenlenir: zaman çizelgesi sahnenin üstünde, araçlar solda, Özellikler altta; katmanlar zaman çizelgesindedir. Enter oynatır. `.deb` paketi iki programı birlikte kurar.
 
-Flash'tan bilinen farklar: ActionScript yoktur, yerine hazır eylemler vardır. `.fla` ve `.swf` dosyaları açılmaz ve yazılmaz. Yayımlanan sayfada her kare ve her klip karesi bir resimdir. Bir film klibinin içindeki başka klipler ve düğmeler yayımlanan filmde ilk kareleriyle, hareketsiz görünür; kliplerin kopyalarına verilen canlı filtreler de yayımda uygulanmaz. Program içinde oynatırken (Enter) kare eylemleri çalışmaz ve klipler ilk kareleriyle görünür, Flash'ta olduğu gibi; filmin tamamı Filmi Test Et ile görülür.
+Flash'tan bilinen farklar: ActionScript yoktur, yerine hazır eylemler vardır. `.fla` ve `.swf` dosyaları açılmaz ve yazılmaz. Yayımlanan sayfada her kare ve her klip karesi bir resimdir. İç içe film klipleri de kendi kareleriyle oynar; yalnız bir klibin içine konan düğme yayımlanan filmde tıklanamaz (sahnedeki düğmeler tıklanır). Program içinde oynatırken (Enter) kare eylemleri çalışmaz ve klipler ilk kareleriyle görünür, Flash'ta olduğu gibi; filmin tamamı Filmi Test Et ile görülür.
 
 Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") elimizde Türkçe Flash kurulumu olmadığı için bizim çevirimizdir ve ders notlarındaki sözcüklerden farklı olabilir. Hepsi tek bir çeviri tablosundadır; doğrusunu bildirirseniz düzeltilir.
 
