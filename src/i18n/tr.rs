@@ -1151,4 +1151,10 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Projects", "Projeler"),
     ("Write a few lines here.", "Buraya birkaç satır yazın."),
     ("Made with PisiWorks", "PisiWorks ile yapıldı"),
+    ("Forever", "Sonsuz"),
+    ("No Looping", "Döngü Yok"),
+    ("{} times", "{} kez"),
+    ("Looping:", "Döngü:"),
+    ("Looping", "Döngü"),
+    ("Opened {} as an animation of {} states", "{}, {} durumlu bir animasyon olarak açıldı"),
 ];

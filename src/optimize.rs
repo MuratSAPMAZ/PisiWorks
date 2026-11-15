@@ -169,6 +169,38 @@ impl Default for ExportSettings {
     }
 }
 
+/// The pictures of an animated GIF, each drawn whole as it shows, with the time it
+/// stays on show in milliseconds, and how many times the animation plays (0 for ever).
+/// `None` for anything that is not a GIF of more than one picture.
+pub fn gif_frames(bytes: &[u8]) -> Option<(Vec<(crate::bitmap::Bitmap, u32)>, u16)> {
+    use image::AnimationDecoder;
+    if !bytes.starts_with(b"GIF8") {
+        return None;
+    }
+    let decoder = image::codecs::gif::GifDecoder::new(std::io::Cursor::new(bytes)).ok()?;
+    let mut frames = Vec::new();
+    for frame in decoder.into_frames().take(2000) {
+        let frame = frame.ok()?;
+        let (numerator, denominator) = frame.delay().numer_denom_ms();
+        let delay = if denominator == 0 { 100 } else { numerator / denominator };
+        let picture = frame.into_buffer();
+        let (width, height) = (picture.width(), picture.height());
+        // A delay of nothing is shown by browsers as a tenth of a second.
+        frames.push((crate::bitmap::Bitmap::from_rgba(width, height, picture.into_raw())?, if delay == 0 { 100 } else { delay }));
+    }
+    if frames.len() < 2 {
+        return None;
+    }
+    let mut options = gif::DecodeOptions::new();
+    options.set_color_output(gif::ColorOutput::Indexed);
+    let loops = match options.read_info(bytes).map(|reader| reader.repeat()) {
+        Ok(gif::Repeat::Finite(more)) => more.saturating_add(1),
+        Ok(gif::Repeat::Infinite) => 0,
+        Err(_) => 0,
+    };
+    Some((frames, loops))
+}
+
 /// Straight-alpha RGBA pixels of a rendered page.
 fn straight_rgba(pixmap: &Pixmap) -> Vec<u8> {
     pixmap
@@ -364,8 +396,12 @@ fn encode_gif(page: &Page, settings: &ExportSettings) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     {
         let mut encoder = gif::Encoder::new(&mut out, page.width as u16, page.height as u16, &[])?;
-        if animated {
-            encoder.set_repeat(gif::Repeat::Infinite)?;
+        // Played once through, a GIF says nothing about repeating; otherwise it says how many more times.
+        if animated && page.gif_loops != 1 {
+            encoder.set_repeat(match page.gif_loops {
+                0 => gif::Repeat::Infinite,
+                times => gif::Repeat::Finite(times - 1),
+            })?;
         }
         for index in states {
             let pixmap = render_page(&page.at_state(index))?;
@@ -452,6 +488,48 @@ pub fn format_size(bytes: usize) -> String {
         format!("{:.1} KB", bytes as f32 / 1024.0)
     } else {
         format!("{:.2} MB", bytes as f32 / (1024.0 * 1024.0))
+    }
+}
+
+#[cfg(test)]
+mod animation_tests {
+    use super::*;
+    use crate::model::{Document, Editor};
+
+    #[test]
+    fn an_animated_gif_comes_back_as_states_with_its_times_and_looping() {
+        // Three states, each a box further right, played four times.
+        let mut e = Editor::new((crate::examples::EXAMPLES[2].build)());
+        let page = e.doc.page_mut();
+        page.gif_loops = 4;
+        page.states[1].delay_ms = 250;
+        page.states.truncate(3);
+        page.animations.clear();
+        let page = e.export_page();
+        let bytes = encode(&page, &page.export).unwrap();
+        let (frames, loops) = gif_frames(&bytes).unwrap();
+        assert_eq!((frames.len(), loops), (3, 4));
+        assert_eq!(frames.iter().map(|(_, delay)| *delay).collect::<Vec<_>>(), [90, 250, 90]);
+        assert!(frames.iter().all(|(bitmap, _)| (bitmap.width(), bitmap.height()) == (480, 300)));
+        let doc = Document::from_frames("star", frames, loops).unwrap();
+        let opened = &doc.pages[0];
+        assert_eq!((opened.states.len(), opened.gif_loops, opened.width, opened.height), (3, 4, 480, 300));
+        assert_eq!(opened.states[1].delay_ms, 250);
+        assert!((0..3).all(|state| opened.at_state(state).objects().count() == 1));
+        // The states differ: the star has moved.
+        let first = crate::export::render_page(&opened.at_state(0)).unwrap();
+        let last = crate::export::render_page(&opened.at_state(2)).unwrap();
+        assert!(first.data() != last.data());
+        // It survives being saved as a document of ours.
+        let again = crate::model::document_from_json(&crate::model::document_to_json(&doc).unwrap()).unwrap();
+        assert_eq!((again.pages[0].gif_loops, again.pages[0].states.len()), (4, 3));
+        // Played once through, the file does not ask to be repeated; a still picture is no animation.
+        let mut once = page.clone();
+        once.gif_loops = 1;
+        assert_eq!(gif_frames(&encode(&once, &once.export).unwrap()).unwrap().1, 1);
+        let still = Editor::new(Document::new(8, 8)).export_page();
+        let still_gif = encode(&still, &ExportSettings { format: ExportFormat::Gif, ..ExportSettings::default() }).unwrap();
+        assert!(gif_frames(&still_gif).is_none() && gif_frames(b"not a gif").is_none());
     }
 }
 

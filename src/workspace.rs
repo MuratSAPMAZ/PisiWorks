@@ -105,6 +105,7 @@ pub enum Combo {
     ButtonLook,
     BatchScale,
     TextOrientation,
+    GifLoop,
     ArrowStyle,
     AutoMask,
     Printer,
@@ -949,6 +950,8 @@ pub fn arrow_head(style: usize, tip: Vec2, from: Vec2, size: f32) -> (bool, Vec<
 enum Opened {
     Document(Document),
     Image(Bitmap),
+    /// An animated GIF, its pictures laid out as states.
+    Animation(Document),
     /// A Fireworks PNG read with its layers.
     Fireworks(Document, crate::fwpng::Report),
     /// A Fireworks PNG with this many objects that could not be read, opened as its flat picture.
@@ -960,6 +963,12 @@ fn parse_file(bytes: &[u8]) -> Result<Opened> {
     if bytes.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'{') {
         let text = std::str::from_utf8(bytes).context(t("not an Emberframe document"))?;
         return document_from_json(text).map(Opened::Document);
+    }
+    // An animated GIF opens as Fireworks opens it: a state for each of its pictures.
+    if let Some((frames, loops)) = crate::optimize::gif_frames(bytes) {
+        if let Some(document) = Document::from_frames(t("Bitmap"), frames, loops) {
+            return Ok(Opened::Animation(document));
+        }
     }
     // A Fireworks PNG opens with its layers if all of it can be read, and as the flat picture it carries if not.
     match crate::fwpng::read(bytes) {
@@ -2397,7 +2406,7 @@ impl Workspace {
         };
         let open = |bytes: &[u8], path: &Path| match parse_file(bytes)? {
             Opened::Document(document) => Ok((document, true)),
-            Opened::Fireworks(document, _) => Ok((document, false)),
+            Opened::Fireworks(document, _) | Opened::Animation(document) => Ok((document, false)),
             Opened::Image(bitmap) | Opened::Flat(bitmap, _) => Ok((Document::from_bitmap(file_stem(path), bitmap), false)),
         };
         let mut failed = Vec::new();
@@ -3801,6 +3810,13 @@ impl Workspace {
             Ok(Opened::Document(doc)) => {
                 self.status = tf("Opened {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]);
                 self.load_document(doc, Some(path));
+            }
+            Ok(Opened::Animation(doc)) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                self.status = tf("Opened {} as an animation of {} states", &[&name, &doc.pages[0].states.len()]);
+                self.load_document(doc, None);
+                self.source_image = Some(path);
+                self.fit_if_larger_than_view();
             }
             Ok(Opened::Fireworks(doc, report)) => {
                 let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();

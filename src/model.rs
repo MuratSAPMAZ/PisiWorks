@@ -2229,6 +2229,9 @@ pub struct Page {
     /// `button_symbols`, only on the copy of a page handed to the exporter.
     #[serde(skip)]
     pub button_looks: Vec<ButtonLooks>,
+    /// How many times an animated GIF made from the page plays: 0 is for ever, 1 is once through.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub gif_loops: u16,
     /// The symbol being edited in place. Never written to a file: the edit is ended first.
     #[serde(skip)]
     pub symbol_edit: Option<SymbolEdit>,
@@ -2306,6 +2309,7 @@ impl Page {
             guides: Guides::default(),
             open_groups: Vec::new(),
             symbol_edit: None,
+            gif_loops: 0,
             animations: Vec::new(),
             button_looks: Vec::new(),
         }
@@ -2649,6 +2653,22 @@ pub fn button_look_name(look: usize) -> &'static str {
     crate::i18n::tc("button", BUTTON_LOOKS[look.min(3)])
 }
 
+fn is_zero(count: &u16) -> bool {
+    *count == 0
+}
+
+/// The numbers of plays the looping list offers; 0 stands for "for ever".
+pub const GIF_LOOPS: [u16; 9] = [0, 1, 2, 3, 4, 5, 10, 20, 50];
+
+/// How a number of plays is named in the looping list.
+pub fn gif_loop_name(loops: u16) -> String {
+    match loops {
+        0 => t("Forever").to_string(),
+        1 => t("No Looping").to_string(),
+        times => tf("{} times", &[&times]),
+    }
+}
+
 /// The other looks of a button symbol, as the exporter and the preview need them.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ButtonLooks {
@@ -2891,6 +2911,34 @@ impl Document {
     }
 
     /// A document sized to an image, with the image as its only object.
+    /// A document from the pictures of an animation: each becomes a state with the
+    /// time it stays on show. All are placed at the top left of a canvas the size of the largest.
+    pub fn from_frames(name: &str, frames: Vec<(Bitmap, u32)>, loops: u16) -> Option<Self> {
+        let width = frames.iter().map(|(bitmap, _)| bitmap.width()).max()?;
+        let height = frames.iter().map(|(bitmap, _)| bitmap.height()).max()?;
+        let mut doc = Self::new(width, height);
+        let page = &mut doc.pages[0];
+        (page.canvas, page.gif_loops, page.states) = (None, loops, Vec::new());
+        page.layers[0].name = t("Background").into();
+        let mut id = 1;
+        for (index, (bitmap, delay)) in frames.into_iter().enumerate() {
+            let object = Object::new_bitmap(id, name, bitmap, 0.0, 0.0);
+            id += 1;
+            let mut state = State::new(tf("State {}", &[&(index + 1)]));
+            state.delay_ms = delay.clamp(10, 600_000);
+            if index == 0 {
+                // The first state is the one on show: its objects lie in the layer.
+                page.layers[0].objects.push(object);
+            } else {
+                state.objects = vec![vec![object]];
+            }
+            page.states.push(state);
+        }
+        page.export.format = crate::optimize::ExportFormat::AnimatedGif;
+        doc.next_id = id;
+        Some(doc)
+    }
+
     pub fn from_bitmap(name: impl Into<String>, bitmap: Bitmap) -> Self {
         let mut doc = Self::new(bitmap.width(), bitmap.height());
         doc.pages[0].canvas = None;

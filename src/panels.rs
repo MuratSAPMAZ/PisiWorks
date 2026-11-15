@@ -455,6 +455,15 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::GifLoop => crate::model::GIF_LOOPS
+                .into_iter()
+                .map(|loops| {
+                    item(crate::model::gif_loop_name(loops).into(), self.ed.doc.page().gif_loops == loops, cx, Box::new(move |this, _, _| {
+                        this.ed.doc.page_mut().gif_loops = loops;
+                        this.ed.commit(t("Looping"));
+                    }))
+                })
+                .collect(),
             Combo::AutoMask => (0..crate::model::AUTO_MASKS.len())
                 .map(|which| item(t(crate::model::AUTO_MASKS[which].0).into(), self.mask_dialog == Some(which), cx, Box::new(move |this, _, _| this.mask_dialog = Some(which))))
                 .collect(),
@@ -650,7 +659,14 @@ impl Workspace {
         };
         let animated_note = (format == ExportFormat::AnimatedGif).then(|| {
             let frames = self.ed.doc.page().states.iter().filter(|s| s.exported).count();
-            label(tf("{} frame(s) from the States panel", &[&frames]))
+            div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .gap_2()
+                .child(label(tf("{} frame(s) from the States panel", &[&frames])))
+                .child(label(t("Looping:")))
+                .child(self.combo(Combo::GifLoop, crate::model::gif_loop_name(self.ed.doc.page().gif_loops), 96., cx).bg(rgb(PANEL_RAISED)))
         });
         let preset = PRESETS.iter().find(|(_, p)| *p == settings).map_or(t("Custom"), |(name, _)| t(name));
         let greyed = |text: &'static str| div().text_color(rgb(TEXT_DISABLED)).child(text);
