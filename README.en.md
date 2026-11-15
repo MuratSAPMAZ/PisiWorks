@@ -55,7 +55,7 @@ It is deliberately a look-alike: the same docked layout, tool groups, panels and
 
 ## Get started
 
-Building, packaging and running were checked on Linux Mint 22.3. The target is Pardus 25, but **it has not been tried on Pardus 25 yet**.
+Building and packaging are done on Linux Mint 22.3. The `.deb` package **has been installed and run on Pardus 25**, the system it is meant for (November 2026).
 
 ### Installing a package
 

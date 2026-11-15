@@ -295,6 +295,9 @@ pub struct PrintDialog {
     pub range: crate::print::PageRange,
     pub from: u32,
     pub to: u32,
+    /// Printer options: on both sides of the paper, and in shades of grey.
+    pub two_sided: bool,
+    pub grayscale: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1214,7 +1217,9 @@ impl Workspace {
             }
         }
         if wanted && self.page_raster.is_none() {
-            self.page_raster = crate::export::render_page(self.ed.doc.page())
+            // A group that is open is drawn whole, so that its own mask and filters still show.
+            let closed = self.ed.doc.page().open_groups_need_drawing().then(|| self.ed.doc.page().with_groups_closed());
+            self.page_raster = crate::export::render_page(closed.as_ref().unwrap_or(self.ed.doc.page()))
                 .ok()
                 .and_then(|pixmap| crate::canvas_view::pixmap_texture(&pixmap))
                 .map(|image| (self.ed.revision, image));
@@ -3186,7 +3191,7 @@ impl Workspace {
                 // The default printer if there is one, else the first; with none set up, a PDF file.
                 let chosen = default.and_then(|name| printers.iter().position(|p| *p == name)).unwrap_or(0);
                 let pages = self.ed.doc.pages.len() as u32;
-                self.print_dialog = Some(PrintDialog { printers, chosen, copies: 1, range: Default::default(), from: 1, to: pages });
+                self.print_dialog = Some(PrintDialog { printers, chosen, copies: 1, range: Default::default(), from: 1, to: pages, two_sided: false, grayscale: false });
             }
             Cmd::Subselect => {
                 if self.ed.subselect() {
@@ -3396,7 +3401,7 @@ impl Workspace {
         let page = self.ed.doc.page();
         let too_big = self.print_setup.overflows(page.width, page.height);
         if let Some(printer) = dialog.printers.get(dialog.chosen) {
-            self.status = match crate::print::send(&pdf, printer, dialog.copies, &self.print_setup, &stem) {
+            self.status = match crate::print::send(&pdf, printer, dialog.copies, &self.print_setup, &stem, crate::print::Options { two_sided: dialog.two_sided, grayscale: dialog.grayscale }) {
                 Ok(_) if too_big => tf("Sent to {}. The page is larger than the paper, so it is printed on several sheets.", &[printer]),
                 Ok(_) => tf("Sent to {}", &[printer]),
                 Err(error) => tf("Could not print: {}", &[&error]),

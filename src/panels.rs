@@ -2134,6 +2134,9 @@ impl Workspace {
         let mut rows = vec![labelled_row(names[0], name_width, self.combo(Combo::Printer, chosen, 190., cx).bg(rgb(PANEL_RAISED))).into_any_element()];
         if to_printer {
             rows.push(labelled_row(names[1], name_width, self.field(FieldId::PrintCopies, 50., cx)).into_any_element());
+            let (two_sided, grayscale) = (dialog.two_sided, dialog.grayscale);
+            rows.push(self.check_box(t("Print on both sides"), two_sided, cx, |this| this.print_dialog.iter_mut().for_each(|d| d.two_sided = !d.two_sided)).into_any_element());
+            rows.push(self.check_box(t("Print in grayscale"), grayscale, cx, |this| this.print_dialog.iter_mut().for_each(|d| d.grayscale = !d.grayscale)).into_any_element());
         }
         // Which pages of the document: the one on show, all of them, or from one to another.
         use crate::print::PageRange;

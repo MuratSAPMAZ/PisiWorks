@@ -1109,4 +1109,6 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("PisiWorks is built on his Emberframe.", "PisiWorks, Emberframe üzerine kuruludur."),
     ("Free software, MIT license.", "MIT lisanslı özgür yazılımdır."),
     ("Not affiliated with Adobe.", "Adobe ile bir bağı yoktur."),
+    ("Print on both sides", "Kâğıdın iki yüzüne yazdır"),
+    ("Print in grayscale", "Gri tonlamalı yazdır"),
 ];

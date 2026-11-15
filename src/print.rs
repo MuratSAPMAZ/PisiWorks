@@ -248,8 +248,23 @@ pub fn printers() -> (Vec<String>, Option<String>) {
 }
 
 /// What `lp` is run with to print a PDF that is already laid out for its paper.
-fn lp_arguments(file: &Path, printer: &str, copies: u32, setup: &PrintSetup, title: &str) -> Vec<String> {
-    vec![
+/// What is asked of the printer itself, in the words every CUPS printer understands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Options {
+    /// On both sides of the paper, turned along its long edge (its short edge for a landscape page).
+    pub two_sided: bool,
+    pub grayscale: bool,
+}
+
+fn lp_arguments(file: &Path, printer: &str, copies: u32, setup: &PrintSetup, title: &str, options: Options) -> Vec<String> {
+    let mut asked = Vec::new();
+    if options.two_sided {
+        asked.extend(["-o".to_string(), format!("sides={}", if setup.landscape { "two-sided-short-edge" } else { "two-sided-long-edge" })]);
+    }
+    if options.grayscale {
+        asked.extend(["-o".to_string(), "print-color-mode=monochrome".to_string()]);
+    }
+    let mut arguments = vec![
         "-d".into(),
         printer.into(),
         "-n".into(),
@@ -261,16 +276,17 @@ fn lp_arguments(file: &Path, printer: &str, copies: u32, setup: &PrintSetup, tit
         // The PDF is turned already; the printer must not turn or scale it again.
         "-o".into(),
         "print-scaling=none".into(),
-        "--".into(),
-        file.display().to_string(),
-    ]
+    ];
+    arguments.extend(asked);
+    arguments.extend(["--".to_string(), file.display().to_string()]);
+    arguments
 }
 
 /// Sends a PDF to a printer. Gives back what the print system answered, which names the job.
-pub fn send(pdf: &[u8], printer: &str, copies: u32, setup: &PrintSetup, title: &str) -> Result<String> {
+pub fn send(pdf: &[u8], printer: &str, copies: u32, setup: &PrintSetup, title: &str, options: Options) -> Result<String> {
     let file = std::env::temp_dir().join(format!("pisiworks-print-{}.pdf", std::process::id()));
     std::fs::write(&file, pdf).with_context(|| tf("could not write {}", &[&file.display()]))?;
-    let ran = Command::new("lp").args(lp_arguments(&file, printer, copies, setup, title)).output();
+    let ran = Command::new("lp").args(lp_arguments(&file, printer, copies, setup, title, options)).output();
     // The print system has taken its own copy by the time `lp` returns.
     let _ = std::fs::remove_file(&file);
     let out = ran.map_err(|_| anyhow!(t("The print system (CUPS) is not installed")))?;
@@ -384,7 +400,11 @@ mod tests {
         assert_eq!(parse_default("sistem öntanımlı hedefi: Canon-MF"), Some("Canon-MF".into()));
         assert_eq!(parse_default("no system default destination\n"), None);
         let setup = PrintSetup { paper: PaperSize::A3, ..PrintSetup::default() };
-        let arguments = lp_arguments(Path::new("/tmp/a b.pdf"), "HP_LaserJet", 0, &setup, "Poster");
+        let arguments = lp_arguments(Path::new("/tmp/a b.pdf"), "HP_LaserJet", 0, &setup, "Poster", Options::default());
+        assert!(!arguments.iter().any(|a| a.starts_with("sides=") || a.starts_with("print-color-mode=")));
+        let both = lp_arguments(Path::new("/tmp/a.pdf"), "HP", 1, &setup, "Poster", Options { two_sided: true, grayscale: true });
+        assert!(both.contains(&"print-color-mode=monochrome".to_string()) && both.iter().any(|a| a.starts_with("sides=two-sided-")));
+        assert_eq!(both[both.len() - 2], "--", "the file still comes last, after every option");
         assert_eq!(arguments[..6], ["-d", "HP_LaserJet", "-n", "1", "-t", "Poster"]);
         assert!(arguments.contains(&"media=A3".to_string()));
         // The file comes last, after the mark that ends the options, so its name is never read as one.

@@ -56,7 +56,7 @@ Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve aç
 
 ## Kurulum
 
-Derleme, paketleme ve çalıştırma Linux Mint 22.3 üzerinde doğrulandı. Hedef Pardus 25'tir, ancak **Pardus 25 üzerinde henüz denenmedi**.
+Derleme ve paketleme Linux Mint 22.3 üzerinde yapılır. `.deb` paketi hedef sistem olan **Pardus 25 üzerinde kurulup çalıştırıldı** (Kasım 2026).
 
 ### Paketle kurma
 

@@ -2311,6 +2311,38 @@ impl Page {
         }
     }
 
+    /// Whether a group that is open has something of its own to draw with: a mask, filters or a blend mode.
+    pub fn open_groups_need_drawing(&self) -> bool {
+        self.open_groups.iter().any(|open| open.shell.mask.is_some() || !open.shell.filters.is_empty() || !open.shell.blend.is_normal())
+    }
+
+    /// The page as it is drawn while groups are open: each open group is put back
+    /// together, so that its own mask, filters and blend mode show while its members are worked on.
+    pub fn with_groups_closed(&self) -> Page {
+        let mut page = self.clone();
+        for OpenGroup { mut shell, members } in std::mem::take(&mut page.open_groups) {
+            let mut found = Vec::new();
+            let mut spot = None;
+            for (layer_index, layer) in page.layers.iter_mut().enumerate() {
+                let mut at = 0;
+                while at < layer.objects.len() {
+                    if members.contains(&layer.objects[at].id) {
+                        spot.get_or_insert((layer_index, at));
+                        found.push(layer.objects.remove(at));
+                    } else {
+                        at += 1;
+                    }
+                }
+            }
+            let (Some((layer, at)), Some(bounds)) = (spot, found.iter().map(|o| o.bounds).reduce(Rect::union)) else { continue };
+            shell.bounds = bounds;
+            shell.shape = Shape::Group { objects: Arc::new(found) };
+            let at = at.min(page.layers[layer].objects.len());
+            page.layers[layer].objects.insert(at, shell);
+        }
+        page
+    }
+
     /// The buttons that change under the mouse: the copies, lying loose on the page, of button symbols with more than one look.
     pub fn buttons(&self) -> Vec<&Object> {
         self.layers
@@ -3077,7 +3109,7 @@ impl Editor {
         fn special(object: &Object) -> bool {
             !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || !object.fill_look.is_plain() || !object.stroke_profile.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
-        self.doc.page().objects().any(|o| o.visible && special(o))
+        self.doc.page().objects().any(|o| o.visible && special(o)) || self.doc.page().open_groups_need_drawing()
     }
 
     pub fn export_page(&self) -> Page {
@@ -5370,6 +5402,25 @@ mod tests {
         e.delete_selected();
         assert!(e.leave_symbol());
         assert!(e.doc.symbols[0].objects.is_empty() && e.doc.page().objects().count() == 3);
+    }
+
+    #[test]
+    fn an_open_group_is_still_drawn_with_its_own_filters() {
+        let mut e = editor();
+        e.selection = vec![100, 101];
+        assert!(e.group_selected());
+        let group = e.selection[0];
+        e.object_mut(group).unwrap().filters = vec![crate::effects::LiveFilter::new(crate::effects::FilterKind::Blur)];
+        assert!(e.subselect());
+        // Open, the members lie loose and none of them carries the filter; the page still asks to be drawn with it.
+        assert!(e.doc.page().objects().all(|o| o.filters.is_empty()));
+        assert!(e.doc.page().open_groups_need_drawing() && e.needs_compositing());
+        let drawn = e.doc.page().with_groups_closed();
+        assert_eq!(drawn.objects().count(), 2);
+        let whole = drawn.objects().find(|o| matches!(o.shape, Shape::Group { .. })).unwrap();
+        assert_eq!((whole.filters.len(), whole.instance_parts().len()), (1, 2));
+        // The page itself is left as it was.
+        assert_eq!((e.doc.page().objects().count(), e.doc.page().open_groups.len()), (3, 1));
     }
 
     #[test]
