@@ -210,7 +210,9 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
     };
 
     // The objects the rules are about, by name: each is a picture of its own, so that a rule can move or hide it.
-    let ruled: std::collections::HashSet<&str> = doc.rules.iter().flat_map(|rule| rule.objects()).chain(doc.commands.iter().flat_map(|command| crate::rules::objects_of(&command.steps))).collect();
+    // So is an object that others are attached to: it must be known where it has gone.
+    let held = doc.pages.iter().flat_map(|page| page.objects()).map(|object| object.attached.as_str()).filter(|name| !name.is_empty());
+    let ruled: std::collections::HashSet<&str> = doc.rules.iter().flat_map(|rule| rule.objects()).chain(doc.commands.iter().flat_map(|command| crate::rules::objects_of(&command.steps))).chain(held).collect();
     let mut total = 0;
     let mut scene_texts = Vec::new();
     for index in &scenes {
@@ -230,12 +232,13 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
                     _ => None,
                 };
                 // What the script needs to move an object by its behaviors: the point it turns around, its box, and the list.
-                let behaving = (!object.behaviors.is_empty() || ruled.contains(object.name.as_str())).then(|| {
+                let behaving = (!object.behaviors.is_empty() || !object.attached.is_empty() || ruled.contains(object.name.as_str())).then(|| {
                     let (p, b) = (object.pivot_point().unwrap_or(object.bounds.center()), object.bounds);
                     let list: Vec<String> = object.behaviors.iter().map(|behavior| behavior.text()).collect();
                     // An ellipse that has not been turned or slanted is known to be round, so that touching goes by its outline.
                     let round = matches!(object.shape, Shape::Ellipse) && object.placement.is_none();
-                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}],\"n\":{},\"r\":{}}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","), serde_json::to_string(&object.name).unwrap_or_default(), round as u8)
+                    let tie = if object.attached.is_empty() { String::new() } else { format!(",\"a\":{}", serde_json::to_string(&object.attached).unwrap_or_default()) };
+                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}],\"n\":{},\"r\":{}{tie}}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","), serde_json::to_string(&object.name).unwrap_or_default(), round as u8)
                 });
                 // A text that shows a number is written by the script, so that it can change.
                 let counting = match &object.shape {
@@ -375,8 +378,8 @@ const PAGE: &str = r#"<!doctype html>
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).
 // What is drawn is a picture of the stage ("i"), a movie clip ("c"), a button ("b") or an object
 // with behaviors ("m"); the last three may carry behaviors: the point to turn around (p), the
-// object's box (box), the list (l) of [kind, first number, second number], the object's name (n)
-// and whether it is round (r).
+// object's box (box), the list (l) of [kind, first number, second number], the object's name (n),
+// whether it is round (r), and the name of the object it is attached to (a), if it is.
 // A text that shows a number ("t") is written here, with the number in place of its {name}.
 // rules: what makes the film a game. Each has an event (e): [kind, first name, second name, number]
 // what must also be so (c): a list of [number, how, value], or nothing; steps (s): [kind, name, first number,
@@ -596,7 +599,7 @@ function step(key, b) {
   // What a rule has set going gathers speed, or loses it, towards the speed it is to have.
   if (a.go) {
     var g = a.go, sx = g.tx - g.vx, sy = g.ty - g.vy, short = Math.sqrt(sx * sx + sy * sy), most = g.acc * dt;
-    if (short <= most) { g.vx = g.tx; g.vy = g.ty; } else { g.vx += sx / short * most; g.vy += sy / short * most; }
+    if (short <= most || !(short > 0)) { g.vx = g.tx; g.vy = g.ty; } else { g.vx += sx / short * most; g.vy += sy / short * most; }
     a.x += g.vx * dt; a.y += g.vy * dt;
     if (!g.tx && !g.ty && !g.vx && !g.vy) a.go = null;
   }
@@ -991,7 +994,7 @@ function draw() {
 function tick(now) {
   // How long since the screen was last drawn, as a part of a film frame. A long gap, as when the page was
   // out of sight, counts for no more than a twentieth of a second, so that nothing leaps.
-  var gone = last ? Math.min((now - last) / 1000, 0.05) : 1 / 60;
+  var gone = last ? Math.max(0, Math.min((now - last) / 1000, 0.05)) : 1 / 60;
   last = now;
   pace = gone * movie.fps;
   // "Stop everything" holds the film as it is until it is started again.
@@ -1004,6 +1007,16 @@ function tick(now) {
     if (!b || !has(keyOf(op), b, "solid") || actor(keyOf(op)).hidden) return;
     var m = moved(keyOf(op), b);
     walls.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+  });
+  // What was drawn attached to another object is tied to it the first time both are on the stage.
+  ops().forEach(function (op) {
+    var b = behaviorsOf(op), key = keyOf(op);
+    if (!b || !b.a || actor(key).drawnTie) return;
+    var holder = ops().filter(function (other) { var ob = behaviorsOf(other); return ob && ob.n === b.a && keyOf(other) !== key; })[0];
+    if (!holder) return;
+    var hm = moved(keyOf(holder), behaviorsOf(holder)), a = actor(key);
+    a.drawnTie = true;
+    a.parent = { key: keyOf(holder), dx: hm.dx, dy: hm.dy };
   });
   // So does every object with behaviors.
   ops().forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });

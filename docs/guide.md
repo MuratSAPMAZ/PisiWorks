@@ -444,14 +444,11 @@ The sentences for events: `When the film starts`, `When a scene starts`, `When t
 
 *Motion that gathers speed and loses it.* `make Car go to the right at 300` sets the car going: it reaches that speed in under half a second and keeps going. The way is `to the right`, `to the left`, `upwards` or `downwards`; the speed is in pixels a second. `make Car slow down and stop` takes its speed away little by little, so that it stands still in a second and a half; `make Car stop` stops it at once. Two rules make it go while a key is held and slow down when it is let go: one for `When the Right Arrow key is pressed`, one for `When the Right Arrow key is released`.
 
-*Attaching one object to another.* After `attach Wheel to Car` the wheel goes wherever the car goes, so only the car has to be moved. What is attached keeps its own behaviors: a wheel with **Roll Like a Wheel** turns by as far as the car goes. `let … go` unties it, and it stays where it is. What is attached follows the other's place only, not its turning or its size.
+*Attaching one object to another.* The menu is the easy way: select the object to attach, choose **Behaviors > Attach to Another Object…** and click, in the list that opens, the name of the object it is to go along with (that object must have a name, given in Properties). **Attached to nothing**, in the same list, unties it. A rule can attach during the game as well: after `attach Wheel to Car` the wheel goes wherever the car goes, so only the car has to be moved. What is attached keeps its own behaviors: a wheel with **Roll Like a Wheel** turns by as far as the car goes. `let … go` unties it, and it stays where it is. What is attached follows the other's place only, not its turning or its size.
 
-**Lesson: a car.** (The example **Driving a car**.) Draw the body, group it and name it "Car". Keep the wheels out of the body's group: draw two wheels of their own, name both "Wheel" and give both **Roll Like a Wheel** (draw spokes on the wheel, so that its turning shows). The rules:
+**Lesson: a car.** (The example **Driving a car**.) Draw the body, group it and name it "Car". Keep the wheels out of the body's group: draw two wheels of their own, name both "Wheel" and give both **Roll Like a Wheel** (draw spokes on the wheel, so that its turning shows). Select the two wheels and attach them to "Car" with **Behaviors > Attach to Another Object…**. The rules:
 
 ```
-When the film starts:
-    attach Wheel to Car
-
 When the Right Arrow key is pressed:
     make Car go to the right at 320
 

@@ -647,13 +647,14 @@ pub fn driving() -> Document {
     for at in [x + 22.0, x + 124.0] {
         let id = wheel(&mut e, wheel_name, at, road - 40.0, 44.0);
         give(&mut e, id, &[(Kind::Roll, 0.0, 0.0)]);
+        // Behaviors > Attach to Another Object: the wheel goes wherever the car goes.
+        e.for_selected(|o| o.attached = car_name.to_string());
     }
     let with = |mut made: Rule, b: &str| {
         made.steps[0].b = b.to_string();
         made
     };
     e.doc.rules = vec![
-        with(rule((EventKind::Start, "", "", 0.0), &[(StepKind::Attach, wheel_name, 0.0, 0.0)]), car_name),
         with(rule((EventKind::Key, "ArrowRight", "", 0.0), &[(StepKind::Go, car_name, 320.0, 0.0)]), "right"),
         rule((EventKind::KeyUp, "ArrowRight", "", 0.0), &[(StepKind::Slow, car_name, 0.0, 0.0)]),
         with(rule((EventKind::Key, "ArrowLeft", "", 0.0), &[(StepKind::Go, car_name, 320.0, 0.0)]), "left"),

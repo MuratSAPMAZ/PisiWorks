@@ -446,14 +446,11 @@ Olay cümleleri: `Film başlayınca`, `Bir sahne başlayınca`, `… tuşuna bas
 
 *Hızlanıp yavaşlayan hareket.* `Araba nesnesi sağa 300 hızla gitsin` arabayı yola çıkarır: yarım saniyeden kısa sürede o hıza çıkar ve gitmeye devam eder. Yön `sağa`, `sola`, `yukarı` ya da `aşağı` yazılır; hız saniyede pikseldir. `Araba nesnesi yavaşlayarak dursun` hızını azar azar düşürür, bir buçuk saniyede durur; `Araba nesnesi dursun` hemen durdurur. Tuşa basılıyken gidip bırakınca yavaşlaması için iki kural yeter: biri `Sağ Ok tuşuna basılınca`, öteki `Sağ Ok tuşu bırakılınca`.
 
-*Bir nesneyi ötekine bağlamak.* `Tekerlek nesnesini Araba nesnesine bağla` dedikten sonra tekerlek arabanın gittiği her yere gider; yalnızca arabayı hareket ettirmek yeter. Bağlı nesnenin kendi davranışları sürer: **Teker Gibi Yuvarlan** verilmiş tekerlek, araba ne kadar yol giderse o kadar döner. `serbest bırak` bağı çözer; nesne olduğu yerde kalır. Bağlı nesne ötekinin dönmesini ya da büyümesini izlemez, yalnızca yer değiştirmesini.
+*Bir nesneyi ötekine bağlamak.* En kolayı menüdendir: bağlanacak nesneyi seçin, **Davranışlar > Başka Nesneye Bağla…** deyin ve açılan listede birlikte gideceği nesnenin adına tıklayın (o nesnenin Özellikler'de bir adı olmalıdır). Aynı listedeki **Hiçbir şeye bağlı değil** bağı kaldırır. Oyun sırasında bağlamak için kural da yazılabilir: `Tekerlek nesnesini Araba nesnesine bağla` dedikten sonra tekerlek arabanın gittiği her yere gider; yalnızca arabayı hareket ettirmek yeter. Bağlı nesnenin kendi davranışları sürer: **Teker Gibi Yuvarlan** verilmiş tekerlek, araba ne kadar yol giderse o kadar döner. `serbest bırak` bağı çözer; nesne olduğu yerde kalır. Bağlı nesne ötekinin dönmesini ya da büyümesini izlemez, yalnızca yer değiştirmesini.
 
-**Ders: araba.** (**Araba sürmek** örneği.) Gövdeyi çizip gruplayın ve "Araba" adını verin. Tekerleri gövdenin grubuna katmayın: iki ayrı tekerlek çizin, ikisine de "Tekerlek" adını ve **Teker Gibi Yuvarlan** davranışını verin (dönmesi görünsün diye tekerleğe bir jant çizgisi çizin). Kurallar:
+**Ders: araba.** (**Araba sürmek** örneği.) Gövdeyi çizip gruplayın ve "Araba" adını verin. Tekerleri gövdenin grubuna katmayın: iki ayrı tekerlek çizin, ikisine de "Tekerlek" adını ve **Teker Gibi Yuvarlan** davranışını verin (dönmesi görünsün diye tekerleğe bir jant çizgisi çizin). İki tekerleği seçip **Davranışlar > Başka Nesneye Bağla…** ile "Araba"ya bağlayın. Kurallar:
 
 ```
-Film başlayınca:
-    Tekerlek nesnesini Araba nesnesine bağla
-
 Sağ Ok tuşuna basılınca:
     Araba nesnesi sağa 320 hızla gitsin
 

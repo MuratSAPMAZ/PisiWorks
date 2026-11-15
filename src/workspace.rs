@@ -786,6 +786,8 @@ pub struct Workspace {
     pub rule_picked: usize,
     /// Whether Behavior Settings is open.
     pub behavior_dialog: bool,
+    /// Behaviors > Attach to Another Object: the list of objects to attach the selection to.
+    pub attach_dialog: bool,
     /// Whether playing in the program starts over at the end. Off, as in Flash, it plays once and stops on the last frame.
     pub loop_playback: bool,
     /// Where the frames of the timeline are scrolled to.
@@ -1198,6 +1200,7 @@ impl Workspace {
             behavior_tick: 0,
             raster_behaved: false,
             behavior_dialog: false,
+            attach_dialog: false,
             script: None,
             script_scroll: gpui::ScrollHandle::new(),
             script_pick: 0,
@@ -3316,7 +3319,7 @@ impl Workspace {
             | Cmd::FlipH | Cmd::FlipV => has_selection,
             Cmd::Filter(_) => self.ed.has_selected_bitmap(),
             Cmd::ConvertToSymbol | Cmd::Animate => has_selection,
-            Cmd::Behavior(crate::menus::BehaviorCmd::Toggle(_)) => has_selection,
+            Cmd::Behavior(crate::menus::BehaviorCmd::Toggle(_) | crate::menus::BehaviorCmd::Attach) => has_selection,
             Cmd::Behavior(_) => self.ed.selected().iter().any(|o| !o.behaviors.is_empty()),
             Cmd::TextAlignDown(_) => self.shown_text_style().orientation.is_vertical(),
             Cmd::SaveSteps => !self.steps_to_save().is_empty(),
@@ -3954,6 +3957,7 @@ impl Workspace {
                     t("Added. Press Enter to see it; its numbers are in Behaviors > Behavior Settings").into()
                 };
             }
+            BehaviorCmd::Attach => self.attach_dialog = true,
             BehaviorCmd::Settings => self.behavior_dialog = true,
             BehaviorCmd::Clear => {
                 self.ed.for_selected(|o| o.behaviors.clear());
@@ -3971,6 +3975,20 @@ impl Workspace {
         if self.shown_behaviors().is_empty() {
             self.behavior_dialog = false;
         }
+    }
+
+    /// The objects the selection can be attached to: every name on the stage that is not the selection's own.
+    pub fn attach_choices(&self) -> Vec<String> {
+        let own: Vec<&str> = self.ed.selected().iter().map(|o| o.name.as_str()).collect();
+        self.ed.doc.object_names().into_iter().filter(|name| !own.contains(&name.as_str())).collect()
+    }
+
+    /// Attaches the selection to the object of a name, or, with no name, lets it go.
+    pub fn attach_selection(&mut self, to: &str) {
+        self.ed.for_selected(|o| o.attached = to.to_string());
+        self.ed.commit(t("Attach to Another Object"));
+        self.attach_dialog = false;
+        self.status = if to.is_empty() { t("The object is attached to nothing now").into() } else { tf("Attached to {}: it goes wherever that goes. See it with Test Movie (Ctrl+Enter)", &[&to]).into() };
     }
 
     pub fn close_behavior_dialog(&mut self) {
@@ -6116,6 +6134,7 @@ impl Workspace {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -7137,6 +7156,8 @@ impl Workspace {
             // Enter only takes what was typed; Esc closes.
             self.commit_field();
             self.rules_dialog = key != "escape";
+        } else if self.attach_dialog && matches!(key, "enter" | "escape") {
+            self.attach_dialog = false;
         } else if self.behavior_dialog && matches!(key, "enter" | "escape") {
             self.close_behavior_dialog();
         } else if self.twist_dialog.is_some() && matches!(key, "enter" | "escape") {

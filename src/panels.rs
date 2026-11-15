@@ -62,6 +62,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         pivot: None,
 
         behaviors: Vec::new(),
+        attached: String::new(),
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
@@ -2646,6 +2647,46 @@ impl Workspace {
         }
         let buttons = div().flex().justify_end().gap_1().child(self.text_button(t("Close"), true, cx, |this, _, _| this.close_behavior_dialog()));
         Some(self.dialog_frame(340., t("Behavior Settings"), rows, buttons))
+    }
+
+    /// Behaviors > Attach to Another Object: the named objects, one click on one attaches the selection to it.
+    pub(crate) fn attach_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.attach_dialog {
+            return None;
+        }
+        let now = self.ed.selected().first().map_or_else(String::new, |o| o.attached.clone());
+        let choices = self.attach_choices();
+        let mut rows: Vec<AnyElement> = vec![div().text_color(rgb(TEXT_DIM)).child(label(t("Click the object it is to go along with:"))).into_any_element()];
+        let row = |name: String, shown: SharedString, chosen: bool, cx: &mut Context<Self>| {
+            div()
+                .h(px(22.))
+                .px_2()
+                .flex()
+                .items_center()
+                .when(chosen, |d| d.bg(rgb(ACCENT)))
+                .hover(|s| s.bg(rgb(ACCENT)))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.attach_selection(&name);
+                        cx.notify();
+                    }),
+                )
+                .child(shown)
+                .into_any_element()
+        };
+        for name in choices.iter() {
+            rows.push(row(name.clone(), name.clone().into(), *name == now, cx));
+        }
+        if choices.is_empty() {
+            rows.push(label(t("There is no other object with a name. Give the object a name in Properties first.")).into_any_element());
+        }
+        if !now.is_empty() {
+            rows.push(row(String::new(), t("Attached to nothing").into(), false, cx));
+        }
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Works in the published film (Test Movie)"))).into_any_element());
+        let buttons = div().flex().justify_end().gap_1().child(self.text_button(t("Close"), true, cx, |this, _, _| this.attach_dialog = false));
+        Some(self.dialog_frame(340., t("Attach to Another Object"), rows, buttons))
     }
 
     /// Commands > Creative > Twist and Fade: how many copies, and how each differs from the one before.

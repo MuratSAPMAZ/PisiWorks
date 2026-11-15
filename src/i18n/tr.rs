@@ -1648,4 +1648,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Driving a car", "Araba sürmek"),
     ("A car that gathers speed and slows down by itself, with wheels tied to it that turn as far as it goes", "Kendiliğinden hızlanıp yavaşlayan bir araba; ona bağlı tekerler gittiği yol kadar döner"),
     ("Hold Right or Left to drive. Let go, and the car slows down by itself.", "Sürmek için Sağ ya da Sol oka basılı tutun. Bırakınca araba kendiliğinden yavaşlar."),
+    ("Attach to Another Object...", "Başka Nesneye Bağla..."),
+    ("Attach to Another Object", "Başka Nesneye Bağla"),
+    ("Click the object it is to go along with:", "Birlikte gideceği nesneye tıklayın:"),
+    ("There is no other object with a name. Give the object a name in Properties first.", "Adı olan başka bir nesne yok. Önce Özellikler'de nesneye ad verin."),
+    ("Attached to nothing", "Hiçbir şeye bağlı değil"),
+    ("The object is attached to nothing now", "Nesne artık hiçbir şeye bağlı değil"),
+    ("Attached to {}: it goes wherever that goes. See it with Test Movie (Ctrl+Enter)", "{} nesnesine bağlandı: o nereye giderse gider. Filmi Test Et (Ctrl+Enter) ile görün"),
 ];

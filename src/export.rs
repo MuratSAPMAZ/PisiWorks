@@ -1030,6 +1030,7 @@ mod tests {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,

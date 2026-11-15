@@ -850,6 +850,9 @@ pub struct Object {
     /// The ready-made motions the object has been given in PisiSahne: see [`crate::behavior`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub behaviors: Vec<crate::behavior::Behavior>,
+    /// The name of the object this one is attached to in PisiSahne: in the published film it goes wherever that one goes.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub attached: String,
     /// How the object's colors mix with the artwork under it.
     #[serde(default, skip_serializing_if = "BlendMode::is_normal")]
     pub blend: BlendMode,
@@ -912,6 +915,7 @@ impl Object {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -943,6 +947,7 @@ impl Object {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -1320,6 +1325,7 @@ impl Object {
                     pivot: None,
 
                     behaviors: Vec::new(),
+                    attached: String::new(),
                     blend: crate::blend::BlendMode::Normal,
                     mask: None,
                     mask_of: None,
@@ -5124,6 +5130,7 @@ impl Editor {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -5899,6 +5906,7 @@ impl Editor {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -6716,6 +6724,7 @@ mod tests {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,

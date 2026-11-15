@@ -605,6 +605,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn what_is_attached_in_the_menu_is_tied_in_the_published_film() {
+        let doc = (EXAMPLES.iter().find(|e| e.name == "Driving a car").unwrap().build)();
+        let wheels: Vec<_> = doc.pages[0].objects().filter(|o| o.attached == t("Car")).collect();
+        assert_eq!(wheels.len(), 2);
+        let html = crate::publish::html(&doc, "x").unwrap();
+        // Each wheel says what it is attached to, and the car, which has no behavior, is a picture the page can follow.
+        assert_eq!(html.matches("\"a\":\"Car\"").count(), 2);
+        assert!(html.contains("\"l\":[],\"n\":\"Car\""));
+        // It is kept with the document.
+        let again = crate::model::document_from_json(&crate::model::document_to_json(&doc).unwrap()).unwrap();
+        assert_eq!(again.pages[0].objects().filter(|o| o.attached == t("Car")).count(), 2);
+    }
+
+    #[test]
     fn every_animation_example_builds_plays_and_is_published() {
         for example in EXAMPLES {
             let doc = (example.build)();

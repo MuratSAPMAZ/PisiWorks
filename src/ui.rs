@@ -954,6 +954,7 @@ impl Workspace {
             pivot: None,
 
             behaviors: Vec::new(),
+            attached: String::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -1918,6 +1919,7 @@ impl Render for Workspace {
             .children(self.gif_dialog_view(cx))
             .children(self.twist_dialog_view(cx))
             .children(self.behavior_dialog_view(cx))
+            .children(self.attach_dialog_view(cx))
             .children(self.rules_dialog_view(cx))
             .children(self.script_view(cx))
             .children(self.frame_dialog_view(cx))
