@@ -378,12 +378,18 @@ When Lives goes below 1:
 - *Taking it.* **Take the Text** (Ctrl+S) takes what is written into the document; **Take It and Test Movie** (Ctrl+Enter) takes it and opens the game in the browser. The text is not taken while a line cannot be read. Esc closes the window.
 - *Pasting.* Ctrl+V pastes rules copied from elsewhere: the rules of a game can be sent to a friend as text.
 
-What the writing has over the lists is four things:
+- *Offered as you write.* When a line is begun, offers appear under the caret: the sentences the line can be, and the names of the document. They go by what is typed: the name of an object brings the sentences about objects (`hide Apple`), in Turkish the name of a number brings those about numbers, a figure those that open with one; a name typed in small letters is put in as it is kept. The up and down arrows pick, **Tab** takes. When a sentence is taken the caret goes to its first gap; as the gaps are filled, Tab goes on to the next. Esc waves the offers away.
+
+What the writing has over the lists:
 
 - *Sums.* Wherever a number goes, a sum may be written: `set Score to Score * 2`, `increase Lives by Score / 10`. The four signs and brackets are used. The place of an object is read with `Name.x` and `Name.y`: `put Bullet at Ship.x + 20, Ship.y`. A whole number at random is `random(1, 6)`. An object with a space in its name is written between quotation marks: `"Giant Rat".x`. (The number boxes of the lists take sums too.)
 - *Several conditions.* Conditions are joined by `and`: `When Hero touches Door, if Score is more than 2 and Lives is more than 0:`. The rule is followed when all of them hold.
 - *Otherwise.* After the steps, `otherwise:` is written at the edge; what stands under it is done when the conditions do not hold.
 - *Waiting.* `wait 1 seconds` puts off the steps after it: the sound first, the change of scene a second later.
+- *Repeating.* `repeat 3 times:` does the steps written further in under it three times; the count may be a sum (`repeat Shots times:`). With a `wait` inside, it waits between rounds.
+- *If.* Inside a rule, what is under `if Score is more than 10:` is done only when that holds; `otherwise:`, written as far in as the `if`, says what to do when it does not. Blocks can be written inside blocks.
+- *Repeating while.* `repeat while Score is more than 0:` does what is under it for as long as that holds. A loop that would never end does not hold the game up: the program cuts it short.
+- *Commands.* A thing done often is given a name: `The command Burst:` at the edge, its steps under it; then any rule says `do the command Burst`. A command may be used above where it is written, and may do other commands, itself among them.
 
 ```
 When Hero touches Door, if Score is more than 2 and Lives is more than 0:
@@ -395,6 +401,27 @@ otherwise:
     put Hero at Hero.x - 40, 322
 ```
 
+```
+Numbers:
+    Score = 0
+    Shots = 3
+
+The command Burst:
+    make a copy of Explosion at Enemy
+    play the sound boom
+
+When the Space key is pressed:
+    repeat Shots times:
+        make a copy of Bullet at Ship
+        wait 0.2 seconds
+    if Score is more than 10:
+        do the command Burst
+    otherwise:
+        play the sound zap
+```
+
+The lines that open a block: `repeat … times:`, `repeat while …:`, `if …:`, `otherwise:`. Defining a command: `The command …:`. Doing it: `do the command …`.
+
 The sentences for events: `When the film starts`, `When a scene starts`, `When the … key is pressed`, `When … is clicked`, `When … touches … of the stage`, `When … touches …`, `Every … seconds`, `After … seconds`, `When … goes above …`, `When … goes below …`, `When … becomes …`.
 
 The sentences for steps: `move … by … right and … down`, `put … somewhere at random`, `put … at the top, at random`, `put … at …, …`, `show …`, `hide …`, `make … jump at …`, `decrease … by …`, `increase … by …`, `make a copy of … at …`, `remove …`, `make … blink for a moment`, `make … slower by … percent`, `make … faster by … percent`, `set … at random from … to …`, `set … to …`, `wait … seconds`, `stop the film`, `play the film`, `go to frame … and play`, `go to frame … and stop`, `go to the next scene`, `go to scene …`, `play the sound …`, `stop everything`, `start again`.
@@ -403,7 +430,7 @@ Conditions: `… is …`, `… is more than …`, `… is less than …`. The na
 
 With the program in Turkish the same rules are written and read in Turkish sentences (`Elma nesnesi Sepet nesnesine değince:`); the rules are kept in the document apart from any language, so a game written in one shows in the other in that language's sentences. The names of objects and numbers are not translated.
 
-What the language does not do yet: there are no loops ("do 3 times") and no way to define a command of one's own; nothing but numbers is kept (no words, no lists); only the place of an object is read, not its size or whether it shows. The writing area is a plain editor: there is no selecting, no undo and no find and replace; a long text can be written in an editor of your own and pasted with Ctrl+V.
+In the lists (Rules and Numbers) blocks and commands are shown but not made; they are written. What the language does not do yet: a command takes no values (there is no `Burst 3`; a command knows the objects that set the rule off); nothing but numbers is kept (no words, no lists); only the place of an object is read, not its size or whether it shows. The writing area is a plain editor: there is no selecting, no undo and no find and replace; a long text can be written in an editor of your own and pasted with Ctrl+V.
 
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 

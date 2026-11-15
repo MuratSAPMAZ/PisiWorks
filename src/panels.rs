@@ -2237,6 +2237,9 @@ impl Workspace {
         const GUTTER: f32 = 40.;
         const LINE: f32 = 18.;
         let bad: Vec<usize> = script.mistakes().iter().map(|m| m.line).collect();
+        // What is offered for the line being written, shown under the caret.
+        let offers = self.script_offers();
+        let picked = self.script_pick.min(offers.len().saturating_sub(1));
         // A space that the drawing of text does not fold away.
         let shown = |text: &str| text.replace(' ', "\u{a0}");
         let lines: Vec<AnyElement> = script
@@ -2274,6 +2277,29 @@ impl Workspace {
                     .into_any_element()
             })
             .collect();
+        let offer_rows: Vec<AnyElement> = offers
+            .iter()
+            .enumerate()
+            .map(|(at, offer)| {
+                div()
+                    .h(px(LINE))
+                    .px_2()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .when(at == picked, |d| d.bg(rgb(ACCENT)))
+                    .hover(|s| s.bg(rgb(ACCENT)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.accept_offer(at);
+                            cx.notify();
+                        }),
+                    )
+                    .child(shown(offer.shown()))
+                    .into_any_element()
+            })
+            .collect();
         let raised = |combo: Div| combo.bg(rgb(PANEL_RAISED));
         let mut rows: Vec<AnyElement> = vec![
             div()
@@ -2285,26 +2311,52 @@ impl Workspace {
                 .child(raised(self.combo(Combo::ScriptStep, t("A step"), 130., cx)))
                 .child(div().text_color(rgb(TEXT_DIM)).child(label(t("then write a name or a number in place of each ?"))))
                 .into_any_element(),
+            // The lines, and over them, under the caret, what is offered. The list is a child of the box and not
+            // of the line, so that the lines below do not lie over it.
             div()
-                .id("script-lines")
-                .h(px(LINE * 19.))
-                .flex()
-                .flex_col()
-                .overflow_y_scroll()
-                .track_scroll(&self.script_scroll)
-                .bg(rgb(INPUT))
-                .border_1()
-                .border_color(rgb(INPUT_BORDER))
+                .relative()
                 .font_family(crate::fonts::mono())
                 .text_size(px(SIZE))
-                .children(lines)
+                .child(
+                    div()
+                        .id("script-lines")
+                        .h(px(LINE * 19.))
+                        .flex()
+                        .flex_col()
+                        .overflow_y_scroll()
+                        .track_scroll(&self.script_scroll)
+                        .bg(rgb(INPUT))
+                        .border_1()
+                        .border_color(rgb(INPUT_BORDER))
+                        .children(lines),
+                )
+                .when(!offer_rows.is_empty(), |d| {
+                    // Under the caret's line, or over it where there is no room below.
+                    let line_top = script.row as f32 * LINE + f32::from(self.script_scroll.offset().y);
+                    let tall = offer_rows.len() as f32 * LINE + 2.;
+                    let top = if line_top + LINE + tall > LINE * 19. { (line_top - tall).max(0.) } else { line_top + LINE };
+                    d.child(
+                        div()
+                            .absolute()
+                            .top(px(top + 1.))
+                            .left(px((GUTTER + script.col as f32 * ADVANCE).min(420.)))
+                            .occlude()
+                            .flex()
+                            .flex_col()
+                            .bg(rgb(PANEL_RAISED))
+                            .border_1()
+                            .border_color(rgb(BORDER))
+                            .shadow_md()
+                            .children(offer_rows),
+                    )
+                })
                 .into_any_element(),
         ];
         match &script.outcome {
             Some(Ok(read)) => {
                 rows.push(div().text_color(rgb(0x1c7a30)).child(label(tf("The text reads: {} rules, {} numbers", &[&read.rules.len(), &read.variables.len()]))).into_any_element());
                 let sounds: Vec<String> = self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect();
-                let strangers = crate::script::strangers(&read.rules, &self.ed.doc.object_names(), &sounds);
+                let strangers = crate::script::strangers(&read.rules, &read.commands, &self.ed.doc.object_names(), &sounds);
                 if !strangers.is_empty() {
                     rows.push(div().text_color(rgb(0xa05a00)).child(label(tf("Nothing in the document is called: {}", &[&strangers.join(", ")]))).into_any_element());
                 }
@@ -2336,7 +2388,7 @@ impl Workspace {
             }
             None => {}
         }
-        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
         let buttons = div()
             .flex()
             .justify_end()
@@ -2430,6 +2482,20 @@ impl Workspace {
                     .into_any_element(),
             );
             for (index, step) in rule.steps.iter().enumerate() {
+                // A step that holds steps of its own is written in the language: here it is shown, and can be taken away.
+                if step.is_block() {
+                    rows.push(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(if index == 0 { t("Do:") } else { "" })))
+                            .child(div().flex_1().min_w_0().overflow_hidden().text_color(rgb(TEXT_DIM)).child(label(step.told())))
+                            .child(self.text_button(t("Remove"), true, cx, move |this, _, _| this.remove_rule_step(index)))
+                            .into_any_element(),
+                    );
+                    continue;
+                }
                 let (a, b, x, y) = step.kind.needs();
                 rows.push(
                     div()
@@ -2456,6 +2522,23 @@ impl Workspace {
                     .child(raised(self.combo(Combo::RuleStepAdd, t("Add a Step"), 230., cx)))
                     .into_any_element(),
             );
+        }
+        // What only the written language sets is told of, so that it is not thought lost.
+        if let Some(rule) = doc.rules.get(self.rule_picked).filter(|rule| !rule.also.is_empty() || !rule.otherwise.is_empty()) {
+            let more: Vec<String> = rule.also.iter().map(|only| only.phrase()).collect();
+            let rest: Vec<String> = rule.otherwise.iter().map(|step| step.told()).collect();
+            let mut told = Vec::new();
+            if !more.is_empty() {
+                told.push(format!("{} {}", t(" and ").trim(), more.join(t(" and "))));
+            }
+            if !rest.is_empty() {
+                told.push(format!("{}: {}", t("otherwise"), rest.join("; ")));
+            }
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(label(tf("Written in Rules as Text: {}", &[&told.join(" — ")]))).into_any_element());
+        }
+        if !doc.commands.is_empty() {
+            let names: Vec<&str> = doc.commands.iter().map(|command| command.name.as_str()).collect();
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(label(tf("Commands, written in Rules as Text: {}", &[&names.join(", ")]))).into_any_element());
         }
         rows.push(div().pt_2().font_weight(FontWeight::BOLD).child(label(t("Numbers"))).into_any_element());
         for (index, variable) in doc.variables.iter().enumerate() {

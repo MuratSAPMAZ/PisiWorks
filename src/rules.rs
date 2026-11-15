@@ -52,6 +52,8 @@ pub enum Pick {
     Compare,
     /// One of the three ways of "only if".
     Condition,
+    /// A command defined in the written language.
+    Command,
     Variable,
     Sound,
 }
@@ -155,13 +157,22 @@ pub enum StepKind {
     Flash,
     /// Waits `x` seconds before the steps that follow it.
     Wait,
+    /// Does the command called `a`: steps written once under a name, in the written language.
+    Call,
+    /// Does the steps of its `body` `x` times over. This and the two after it hold steps of their own, and
+    /// are written in the language; the lists show them and leave them as they are.
+    Repeat,
+    /// Does its `body` if its conditions (`only`) hold, and its `otherwise` if they do not.
+    If,
+    /// Does its `body` again and again for as long as its conditions hold.
+    While,
     /// Stops the film and everything that moves in it.
     StopAll,
     /// Starts the film again from the beginning, with every number as it started.
     Restart,
 }
 
-pub const STEPS: [StepKind; 24] = [
+pub const STEPS: [StepKind; 25] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -177,6 +188,7 @@ pub const STEPS: [StepKind; 24] = [
     StepKind::RandomTop,
     StepKind::Jump,
     StepKind::Wait,
+    StepKind::Call,
     StepKind::Sound,
     StepKind::NextScene,
     StepKind::GotoScene,
@@ -213,6 +225,10 @@ impl StepKind {
             StepKind::RandomNumber => "Set a number at random",
             StepKind::Flash => "Make an object blink for a moment",
             StepKind::Wait => "Wait",
+            StepKind::Call => "Do a command",
+            StepKind::Repeat => "Repeat",
+            StepKind::If => "If",
+            StepKind::While => "Repeat while",
             StepKind::StopAll => "Stop everything",
             StepKind::Restart => "Start again",
         }
@@ -242,6 +258,10 @@ impl StepKind {
             StepKind::RandomNumber => "rnd",
             StepKind::Flash => "flash",
             StepKind::Wait => "wait",
+            StepKind::Call => "call",
+            StepKind::Repeat => "repeat",
+            StepKind::If => "if",
+            StepKind::While => "while",
             StepKind::StopAll => "halt",
             StepKind::Restart => "restart",
         }
@@ -262,6 +282,9 @@ impl StepKind {
             StepKind::GotoFrame | StepKind::GotoFrameStop => (None, None, Some(("Frame:", 1.0)), None),
             StepKind::GotoScene => (None, None, Some(("Scene:", 1.0)), None),
             StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
+            StepKind::Call => (Some(Pick::Command), None, None, None),
+            StepKind::Repeat => (None, None, Some(("Times:", 3.0)), None),
+            StepKind::If | StepKind::While => (None, None, None, None),
             StepKind::Sound => (Some(Pick::Sound), None, None, None),
             StepKind::StopFilm | StepKind::PlayFilm | StepKind::NextScene | StepKind::StopAll | StepKind::Restart => (None, None, None, None),
         }
@@ -282,6 +305,15 @@ pub struct Step {
     pub ex: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub ey: String,
+    /// The steps a step holds, for the kinds that hold steps: what is repeated, or done if the conditions hold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub body: Vec<Step>,
+    /// The conditions of an "if" or a "repeat while".
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub only: Vec<Condition>,
+    /// What an "if" does when its conditions do not hold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub otherwise: Vec<Step>,
     #[serde(default)]
     pub x: f32,
     #[serde(default)]
@@ -302,6 +334,71 @@ pub struct Rule {
     /// What to do when the event happens and the conditions do not hold.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub otherwise: Vec<Step>,
+}
+
+/// A command: steps written once under a name, to be done from any rule with "do the command".
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Command {
+    pub name: String,
+    #[serde(default)]
+    pub steps: Vec<Step>,
+}
+
+/// Every step in a list of steps, with those the steps hold, each before what it holds.
+pub fn every_step(steps: &[Step]) -> Vec<&Step> {
+    let mut all = Vec::new();
+    for step in steps {
+        all.push(step);
+        all.extend(every_step(&step.body));
+        all.extend(every_step(&step.otherwise));
+    }
+    all
+}
+
+/// The names of the objects some steps are about, those of the steps they hold among them.
+pub fn objects_of(steps: &[Step]) -> Vec<&str> {
+    let mut names = Vec::new();
+    for step in every_step(steps) {
+        let (a, b, _, _) = step.kind.needs();
+        if a == Some(Pick::Object) {
+            names.push(step.a.as_str());
+        }
+        if b == Some(Pick::Object) {
+            names.push(step.b.as_str());
+        }
+        // And the objects whose places its sums ask for: `Hero.x`.
+        let sums = [step.ex.as_str(), step.ey.as_str()].into_iter().chain(step.only.iter().map(|only| only.expr.as_str()));
+        names.extend(sums.flat_map(crate::script::objects_in));
+    }
+    names.retain(|name| !name.is_empty());
+    names
+}
+
+/// Steps as the script of the published page reads them. A step that holds steps carries them after its own
+/// five parts: its body, its conditions, and what to do otherwise. A sound is given by its place in `sounds`.
+pub fn steps_text(steps: &[Step], sounds: &[String]) -> String {
+    let list: Vec<String> = steps
+        .iter()
+        .map(|step| {
+            // A number that is a sum goes as its text, for the script to work out when the step is taken.
+            let x = if step.kind == StepKind::Sound {
+                sounds.iter().position(|name| *name == step.a).map_or(-1.0, |at| at as f32).to_string()
+            } else if step.ex.is_empty() {
+                step.x.to_string()
+            } else {
+                quoted(&step.ex)
+            };
+            let y = if step.ey.is_empty() { step.y.to_string() } else { quoted(&step.ey) };
+            let own = format!("\"{}\",{},{x},{y},{}", step.kind.key(), quoted(&step.a), quoted(&step.b));
+            if matches!(step.kind, StepKind::Repeat | StepKind::If | StepKind::While) {
+                let only: Vec<String> = step.only.iter().map(Condition::text).collect();
+                format!("[{own},[{}],[{}],[{}]]", steps_text(&step.body, sounds), only.join(","), steps_text(&step.otherwise, sounds))
+            } else {
+                format!("[{own}]")
+            }
+        })
+        .collect();
+    list.join(",")
 }
 
 /// "Only if": a number held against a value, as [`COMPARES`] has the three ways.
@@ -402,7 +499,7 @@ pub fn choice_name(pick: Pick, value: &str) -> String {
         Pick::Edge => &EDGES,
         Pick::Compare => &COMPARES,
         Pick::Condition => &CONDITIONS,
-        Pick::Object | Pick::Variable | Pick::Sound => return value.to_string(),
+        Pick::Object | Pick::Variable | Pick::Sound | Pick::Command => return value.to_string(),
     };
     list.iter().find(|(key, _)| *key == value).map_or_else(|| value.to_string(), |(_, name)| if name.len() == 1 { name.to_string() } else { t(name).to_string() })
 }
@@ -460,6 +557,26 @@ impl Step {
         if self.ey.is_empty() { plain(self.y) } else { self.ey.clone() }
     }
 
+    fn told_conditions(&self) -> String {
+        let told: Vec<String> = self.only.iter().map(Condition::phrase).collect();
+        told.join(t(" and "))
+    }
+
+    /// Whether the step holds steps of its own.
+    pub fn is_block(&self) -> bool {
+        matches!(self.kind, StepKind::Repeat | StepKind::If | StepKind::While)
+    }
+
+    /// The step on one line, what it holds between brackets: how a list shows it.
+    pub fn told(&self) -> String {
+        if !self.is_block() {
+            return self.sentence();
+        }
+        let inside = |steps: &[Step]| steps.iter().map(Step::told).collect::<Vec<_>>().join("; ");
+        let rest = if self.otherwise.is_empty() { String::new() } else { format!(" {} [{}]", t("otherwise"), inside(&self.otherwise)) };
+        format!("{} [{}]{rest}", self.sentence(), inside(&self.body))
+    }
+
     pub fn sentence(&self) -> String {
         let (a, x, y) = (&self.a, self.first(), self.second());
         // Taking away reads as taking away only where the number is a plain one.
@@ -478,6 +595,10 @@ impl Step {
             StepKind::Remove => tf("remove {}", &[a]),
             StepKind::Flash => tf("make {} blink for a moment", &[a]),
             StepKind::Wait => tf("wait {} seconds", &[&x]),
+            StepKind::Call => tf("do the command {}", &[a]),
+            StepKind::Repeat => tf("repeat {} times", &[&x]),
+            StepKind::If => tf("if {}", &[&self.told_conditions()]),
+            StepKind::While => tf("repeat while {}", &[&self.told_conditions()]),
             StepKind::Faster if down => tf("make {} slower by {} percent", &[a, &plain(-self.x)]),
             StepKind::Faster => tf("make {} faster by {} percent", &[a, &x]),
             StepKind::RandomNumber => tf("set {} at random from {} to {}", &[a, &x, &y]),
@@ -518,9 +639,9 @@ impl Rule {
 
     /// The rule as one sentence: the event, what must also be so, then the steps.
     pub fn sentence(&self) -> String {
-        let steps: Vec<String> = self.steps.iter().map(Step::sentence).collect();
+        let steps: Vec<String> = self.steps.iter().map(Step::told).collect();
         let head = self.head();
-        let rest: Vec<String> = self.otherwise.iter().map(Step::sentence).collect();
+        let rest: Vec<String> = self.otherwise.iter().map(Step::told).collect();
         let rest = if rest.is_empty() { String::new() } else { format!(" — {}: {}", t("otherwise"), rest.join("; ")) };
         if steps.is_empty() {
             format!("{head}: …{rest}")
@@ -539,36 +660,16 @@ impl Rule {
         if b == Some(Pick::Object) {
             names.push(self.event.b.as_str());
         }
-        let steps = || self.steps.iter().chain(self.otherwise.iter());
-        names.extend(steps().filter(|step| step.kind.needs().0 == Some(Pick::Object)).map(|step| step.a.as_str()));
-        names.extend(steps().filter(|step| step.kind.needs().1 == Some(Pick::Object)).map(|step| step.b.as_str()));
-        // And the objects whose places its sums ask for: `Hero.x`.
-        let sums = steps().flat_map(|step| [step.ex.as_str(), step.ey.as_str()]).chain(self.conditions().map(|only| only.expr.as_str()));
-        names.extend(sums.flat_map(crate::script::objects_in));
+        names.extend(objects_of(&self.steps));
+        names.extend(objects_of(&self.otherwise));
+        names.extend(self.conditions().flat_map(|only| crate::script::objects_in(&only.expr)));
         names.retain(|name| !name.is_empty());
         names
     }
 
     /// What the script of the published page reads. A sound is given by its place in `sounds`.
     pub fn text(&self, sounds: &[String]) -> String {
-        // A number that is a sum goes as its text, for the script to work out when the step is taken.
-        let written = |steps: &[Step]| -> String {
-            let list: Vec<String> = steps
-                .iter()
-                .map(|step| {
-                    let x = if step.kind == StepKind::Sound {
-                        sounds.iter().position(|name| *name == step.a).map_or(-1.0, |at| at as f32).to_string()
-                    } else if step.ex.is_empty() {
-                        step.x.to_string()
-                    } else {
-                        quoted(&step.ex)
-                    };
-                    let y = if step.ey.is_empty() { step.y.to_string() } else { quoted(&step.ey) };
-                    format!("[\"{}\",{},{x},{y},{}]", step.kind.key(), quoted(&step.a), quoted(&step.b))
-                })
-                .collect();
-            list.join(",")
-        };
+        let written = |steps: &[Step]| steps_text(steps, sounds);
         let conditions: Vec<String> = self.conditions().map(Condition::text).collect();
         let only = if conditions.is_empty() { "null".to_string() } else { format!("[{}]", conditions.join(",")) };
         let otherwise = if self.otherwise.is_empty() { String::new() } else { format!(",\"o\":[{}]", written(&self.otherwise)) };

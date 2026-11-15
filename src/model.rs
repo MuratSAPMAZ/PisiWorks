@@ -3794,6 +3794,9 @@ pub struct Document {
     /// The numbers the rules keep, such as a score.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub variables: Vec<crate::rules::Variable>,
+    /// The commands defined in the written language: steps under a name.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<crate::rules::Command>,
     /// While a movie clip is edited, the page to go back to. Never written to a file.
     #[serde(skip)]
     pub clip_return: Option<usize>,
@@ -3875,6 +3878,7 @@ impl Document {
             sounds: Vec::new(),
             rules: Vec::new(),
             variables: Vec::new(),
+            commands: Vec::new(),
             clip_return: None,
         }
     }

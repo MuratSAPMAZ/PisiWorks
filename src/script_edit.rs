@@ -2,7 +2,8 @@
 //! reading of it has found. A small editor of its own, since the program has no other
 //! place where many lines are typed: enough to write, correct and paste rules in.
 
-use crate::script::{Mistake, Read};
+use crate::rules::Pick;
+use crate::script::{Mistake, Opens, Read};
 
 /// How far in a step is written.
 const INDENT: &str = "    ";
@@ -18,6 +19,35 @@ pub struct ScriptEdit {
     /// Whether the text has been changed since it was last taken into the document.
     pub changed: bool,
 }
+
+/// The names there are to write: what a sentence can be about.
+#[derive(Clone, Debug, Default)]
+pub struct Names {
+    pub objects: Vec<String>,
+    pub numbers: Vec<String>,
+    pub commands: Vec<String>,
+    pub sounds: Vec<String>,
+}
+
+/// Something offered as the line is typed: a whole sentence for the line, or the rest of a name.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Offer {
+    /// The sentence the line becomes, with a question mark at each gap still to fill.
+    Sentence(String),
+    /// A name, to stand in place of the letters of it typed so far.
+    Name(String),
+}
+
+impl Offer {
+    pub fn shown(&self) -> &str {
+        match self {
+            Offer::Sentence(text) | Offer::Name(text) => text,
+        }
+    }
+}
+
+/// The most offers shown at once.
+const MOST_OFFERS: usize = 8;
 
 /// The place in a line, in bytes, of its `col`th character.
 fn byte_at(line: &str, col: usize) -> usize {
@@ -84,7 +114,11 @@ impl ScriptEdit {
     pub fn newline(&mut self) {
         let line = &self.lines[self.row];
         let before: String = line.chars().take(self.col).collect();
-        let lead: String = if before.trim_end().ends_with(':') { INDENT.to_string() } else { before.chars().take_while(|c| *c == ' ').collect() };
+        // As far in as the line it comes from, and a step further under a line that opens steps.
+        let mut lead: String = before.chars().take_while(|c| *c == ' ').collect();
+        if before.trim_end().ends_with(':') {
+            lead.push_str(INDENT);
+        }
         self.split();
         self.lines[self.row].insert_str(0, &lead);
         self.col = lead.chars().count();
@@ -156,6 +190,108 @@ impl ScriptEdit {
         self.col = col.min(self.length());
     }
 
+    /// What can be offered for the line the caret is at the end of: the sentences that begin as the line does,
+    /// and the names that begin as its last word does. Nothing is offered in the middle of a line or on an empty one.
+    pub fn offers(&self, names: &Names) -> Vec<Offer> {
+        let line = &self.lines[self.row];
+        let before: String = line.chars().take(self.col).collect();
+        let after: String = line.chars().skip(self.col).collect();
+        let typed = before.trim_start();
+        if typed.is_empty() || !after.trim().is_empty() {
+            return Vec::new();
+        }
+        let edge = !before.starts_with(' ');
+        let low = typed.to_lowercase();
+        let mut found = Vec::new();
+        // The first word says what the sentence can be: a number's name brings the sentences about numbers, an
+        // object's those about objects, a figure those that open with an amount. A name is known whatever
+        // its capitals, and is written the way it is kept.
+        let first = typed.split(' ').next().unwrap_or_default();
+        let known = |list: &[String]| list.iter().find(|name| name.to_lowercase() == first.to_lowercase()).cloned();
+        let keys = crate::script::key_names();
+        let figure = first.replace(',', ".").parse::<f32>().is_ok();
+        let (number, command, object, sound, key) = (known(&names.numbers), known(&names.commands), known(&names.objects), known(&names.sounds), known(&keys));
+        let fits = |opens: Opens| match opens {
+            Opens::Words => true,
+            Opens::Amount => figure || number.is_some(),
+            Opens::Condition => number.is_some(),
+            Opens::Name(Pick::Variable) => number.is_some(),
+            Opens::Name(Pick::Command) => command.is_some(),
+            Opens::Name(Pick::Sound) => sound.is_some(),
+            Opens::Name(Pick::Key) => key.is_some(),
+            // A word that is nothing yet may be an object still to be drawn, or a command still to be written.
+            Opens::Name(_) => object.is_some() || (!figure && number.is_none() && command.is_none() && key.is_none() && sound.is_none()),
+            Opens::NewName => !figure && number.is_none() && object.is_none(),
+        };
+        let written = number.clone().or(command.clone()).or(object.clone()).or(sound.clone()).or(key.clone()).unwrap_or_else(|| first.to_string());
+        for (pattern, opens) in crate::script::offers(edge) {
+            let sentence = if pattern.starts_with('?') {
+                if !fits(opens) {
+                    continue;
+                }
+                pattern.replacen('?', &written, 1)
+            } else {
+                pattern
+            };
+            let lowered = sentence.to_lowercase();
+            if lowered.starts_with(&low) && lowered != low && lowered.trim_end_matches(':') != low {
+                found.push(Offer::Sentence(sentence));
+            }
+        }
+        // The word being typed, if it is the beginning of a name. A name already whole is not offered again.
+        let word: String = typed.chars().rev().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<Vec<_>>().into_iter().rev().collect();
+        if !word.is_empty() {
+            let partial = word.to_lowercase();
+            let mut fitting: Vec<&String> = names.objects.iter().chain(&names.numbers).chain(&names.commands).chain(&names.sounds).filter(|name| name.to_lowercase().starts_with(&partial) && **name != word).collect();
+            fitting.sort();
+            fitting.dedup();
+            // Inside a sentence the names come first; at its start, the sentences.
+            let offered = fitting.into_iter().map(|name| Offer::Name(name.clone()));
+            if typed.contains(' ') {
+                found.splice(0..0, offered);
+            } else {
+                found.extend(offered);
+            }
+        }
+        found.truncate(MOST_OFFERS);
+        found
+    }
+
+    /// Takes an offer. A sentence becomes the line, and the caret goes to its first gap; a name takes the place of its beginning.
+    pub fn accept(&mut self, offer: &Offer) {
+        match offer {
+            Offer::Sentence(sentence) => {
+                let lead: String = self.lines[self.row].chars().take_while(|c| *c == ' ').collect();
+                self.lines[self.row] = format!("{lead}{sentence}");
+                self.col = 0;
+                if !self.next_gap() {
+                    // A sentence with no gap is whole: after a line that opens steps the caret may as well go on.
+                    self.col = self.length();
+                }
+            }
+            Offer::Name(name) => {
+                let before: Vec<char> = self.lines[self.row].chars().take(self.col).collect();
+                let typed = before.iter().rev().take_while(|c| c.is_alphanumeric() || **c == '_').count();
+                let (from, to) = (byte_at(&self.lines[self.row], self.col - typed), byte_at(&self.lines[self.row], self.col));
+                self.lines[self.row].replace_range(from..to, name);
+                self.col = self.col - typed + name.chars().count();
+            }
+        }
+        self.check();
+    }
+
+    /// Goes to the next gap of the line, a question mark, and takes the mark away so that the name can be typed. Says whether there was one.
+    pub fn next_gap(&mut self) -> bool {
+        let line = &self.lines[self.row];
+        let after = line.chars().enumerate().skip(self.col).find(|(_, c)| *c == '?').map(|(at, _)| at);
+        let Some(at) = after.or_else(|| line.chars().position(|c| c == '?')) else { return false };
+        let (from, to) = (byte_at(line, at), byte_at(line, at + 1));
+        self.lines[self.row].replace_range(from..to, "");
+        self.col = at;
+        self.check();
+        true
+    }
+
     /// Adds a sentence as a line of its own under the caret's line: an event at the edge with a blank
     /// line before it, a step further in. The caret is left at its end.
     pub fn add_sentence(&mut self, sentence: &str, event: bool) {
@@ -210,6 +346,57 @@ mod tests {
         assert_eq!((edit.col, edit.lines[2].as_str()), (0, "stop everything"));
         edit.backspace();
         assert_eq!((edit.row, edit.lines.len(), edit.lines[1].as_str()), (1, 2, "    hide Applestop everything"));
+    }
+
+    #[test]
+    fn sentences_and_names_are_offered_as_a_line_is_typed() {
+        set_language(Language::English);
+        let names = Names { objects: vec!["Apple".into(), "Basket".into()], numbers: vec!["Score".into()], commands: vec!["Burst".into()], sounds: vec!["boom".into()] };
+        let shown = |edit: &ScriptEdit| edit.offers(&names).iter().map(|offer| offer.shown().to_string()).collect::<Vec<_>>();
+        // At the edge the events that begin as the line does are offered.
+        let mut edit = ScriptEdit::new("");
+        edit.insert("when the f");
+        assert_eq!(shown(&edit), vec!["When the film starts:"]);
+        // Taking it writes the line; with no gap to fill, the caret is at its end.
+        let offer = edit.offers(&names)[0].clone();
+        edit.accept(&offer);
+        assert_eq!((edit.lines[0].as_str(), edit.col), ("When the film starts:", 21));
+        assert!(edit.offers(&names).is_empty(), "a line that is whole is offered nothing");
+        // Under it, further in, the steps; a gap is a question mark, and Tab goes from gap to gap.
+        edit.newline();
+        edit.insert("put");
+        assert_eq!(shown(&edit), vec!["put ? somewhere at random", "put ? at the top, at random", "put ? at ?, ?"]);
+        let offer = edit.offers(&names)[2].clone();
+        edit.accept(&offer);
+        assert_eq!((edit.lines[1].as_str(), edit.col), ("    put  at ?, ?", 8));
+        // In a gap the beginning of a name brings the name.
+        edit.insert("Ba");
+        assert_eq!(edit.offers(&names), Vec::new(), "nothing is offered in the middle of a line");
+        edit.end();
+        edit.insert(" Sc");
+        assert_eq!(shown(&edit), vec!["Score"]);
+        let offer = edit.offers(&names)[0].clone();
+        edit.accept(&offer);
+        assert!(edit.lines[1].ends_with(" Score"));
+        // What the first word is decides what is offered: `tests/turkce.rs` tries that, where sentences open with a name.
+        let english = |line: &str| {
+            let mut edit = ScriptEdit::new("When the film starts:");
+            edit.end();
+            edit.newline();
+            edit.insert(line);
+            edit.offers(&names).iter().map(|offer| offer.shown().to_string()).collect::<Vec<_>>()
+        };
+        assert_eq!(english("do"), vec!["do the command ?"]);
+        assert!(english("rep").contains(&"repeat ? times:".to_string()) && english("rep").contains(&"repeat while ?:".to_string()));
+        // A gap is gone to and its mark taken away.
+        let mut edit = ScriptEdit::new("    put Apple at ?, ?");
+        assert!(edit.next_gap());
+        assert_eq!((edit.lines[0].as_str(), edit.col), ("    put Apple at , ?", 17));
+        edit.insert("10");
+        assert!(edit.next_gap());
+        edit.insert("20");
+        assert_eq!(edit.lines[0], "    put Apple at 10, 20");
+        assert!(!edit.next_gap(), "no gap is left");
     }
 
     #[test]

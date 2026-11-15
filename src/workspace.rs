@@ -778,6 +778,9 @@ pub struct Workspace {
     /// Rules as Text while it is open: the text being written, and where its lines are scrolled to.
     pub script: Option<crate::script_edit::ScriptEdit>,
     pub script_scroll: gpui::ScrollHandle,
+    /// Which of the things offered as a line is typed is picked, and whether the offers have been waved away for now.
+    pub script_pick: usize,
+    pub script_quiet: bool,
     /// Whether Rules and Numbers is open, and which rule it shows.
     pub rules_dialog: bool,
     pub rule_picked: usize,
@@ -1187,6 +1190,8 @@ impl Workspace {
             behavior_dialog: false,
             script: None,
             script_scroll: gpui::ScrollHandle::new(),
+            script_pick: 0,
+            script_quiet: false,
             rules_dialog: false,
             rule_picked: 0,
             loop_playback: false,
@@ -3617,7 +3622,25 @@ impl Workspace {
     pub fn open_script(&mut self) {
         self.commit_field();
         self.rules_dialog = false;
-        self.script = Some(crate::script_edit::ScriptEdit::new(&crate::script::write(&self.ed.doc.variables, &self.ed.doc.rules)));
+        self.script = Some(crate::script_edit::ScriptEdit::new(&crate::script::write(&self.ed.doc.variables, &self.ed.doc.commands, &self.ed.doc.rules)));
+    }
+
+    /// What is offered for the line being written in Rules as Text: sentences and names. The names are those of
+    /// the document's objects and sounds, and of the numbers and commands the text itself sets out.
+    pub fn script_offers(&self) -> Vec<crate::script_edit::Offer> {
+        let Some(script) = self.script.as_ref().filter(|_| !self.script_quiet) else { return Vec::new() };
+        let (numbers, commands) = crate::script::declared(&script.text());
+        let names = crate::script_edit::Names { objects: self.ed.doc.object_names(), numbers, commands, sounds: self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect() };
+        script.offers(&names)
+    }
+
+    /// Takes one of the offers into the line.
+    pub fn accept_offer(&mut self, index: usize) {
+        let offers = self.script_offers();
+        if let (Some(offer), Some(script)) = (offers.get(index), self.script.as_mut()) {
+            script.accept(offer);
+        }
+        self.script_pick = 0;
     }
 
     /// Takes the text into the document, if all of it reads. Says whether it did.
@@ -3627,7 +3650,7 @@ impl Workspace {
             Some(Ok(read)) => {
                 script.changed = false;
                 self.status = tf("{} rules and {} numbers were taken from the text", &[&read.rules.len(), &read.variables.len()]);
-                (self.ed.doc.rules, self.ed.doc.variables) = (read.rules, read.variables);
+                (self.ed.doc.rules, self.ed.doc.variables, self.ed.doc.commands) = (read.rules, read.variables, read.commands);
                 self.rule_picked = 0;
                 self.ed.commit(t("Rules as Text"));
                 true
@@ -3641,6 +3664,32 @@ impl Workspace {
 
     /// A key pressed while Rules as Text is open.
     fn script_key(&mut self, key: &str, control: bool, window: &mut Window, cx: &mut Context<Self>) {
+        // While sentences or names are offered, the arrows pick among them, Tab takes the one picked and
+        // Esc waves them away; otherwise the keys are the editor's own.
+        let offered = self.script_offers().len();
+        if offered > 0 && !control {
+            match key {
+                "down" => {
+                    self.script_pick = (self.script_pick + 1) % offered;
+                    return;
+                }
+                "up" => {
+                    self.script_pick = (self.script_pick + offered - 1) % offered;
+                    return;
+                }
+                "tab" => {
+                    self.accept_offer(self.script_pick.min(offered - 1));
+                    return;
+                }
+                "escape" => {
+                    self.script_quiet = true;
+                    return;
+                }
+                _ => {}
+            }
+        }
+        // Any other key starts the offering afresh.
+        (self.script_pick, self.script_quiet) = (0, false);
         let Some(script) = self.script.as_mut() else { return };
         match (key, control) {
             ("escape", _) => self.script = None,
@@ -3662,7 +3711,12 @@ impl Workspace {
             ("enter", _) => script.newline(),
             ("backspace", _) => script.backspace(),
             ("delete", _) => script.delete(),
-            ("tab", _) => script.insert("\t"),
+            // With nothing offered, Tab goes to the next gap of the line; with no gap, it is a step's worth of spaces.
+            ("tab", _) => {
+                if !script.next_gap() {
+                    script.insert("\t");
+                }
+            }
             ("left", _) => script.step(0, -1),
             ("right", _) => script.step(0, 1),
             ("up", _) => script.step(-1, 0),
@@ -3688,6 +3742,7 @@ impl Workspace {
             Pick::Object => own(self.ed.doc.object_names()),
             Pick::Variable => own(self.ed.doc.variables.iter().map(|v| v.name.clone()).collect()),
             Pick::Sound => own(self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect()),
+            Pick::Command => own(self.ed.doc.commands.iter().map(|c| c.name.clone()).collect()),
             Pick::Key => listed(&KEYS),
             Pick::Edge => listed(&EDGES),
             Pick::Compare => listed(&COMPARES),
@@ -7454,6 +7509,7 @@ impl Workspace {
             field.buffer.push_str(text);
         } else if let Some(script) = self.script.as_mut() {
             script.insert(text);
+            (self.script_pick, self.script_quiet) = (0, false);
         } else if self.text_edit.is_some() {
             self.edit_text(|t| t.push_str(text));
         }

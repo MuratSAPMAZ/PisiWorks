@@ -210,7 +210,7 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
     };
 
     // The objects the rules are about, by name: each is a picture of its own, so that a rule can move or hide it.
-    let ruled: std::collections::HashSet<&str> = doc.rules.iter().flat_map(|rule| rule.objects()).collect();
+    let ruled: std::collections::HashSet<&str> = doc.rules.iter().flat_map(|rule| rule.objects()).chain(doc.commands.iter().flat_map(|command| crate::rules::objects_of(&command.steps))).collect();
     let mut total = 0;
     let mut scene_texts = Vec::new();
     for index in &scenes {
@@ -319,6 +319,7 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
     let sounds: Vec<String> = doc.sounds.iter().map(|sound| format!("\"data:{};base64,{}\"", sound.mime, sound.data)).collect();
     let sound_names: Vec<String> = doc.sounds.iter().map(|sound| sound.name.clone()).collect();
     let rules: Vec<String> = doc.rules.iter().map(|rule| rule.text(&sound_names)).collect();
+    let commands: Vec<String> = doc.commands.iter().map(|command| format!("{}:[{}]", serde_json::to_string(&command.name).unwrap_or_default(), crate::rules::steps_text(&command.steps, &sound_names))).collect();
     let numbers: Vec<String> = doc.variables.iter().map(|v| format!("{}:{}", serde_json::to_string(&v.name).unwrap_or_default(), v.start)).collect();
     Ok(PAGE
         .replace("{title}", &escape(title))
@@ -330,6 +331,7 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
         .replace("{sets}", &sets.join(","))
         .replace("{sounds}", &sounds.join(","))
         .replace("{rules}", &rules.join(","))
+        .replace("{commands}", &commands.join(","))
         .replace("{numbers}", &numbers.join(","))
         .replace("{scenes}", &scene_texts.join(",")))
 }
@@ -363,13 +365,16 @@ const PAGE: &str = r#"<!doctype html>
 // rules: what makes the film a game. Each has an event (e): [kind, first name, second name, number]
 // what must also be so (c): a list of [number, how, value], or nothing; steps (s): [kind, name, first number,
 // second number, second name]; and steps to take otherwise (o). A value or a number may be a sum, written
-// as text: "Score * 2", "Hero.x + 10", "random(1, 6)". numbers: the numbers by name, as they start.
+// as text: "Score * 2", "Hero.x + 10", "random(1, 6)". A step that holds steps ("repeat", "if", "while")
+// carries them after its own five parts: its body, its conditions, and what to do otherwise.
+// commands: steps under a name, done by the step "call". numbers: the numbers by name, as they start.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
   sets: [{sets}],
   sounds: [{sounds}],
   rules: [{rules}],
+  commands: {{commands}},
   numbers: {{numbers}},
   scenes: [{scenes}]
 };
@@ -648,23 +653,52 @@ function take(step, who, players) {
   else if (k === "halt") { frozen = true; playing = false; }
   else if (k === "restart") restart();
 }
-// Takes steps in order from one of them on. A step that waits puts the rest by until its time has come.
-function run(steps, who, from) {
+// Whether every one of some conditions holds.
+function all(conditions, who) {
   var players = cast();
-  for (var i = from || 0; i < steps.length; i += 1) {
-    if (steps[i][0] === "wait") {
-      waiting.push({ at: ticks + Math.max(1, Math.round(amount(steps[i][2], who, players) * movie.fps)), steps: steps, from: i + 1, who: who });
+  return conditions.every(function (c) { return holds(numbers[c[0]] || 0, c[1], amount(c[2], who, players)); });
+}
+// Goes on with a run of steps. A run keeps its place in a pile: the steps it is in, and under them the
+// steps those are held by, each with how far it has got. A loop is its steps gone through again; a
+// command is its steps put on the pile. A step that waits puts the whole run by until its time has
+// come. A loop that would never end is cut short, so that it cannot hold the page up.
+function resume(job) {
+  var done = 0;
+  while (job.pile.length) {
+    if ((done += 1) > 20000) return;
+    var at = job.pile[job.pile.length - 1];
+    if (at.i >= at.s.length) {
+      if (at.times !== undefined && (at.times -= 1) > 0) { at.i = 0; continue; }
+      if (at.only && all(at.only, job.who)) { at.i = 0; continue; }
+      job.pile.pop();
+      continue;
+    }
+    var step = at.s[at.i], k = step[0];
+    at.i += 1;
+    if (k === "wait") {
+      waiting.push({ at: ticks + Math.max(1, Math.round(amount(step[2], job.who, cast()) * movie.fps)), job: job });
       return;
     }
-    take(steps[i], who, players);
+    if (k === "repeat") {
+      var times = Math.floor(amount(step[2], job.who, cast()));
+      if (times > 0 && step[5].length) job.pile.push({ s: step[5], i: 0, times: times });
+    } else if (k === "if") {
+      var chosen = all(step[6], job.who) ? step[5] : step[7];
+      if (chosen.length) job.pile.push({ s: chosen, i: 0 });
+    } else if (k === "while") {
+      if (step[5].length && all(step[6], job.who)) job.pile.push({ s: step[5], i: 0, only: step[6] });
+    } else if (k === "call") {
+      // A command that does itself goes no deeper than a pile of sixty.
+      var command = movie.commands[step[1]];
+      if (command && command.length && job.pile.length < 60) job.pile.push({ s: command, i: 0 });
+    } else take(step, job.who, cast());
   }
 }
+function run(steps, who) { resume({ who: who, pile: [{ s: steps, i: 0 }] }); }
 // Follows a rule: its steps if everything it asks is so, and otherwise the steps it has for that.
 function follow(rule, who) {
   who = who || {};
-  var players = cast();
-  var so = !rule.c || rule.c.every(function (c) { return holds(numbers[c[0]] || 0, c[1], amount(c[2], who, players)); });
-  if (so) run(rule.s, who); else if (rule.o) run(rule.o, who);
+  if (!rule.c || all(rule.c, who)) run(rule.s, who); else if (rule.o) run(rule.o, who);
 }
 // Follows every rule of a kind that `fits` says is meant.
 function happen(kind, fits, who) {
@@ -798,7 +832,7 @@ function tick() {
   // The steps whose wait is over go on from where they stopped.
   var due = waiting.filter(function (w) { return w.at <= ticks; });
   waiting = waiting.filter(function (w) { return w.at > ticks; });
-  due.forEach(function (w) { run(w.steps, w.who, w.from); });
+  due.forEach(function (w) { resume(w.job); });
   judge();
   draw();
 }
