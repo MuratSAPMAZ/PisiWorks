@@ -2954,6 +2954,8 @@ impl Workspace {
     /// Edit Symbol: opens the selected copy where it lies, or ends the edit that is going on.
     pub fn toggle_symbol_edit(&mut self) {
         self.frames_playing = false;
+        // What is being transformed is taken as it looks before the symbol is entered or left.
+        self.apply_transform();
         // In the animation program a movie clip is edited on a page of its own, with its own timeline.
         if let Some(symbol) = self.ed.editing_clip() {
             self.ed.leave_clip();
@@ -2980,7 +2982,7 @@ impl Workspace {
         if self.ed.leave_symbol() || self.ed.edit_selected_symbol() {
             self.ed.commit(t("Edit Symbol"));
             if self.ed.editing_symbol().is_some() {
-                self.status = t("Double-click an empty spot to finish editing the symbol").into();
+                self.status = t("Editing the symbol. To finish: double-click an empty place, press Esc, or use the button above the stage").into();
             }
         }
     }
@@ -5307,6 +5309,11 @@ impl Workspace {
                 return;
             }
             (TransformKind::Move, 0)
+        } else if ev.click_count >= 2 && self.ed.editing_symbol().is_some() && self.ed.doc.page().hit_test(p, self.tolerance()).is_none() {
+            // A double-click on an empty place ends the editing of a symbol with these tools too: what was
+            // being transformed is applied first.
+            self.toggle_symbol_edit();
+            return;
         } else if self.transform.is_none() && self.ed.doc.page().hit_test(p, self.tolerance()).is_some() {
             // Before a transform has begun, a press on other artwork still selects it.
             return self.pointer_down(ev, p);
@@ -7139,6 +7146,7 @@ impl Workspace {
             "enter" if is_sahne() && self.pen.is_empty() => self.run(Cmd::Frame(crate::menus::FrameCmd::Play), window, cx),
             "enter" => self.finish_pen(false),
             "escape" => {
+                let busy = !self.pen.is_empty() || self.crop_area.is_some() || self.pixel_sel.is_some() || self.polygon_lasso.is_some() || self.polygon_web.is_some();
                 self.polygon_lasso = None;
                 self.polygon_web = None;
                 self.pen.clear();
@@ -7146,8 +7154,12 @@ impl Workspace {
                 self.pen_resume = None;
                 self.crop_area = None;
                 self.pixel_sel = None;
+                let working = busy;
                 if self.drag.take().is_some() | self.cancel_transform() {
                     self.ed.rollback();
+                } else if !working && is_sahne() && (self.ed.editing_symbol().is_some() || self.ed.editing_clip().is_some()) {
+                    // With nothing else to give up, Esc leaves the symbol or the movie clip being edited, as in Flash.
+                    self.toggle_symbol_edit();
                 }
                 self.close_overlays();
             }
