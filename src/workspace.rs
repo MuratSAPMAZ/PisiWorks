@@ -368,6 +368,7 @@ pub enum FieldId {
     /// What Check Spelling changes the word on show to.
     SpellChange,
     NewSymbolName,
+    TemplateName,
     /// A number of the Animate dialog: states, move, direction, scaling, opacity from and to, rotation.
     Animate(usize),
     PrefUndo,
@@ -656,6 +657,10 @@ pub struct Workspace {
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
     /// New Symbol: the name and the kind asked for.
     pub symbol_dialog: Option<(String, SymbolKind)>,
+    /// New from Template: the user's own templates, and which entry of the list is picked.
+    pub template_dialog: Option<(Vec<(String, PathBuf)>, usize)>,
+    /// Save as Template: the name asked for.
+    pub template_name: Option<String>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -934,6 +939,8 @@ impl Workspace {
             print_setup: Settings::load().print,
             page_setup_dialog: None,
             symbol_dialog: None,
+            template_dialog: None,
+            template_name: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2209,6 +2216,48 @@ impl Workspace {
         self.ed.selected_animation().map_or_else(Vec::new, |index| self.ed.animation_path(index))
     }
 
+    /// Starts a new, unnamed document from the template picked in New from Template.
+    pub fn close_template_dialog(&mut self, keep: bool) {
+        let Some((saved, picked)) = self.template_dialog.take() else { return };
+        if !keep {
+            return;
+        }
+        let built_in = crate::templates::BUILT_IN;
+        if let Some(template) = built_in.get(picked) {
+            self.load_document(template.document(), None);
+            self.fit_if_larger_than_view();
+            self.status = tf("New document from the template {}", &[&t(template.name)]);
+        } else if let Some((_, path)) = saved.get(picked - built_in.len()) {
+            self.open_as_template(path.clone());
+        }
+    }
+
+    /// Opens a document as the start of a new one: it has no file of its own, so saving asks for a name.
+    pub fn open_as_template(&mut self, path: PathBuf) {
+        self.template_dialog = None;
+        self.open_file(path.clone());
+        if self.path.as_deref() == Some(path.as_path()) {
+            self.path = None;
+            self.status = tf("New document from the template {}", &[&file_stem(&path)]);
+        }
+    }
+
+    /// Closes Save as Template; kept, the document is written into the templates folder under the name.
+    pub fn close_template_name(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(name) = self.template_name.take() else { return };
+        if !keep {
+            return;
+        }
+        self.ed.leave_symbol_for_good();
+        self.ed.end_mask_edit();
+        self.ed.close_groups();
+        self.status = match document_to_json(&self.ed.doc).and_then(|json| crate::templates::save(&name, &json)) {
+            Ok(path) => tf("Template saved as {}", &[&path.display()]),
+            Err(error) => tf("Could not save: {}", &[&error]),
+        };
+    }
+
     /// Closes New Symbol; kept, the symbol is made and opened for drawing.
     pub fn close_symbol_dialog(&mut self, keep: bool) {
         self.commit_field();
@@ -2444,7 +2493,8 @@ impl Workspace {
         }
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));
         match cmd {
-            Cmd::New | Cmd::Open | Cmd::Exit => self.confirm_discard(cmd, window, cx),
+            Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate => self.confirm_discard(cmd, window, cx),
+            Cmd::SaveAsTemplate => self.template_name = Some(self.path.as_deref().map_or_else(|| t("Template").to_string(), file_stem)),
             Cmd::Save => self.save(false, window, cx),
             Cmd::SaveAs => self.save(true, window, cx),
             Cmd::Import => self.pick_file(window, cx, |this, path| this.import_file(&path)),
@@ -3239,6 +3289,7 @@ impl Workspace {
                 cx.notify();
             }
             Cmd::Open => self.pick_file(window, cx, |this, path| this.open_file(path)),
+            Cmd::NewFromTemplate => self.template_dialog = Some((crate::templates::saved(), 0)),
             Cmd::Exit => cx.quit(),
             _ => {}
         }
@@ -3267,7 +3318,7 @@ impl Workspace {
         self.url_selection = None;
     }
 
-    fn pick_file(
+    pub(crate) fn pick_file(
         &mut self,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -5373,6 +5424,10 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.template_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_template_dialog(key == "enter");
+        } else if self.template_name.is_some() && matches!(key, "enter" | "escape") {
+            self.close_template_name(key == "enter");
         } else if self.symbol_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_symbol_dialog(key == "enter");
         } else if self.animate_dialog.is_some() && matches!(key, "enter" | "escape") {
@@ -5657,6 +5712,7 @@ impl Workspace {
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
+            FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::NewSymbolName => self.symbol_dialog.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
             FieldId::Animate(which) => self.animate_dialog.map_or_else(String::new, |s| number([s.states as f32, s.distance, s.direction, s.scale, s.opacity_from, s.opacity_to, s.rotation][which.min(6)])),
             FieldId::PrefUndo => self.prefs.undo_steps.to_string(),
@@ -5860,6 +5916,11 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::TemplateName => {
+                if let Some(name) = self.template_name.as_mut().filter(|_| !cleared) {
+                    *name = text.to_string();
+                }
             }
             FieldId::NewSymbolName => {
                 if let Some((name, _)) = self.symbol_dialog.as_mut().filter(|_| !cleared) {

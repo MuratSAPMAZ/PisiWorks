@@ -218,6 +218,8 @@ pub enum Cmd {
     HidePanels,
     ConvertToSymbol,
     NewSymbol,
+    NewFromTemplate,
+    SaveAsTemplate,
     NewButton,
     /// Opens the selected copy of a symbol for editing in place, or ends the edit.
     EditSymbol,
@@ -553,11 +555,12 @@ pub const MENUS: &[(&str, &[Entry])] = &[
         "File",
         &[
             cmd("New", "Ctrl+N", Cmd::New),
-            na("New from Template..."),
+            cmd("New from Template...", "", Cmd::NewFromTemplate),
             cmd("Open...", "Ctrl+O", Cmd::Open),
             Sep,
             cmd("Save", "Ctrl+S", Cmd::Save),
             cmd("Save As...", "Ctrl+Shift+S", Cmd::SaveAs),
+            cmd("Save as Template...", "", Cmd::SaveAsTemplate),
             cmd("Revert", "", Cmd::Revert),
             Sep,
             cmd("Import...", "Ctrl+R", Cmd::Import),

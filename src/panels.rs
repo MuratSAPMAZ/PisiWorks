@@ -1589,6 +1589,75 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// File > New from Template: the templates that come with the program, group by group, then the user's own.
+    pub(crate) fn template_dialog_view(&self, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (saved, picked) = self.template_dialog.as_ref()?;
+        let picked = *picked;
+        let row = |index: usize, name: String, cx: &mut Context<Self>| {
+            div()
+                .h(px(18.))
+                .pl_4()
+                .flex()
+                .flex_none()
+                .items_center()
+                .when(picked == index, |d| d.bg(rgb(ACCENT)))
+                .hover(|s| s.bg(rgb(HOVER)))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                        if let Some(dialog) = this.template_dialog.as_mut() {
+                            dialog.1 = index;
+                        }
+                        if ev.click_count >= 2 {
+                            this.close_template_dialog(true);
+                        }
+                        cx.notify();
+                    }),
+                )
+                .child(name)
+                .into_any_element()
+        };
+        let heading = |text: &'static str| div().h(px(18.)).px_1().flex().flex_none().items_center().font_weight(FontWeight::BOLD).child(text).into_any_element();
+        let mut list = Vec::new();
+        let mut group = "";
+        for (index, template) in crate::templates::BUILT_IN.iter().enumerate() {
+            if template.group != group {
+                group = template.group;
+                list.push(heading(t(group)));
+            }
+            list.push(row(index, t(template.name).to_string(), cx));
+        }
+        if !saved.is_empty() {
+            list.push(heading(t("My Templates")));
+        }
+        for (index, (name, _)) in saved.iter().enumerate() {
+            list.push(row(crate::templates::BUILT_IN.len() + index, name.clone(), cx));
+        }
+        let rows = vec![div().id("template-list").h(px(280.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(list).into_any_element()];
+        let _ = window;
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Browse..."), true, cx, |this, window, cx| this.pick_file(window, cx, |this, path| this.open_as_template(path))))
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_template_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_template_dialog(false)));
+        Some(self.dialog_frame(320., t("New from Template"), rows, buttons))
+    }
+
+    /// File > Save as Template: the name the template is kept under.
+    pub(crate) fn template_name_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.template_name.as_ref()?;
+        let rows = vec![labelled_row(t("Name:"), 40., self.field(FieldId::TemplateName, 190., cx)).into_any_element()];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_template_name(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_template_name(false)));
+        Some(self.dialog_frame(270., t("Save as Template"), rows, buttons))
+    }
+
     /// Edit > Insert > New Symbol: the name and the kind of the symbol to draw.
     pub(crate) fn symbol_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let (_, kind) = self.symbol_dialog.as_ref()?;

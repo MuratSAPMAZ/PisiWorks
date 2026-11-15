@@ -21,6 +21,7 @@ mod pseffects;
 mod paths;
 mod settings;
 mod spell;
+mod templates;
 mod theme;
 mod ui;
 mod workspace;
