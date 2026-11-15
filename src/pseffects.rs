@@ -556,15 +556,6 @@ fn lay(out: &mut Layer, mask: &dyn Fn(usize) -> f32, color: &dyn Fn(usize) -> [f
     }
 }
 
-/// Puts color behind the object, through `mask`.
-fn behind(out: &mut Layer, mask: &[f32], color: [f32; 3]) {
-    for (px, m) in out.pixels.iter_mut().zip(mask) {
-        if *m > 0.0 {
-            *px = over(*px, [color[0], color[1], color[2], m.clamp(0.0, 1.0)]);
-        }
-    }
-}
-
 /// The box around everything in a channel that is not clear: left, top, right, bottom.
 fn extent(alpha: &[f32], w: usize, h: usize) -> (f32, f32, f32, f32) {
     let (mut left, mut top, mut right, mut bottom) = (w, h, 0, 0);
@@ -618,8 +609,25 @@ pub fn pattern(which: usize, x: f32, y: f32) -> [f32; 3] {
     if dark { [0.35; 3] } else { [0.92; 3] }
 }
 
-/// Applies the effects that are on to a layer.
+/// Applies the effects that are on to a layer, all in one piece: what goes behind
+/// the object is simply put under it.
 pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
+    let (mut out, under) = apply_apart(layer, filter);
+    // The last of them is the nearest to the object.
+    for (part, _) in under.iter().rev() {
+        for (px, below) in out.pixels.iter_mut().zip(&part.pixels) {
+            if below[3] > 0.0 {
+                *px = over(*px, *below);
+            }
+        }
+    }
+    out
+}
+
+/// Applies the effects that are on, keeping apart what goes behind the object: the
+/// drop shadow and the outer glow, from the lowest up, each with the blend mode it
+/// is to be mixed into the page with. The object and what lies on it come first.
+pub fn apply_apart(layer: &Layer, filter: &LiveFilter) -> (Layer, Vec<(Layer, BlendMode)>) {
     let (w, h) = (layer.width, layer.height);
     let v = |effect: usize, slot: usize| filter.value(index(effect, slot));
     let on = |effect: usize| v(effect, ON) >= 0.5;
@@ -749,27 +757,30 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         bevel(&mut out, &alpha, &band, on(STROKE), filter);
     }
 
-    // What lies behind the object.
-    if on(OUTER_GLOW) {
-        let (mask, strength) = (glow(&alpha, OUTER_GLOW), v(OUTER_GLOW, OPACITY) / 100.0);
-        let color = glow_color(OUTER_GLOW, OUTER_GLOW_GRADIENT);
-        for (at, px) in out.pixels.iter_mut().enumerate().filter(|(at, _)| mask[*at] > 0.0) {
-            let (tone, opacity) = color(at, mask[at]);
-            *px = over(*px, [tone[0], tone[1], tone[2], (opacity * strength).clamp(0.0, 1.0)]);
-        }
-    }
+    // What lies behind the object, each on a layer of its own.
+    let mut under = Vec::new();
     if on(DROP_SHADOW) {
         let (dx, dy) = fall(DROP_SHADOW);
         let mut mask = soft(&shifted(&alpha, w, h, dx, dy, 0.0), w, h, v(DROP_SHADOW, SIZE), v(DROP_SHADOW, SPREAD) / 100.0);
         speckle(&mut mask, w, v(DROP_SHADOW, NOISE) / 100.0);
-        let (strength, knocks_out) = (v(DROP_SHADOW, OPACITY) / 100.0, v(DROP_SHADOW, FLAG) >= 0.5);
-        for (m, a) in mask.iter_mut().zip(&alpha) {
-            // Knocked out, the shadow is cut away under the object even where the object is see-through.
-            *m *= strength * if knocks_out { 1.0 - a } else { 1.0 };
-        }
-        behind(&mut out, &mask, shade(DROP_SHADOW));
+        let (strength, knocks_out, color) = (v(DROP_SHADOW, OPACITY) / 100.0, v(DROP_SHADOW, FLAG) >= 0.5, shade(DROP_SHADOW));
+        // Knocked out, the shadow is cut away under the object even where the object is see-through.
+        let pixels = mask.iter().zip(&alpha).map(|(m, a)| [color[0], color[1], color[2], (m * strength * if knocks_out { 1.0 - a } else { 1.0 }).clamp(0.0, 1.0)]).collect();
+        under.push((Layer { width: w, height: h, pixels }, mode(DROP_SHADOW, BLEND)));
     }
-    out
+    if on(OUTER_GLOW) {
+        let (mask, strength) = (glow(&alpha, OUTER_GLOW), v(OUTER_GLOW, OPACITY) / 100.0);
+        let color = glow_color(OUTER_GLOW, OUTER_GLOW_GRADIENT);
+        let pixels = (0..w * h)
+            .map(|at| {
+                let (tone, opacity) = color(at, mask[at]);
+                // The glow belongs around the object, not under it.
+                [tone[0], tone[1], tone[2], (opacity * strength * (1.0 - alpha[at])).clamp(0.0, 1.0)]
+            })
+            .collect();
+        under.push((Layer { width: w, height: h, pixels }, mode(OUTER_GLOW, BLEND)));
+    }
+    (out, under)
 }
 
 /// Bevel and Emboss: the edge of the object as a slope, lit from an angle.
@@ -1200,6 +1211,28 @@ mod tests {
         glow.set_value(index(OUTER_GLOW, STYLE), 0.0);
         glow.set_value(index(OUTER_GLOW, RANGE), 100.0);
         assert!(at(&apply(&layer, &glow), 17, 40)[3] < at(&soft, 17, 40)[3]);
+    }
+
+    #[test]
+    fn what_goes_behind_the_object_is_kept_apart_with_its_blend_mode() {
+        let layer = square();
+        let mut filter = LiveFilter::new(FilterKind::PhotoshopEffects);
+        filter.set_value(index(OUTER_GLOW, ON), 1.0);
+        let (object, under) = apply_apart(&layer, &filter);
+        // The object comes back alone; the shadow is the lowest, then the glow.
+        assert_eq!(object.pixels, layer.pixels);
+        assert_eq!(under.iter().map(|(_, mode)| *mode).collect::<Vec<_>>(), [BlendMode::Multiply, BlendMode::Screen]);
+        assert!(at(&under[0].0, 61, 62)[3] > 0.2 && at(&under[0].0, 40, 40)[3] == 0.0, "knocked out under the object");
+        assert!(at(&under[1].0, 18, 40)[3] > 0.1 && at(&under[1].0, 18, 40)[0] > 0.9);
+        // Not knocked out, the shadow goes on under the object.
+        filter.set_value(index(DROP_SHADOW, FLAG), 0.0);
+        assert!(at(&apply_apart(&layer, &filter).1[0].0, 45, 45)[3] > 0.5);
+        // Put together they are what the filter gives in one piece.
+        let whole = apply(&layer, &filter);
+        assert_eq!(at(&whole, 40, 40), [0.0, 0.0, 1.0, 1.0]);
+        assert!(at(&whole, 18, 40)[3] > 0.1 && at(&whole, 61, 62)[3] > 0.2);
+        // With neither on there is nothing behind.
+        assert!(apply_apart(&layer, &only(COLOR_OVERLAY)).1.is_empty());
     }
 
     #[test]

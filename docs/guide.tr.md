@@ -57,6 +57,8 @@ Photoshop Canlı Efektleri; Alt Gölge, İç Gölge, Dış Işıma, İç Işıma
 
 Degrade, altında duraklarıyla gösterilir. Durak eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için degradeden uzağa çekin. Seçili durağın rengi, yüzde olarak konumu ve opaklığı görünür. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Kaplamanın, degrade konturun ve degrade ışımanın ayrı degradeleri vardır; degrade ışıma nesnenin kenarından başlar ve Değişim renklerini dağıtır.
 
+Alt gölge ve dış ışıma, nesnenin altında kalanlarla kendi karışım modlarıyla karıştırılır. Bunun için Photoshop Canlı Efektleri'nin listedeki son filtre olması gerekir; ardından başka bir filtre geliyorsa oldukları gibi konurlar.
+
 ## Maskeler
 
 Maske, bir nesnenin bir bölümünü gizler. Komutlar Değiştir > Maske menüsündedir:

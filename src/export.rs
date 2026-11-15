@@ -271,15 +271,35 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
                 [c.red() as f32 / 255.0, c.green() as f32 / 255.0, c.blue() as f32 / 255.0, c.alpha() as f32 / 255.0]
             }).collect(),
         };
-        for filter in object.filters.iter().filter(|f| f.enabled) {
-            layer = crate::effects::apply(&layer, filter);
+        // The shadow and the glow of Photoshop Live Effects are mixed into the page by their own
+        // blend modes, under the object. That can only be done when no other filter comes after.
+        let enabled: Vec<&crate::effects::LiveFilter> = object.filters.iter().filter(|f| f.enabled).collect();
+        let mut under = Vec::new();
+        for (place, filter) in enabled.iter().enumerate() {
+            if place + 1 == enabled.len() && filter.kind == crate::effects::FilterKind::PhotoshopEffects {
+                (layer, under) = crate::pseffects::apply_apart(&layer, filter);
+            } else {
+                layer = crate::effects::apply(&layer, filter);
+            }
         }
-        for (px, value) in drawn.pixels_mut().iter_mut().zip(&layer.pixels) {
-            let alpha = value[3].clamp(0.0, 1.0);
-            let a = (alpha * 255.0).round() as u8;
-            let channel = |v: f32| ((v.clamp(0.0, 1.0) * alpha * 255.0).round() as u8).min(a);
-            *px = PremultipliedColorU8::from_rgba(channel(value[0]), channel(value[1]), channel(value[2]), a).unwrap_or(PremultipliedColorU8::TRANSPARENT);
+        let fill = |target: &mut Pixmap, layer: &crate::effects::Layer| {
+            for (px, value) in target.pixels_mut().iter_mut().zip(&layer.pixels) {
+                let alpha = value[3].clamp(0.0, 1.0);
+                let a = (alpha * 255.0).round() as u8;
+                let channel = |v: f32| ((v.clamp(0.0, 1.0) * alpha * 255.0).round() as u8).min(a);
+                *px = PremultipliedColorU8::from_rgba(channel(value[0]), channel(value[1]), channel(value[2]), a).unwrap_or(PremultipliedColorU8::TRANSPARENT);
+            }
+        };
+        for (part, mode) in &under {
+            fill(&mut drawn, part);
+            if mode.is_normal() {
+                pixmap.draw_pixmap(x0 as i32, y0 as i32, drawn.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+            } else if let Some(mut whole) = Pixmap::new(pixmap.width(), pixmap.height()) {
+                whole.draw_pixmap(x0 as i32, y0 as i32, drawn.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
+                crate::blend::composite(pixmap, &whole, *mode);
+            }
         }
+        fill(&mut drawn, &layer);
         pixmap.draw_pixmap(x0 as i32, y0 as i32, drawn.as_ref(), &PixmapPaint::default(), Transform::identity(), None);
         return;
     }
@@ -551,6 +571,47 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn a_photoshop_shadow_is_mixed_into_the_page_by_its_blend_mode() {
+        use crate::blend::BlendMode;
+        use crate::effects::{FilterKind, LiveFilter};
+        use crate::pseffects::{index, DROP_SHADOW};
+        let mode = |mode: BlendMode| BlendMode::ALL.iter().position(|m| *m == mode).unwrap() as f32;
+        let mut p = page();
+        // A blue box on red, with a hard white shadow thrown down and to the right.
+        p.layers[0].objects.push(red_box(0.0, 40.0));
+        let mut boxed = red_box(10.0, 12.0);
+        boxed.fill = Some(Color::rgb(0, 0, 255));
+        let mut effects = LiveFilter::new(FilterKind::PhotoshopEffects);
+        effects.set_ps_color(DROP_SHADOW, Color::rgb(255, 255, 255));
+        for (slot, value) in [(1, 100.0), (3, 8.0), (4, 0.0)] {
+            effects.set_value(index(DROP_SHADOW, slot), value);
+        }
+        boxed.filters = vec![effects];
+        p.layers[0].objects.push(boxed);
+        let shadow_at = |p: &Page| rgba(&render_page(p).unwrap(), 24, 27);
+        // Multiplied, as a shadow starts out, white leaves the red as it is.
+        assert_eq!(shadow_at(&p), (255, 0, 0, 255));
+        // Laid on normally it covers the red; screened it lightens it to white as well.
+        p.layers[0].objects[1].filters[0].set_value(index(DROP_SHADOW, 5), mode(BlendMode::Normal));
+        assert_eq!(shadow_at(&p), (255, 255, 255, 255));
+        // A dark green shadow screened onto red gives a dull yellow; multiplied, black.
+        p.layers[0].objects[1].filters[0].set_ps_color(DROP_SHADOW, Color::rgb(0, 128, 0));
+        p.layers[0].objects[1].filters[0].set_value(index(DROP_SHADOW, 5), mode(BlendMode::Screen));
+        assert_eq!(shadow_at(&p), (255, 128, 0, 255));
+        p.layers[0].objects[1].filters[0].set_value(index(DROP_SHADOW, 5), mode(BlendMode::Multiply));
+        assert_eq!(shadow_at(&p), (0, 0, 0, 255));
+        // The box itself is drawn over its shadow, untouched.
+        assert_eq!(rgba(&render_page(&p).unwrap(), 15, 15), (0, 0, 255, 255));
+        // With another filter after it the shadow can no longer be told apart, and is laid on as it is.
+        p.layers[0].objects[1].filters.push(LiveFilter::new(FilterKind::Invert));
+        p.layers[0].objects[1].filters[1].enabled = false;
+        assert_eq!(shadow_at(&p), (0, 0, 0, 255), "a filter that is off does not count");
+        p.layers[0].objects[1].filters[1].enabled = true;
+        let folded = shadow_at(&p);
+        assert!(folded.0 > 200 && folded.1 < 140 && folded.2 > 200, "{folded:?}");
     }
 
     #[test]
