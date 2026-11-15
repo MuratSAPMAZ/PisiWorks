@@ -508,6 +508,9 @@ pub struct FillStyle {
     pub pattern: u8,
     #[serde(default = "full_scale")]
     pub scale: f32,
+    /// The opacity stops of the gradient: only the alpha of each counts. None means opaque throughout.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub opacity_stops: Vec<(f32, Color)>,
     /// How wide an Ellipse or Rectangle gradient is across the line between its handles, as a part of that line's length; none is the usual width of the kind.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub width: Option<f32>,
@@ -521,7 +524,7 @@ impl FillStyle {
     /// A fill of a kind running between two colors, with its handles where they start out.
     pub fn new(kind: FillKind, from: Color, to: Color) -> Self {
         let (start, end) = kind.start_handles();
-        Self { kind, stops: vec![(0.0, from), (1.0, to)], start, end, pattern: 0, scale: 100.0, width: None }
+        Self { kind, stops: vec![(0.0, from), (1.0, to)], start, end, pattern: 0, scale: 100.0, opacity_stops: Vec::new(), width: None }
     }
 
     /// The handles on the page, for an object with this box.

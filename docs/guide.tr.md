@@ -100,7 +100,11 @@ Bir vektör nesnesi seçiliyken Özellikler'de dolgunun yanındaki liste, nesnen
 
 İşaretçi ile degradenin tuvalde iki tutamacı görünür: başladığı yerde yuvarlak, bittiği yerde kare. Degradeyi taşımak, döndürmek, uzatmak veya kısaltmak için bunları sürükleyin; nesnenin dışında da durabilirler. Kontur, nesnenin dış hattını izler ve tutamacı yoktur.
 
-Düzenle, degradenin renklerini açar: durak eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için uzağa çekin; seçili durağın rengini, konumunu ve opaklığını ayarlayın. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Desende Düzenle, deseni ve ölçeğini seçtirir. Stiller, Nitelikleri Yapıştır ve dosyalar dolguyu korur.
+Elips ve Dikdörtgen degradesinin, genişliğini belirleyen üçüncü, daha küçük bir tutamacı vardır. Web Renk Taklidi iki rengi piksel piksel sırayla doldurur. Metin de her şekil gibi degrade veya desenle doldurulabilir.
+
+Dolgu listesinin altındaki Kenar, dolgunun kenarının nasıl çizileceğini belirler: Sert, Kenar Yumuşatma veya kaç piksel boyunca söneceği yazılan Geçiş Yumuşatma. Doku, desenlerden birini yüzdesi kadar güçlü biçimde dolgunun içine işler.
+
+Düzenle, degradenin renklerini açar: renk durağı eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için uzağa çekin; seçili durağın rengini ve konumunu ayarlayın. Opaklık durakları degradenin üstünde aynı biçimde çalışır: her biri degradenin bulunduğu yerde ne kadar opak olacağını belirler. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Desende Düzenle, deseni ve ölçeğini seçtirir. Stiller, Nitelikleri Yapıştır ve dosyalar dolguyu korur.
 
 ## Görüntü Önizleme
 

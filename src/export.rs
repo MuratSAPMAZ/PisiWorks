@@ -540,6 +540,8 @@ fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, path: &tiny_skia::Path
         Vec::new()
     };
     let plain = [solid.r as f32 / 255.0, solid.g as f32 / 255.0, solid.b as f32 / 255.0];
+    // The colors of a gradient with its opacity stops worked in.
+    let stops = style.map(|style| crate::pseffects::baked(&style.stops, &style.opacity_stops)).unwrap_or_default();
     let texture = (look.texture > 0).then(|| (look.texture as usize - 1, (look.texture_amount / 100.0).clamp(0.0, 1.0)));
     for (at, coverage) in covered.iter().enumerate().filter(|(_, c)| **c > 0.0) {
         let (x, y) = (left + (at as u32 % w) as i32, top + (at as u32 / w) as i32);
@@ -554,9 +556,9 @@ fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, path: &tiny_skia::Path
             // A web dither is its first and its last color, pixel by pixel in turn.
             Some(style) if style.kind == FillKind::WebDither => {
                 let odd = (x + y).rem_euclid(2) == 1;
-                crate::pseffects::gradient_color(&style.stops, if odd { 1.0 } else { 0.0 })
+                crate::pseffects::gradient_color(&stops, if odd { 1.0 } else { 0.0 })
             }
-            Some(style) => crate::pseffects::gradient_color(&style.stops, style.place(p, b, depth.get(at).copied().unwrap_or(0.0))),
+            Some(style) => crate::pseffects::gradient_color(&stops, style.place(p, b, depth.get(at).copied().unwrap_or(0.0))),
         };
         // A texture darkens the fill where the texture is dark, as much as its amount says.
         if let Some((which, amount)) = texture {

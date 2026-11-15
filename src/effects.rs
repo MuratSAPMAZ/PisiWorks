@@ -232,6 +232,9 @@ pub struct LiveFilter {
     /// The gradients of Photoshop Live Effects, by their numbers there. One that is empty has not been made yet.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gradients: Vec<Vec<crate::pseffects::Stop>>,
+    /// The opacity stops of those gradients: only the alpha of each stop counts. None means opaque throughout.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub gradient_opacity: Vec<Vec<crate::pseffects::Stop>>,
 }
 
 /// The curve that changes nothing, which every channel starts with.
@@ -325,6 +328,7 @@ impl LiveFilter {
             curves: if kind == Curves { vec![STRAIGHT.to_vec(); 4] } else { Vec::new() },
             colors: if kind == PhotoshopEffects { crate::pseffects::start_colors() } else { Vec::new() },
             gradients: Vec::new(),
+            gradient_opacity: Vec::new(),
         }
     }
 
@@ -341,18 +345,33 @@ impl LiveFilter {
         self.values[index] = if value.is_finite() { value.clamp(setting.min, setting.max) } else { setting.start };
     }
 
-    /// One of the gradients of Photoshop Live Effects, its stops in order.
-    pub fn gradient(&self, gradient: usize) -> Vec<crate::pseffects::Stop> {
-        let mut stops = self.gradients.get(gradient).filter(|stops| stops.len() >= 2).cloned().unwrap_or_else(|| crate::pseffects::start_gradient(self, gradient));
+    /// The color stops of one of the gradients of Photoshop Live Effects, or with `opacity` its opacity stops, in order.
+    pub fn gradient_stops(&self, gradient: usize, opacity: bool) -> Vec<crate::pseffects::Stop> {
+        let mut stops = if opacity {
+            self.gradient_opacity.get(gradient).cloned().unwrap_or_default()
+        } else {
+            self.gradients.get(gradient).filter(|stops| stops.len() >= 2).cloned().unwrap_or_else(|| crate::pseffects::start_gradient(self, gradient))
+        };
         stops.sort_by(|a, b| a.0.total_cmp(&b.0));
         stops
     }
 
+    /// One of the gradients of Photoshop Live Effects as it is drawn: its colors with its opacity stops worked in.
+    pub fn gradient(&self, gradient: usize) -> Vec<crate::pseffects::Stop> {
+        crate::pseffects::baked(&self.gradient_stops(gradient, false), &self.gradient_stops(gradient, true))
+    }
+
+    #[cfg(test)]
     pub fn set_gradient(&mut self, gradient: usize, stops: Vec<crate::pseffects::Stop>) {
-        if self.gradients.len() <= gradient {
-            self.gradients.resize(gradient + 1, Vec::new());
+        self.set_gradient_stops(gradient, false, stops);
+    }
+
+    pub fn set_gradient_stops(&mut self, gradient: usize, opacity: bool, stops: Vec<crate::pseffects::Stop>) {
+        let list = if opacity { &mut self.gradient_opacity } else { &mut self.gradients };
+        if list.len() <= gradient {
+            list.resize(gradient + 1, Vec::new());
         }
-        self.gradients[gradient] = stops;
+        list[gradient] = stops;
     }
 
     /// One of the colors of Photoshop Live Effects, by its number there.

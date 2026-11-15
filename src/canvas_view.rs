@@ -732,7 +732,22 @@ pub fn paint_object(object: &Object, textures: &Textures, map: ViewMap, window: 
     // A filled open path, such as a Knife piece, fills as if closed but has no closing stroke.
     if let Some(color) = object.fill {
         if let Some(path) = build_path(&to_screen(&object.outline()), true, None) {
-            window.paint_path(path, to_hsla(color, object.opacity));
+            // Where the page is not drawn pixel by pixel, as in thumbnails, a gradient is shown by its
+            // first and last colors along its line.
+            match object.fill_style.as_deref().filter(|style| style.stops.len() >= 2 && style.kind != crate::model::FillKind::Pattern) {
+                Some(style) => {
+                    let (start, end) = style.handles(object.bounds);
+                    let turn = (end.x - start.x).atan2(-(end.y - start.y)).to_degrees().rem_euclid(360.0);
+                    let (from, to) = (style.stops[0].1, style.stops[style.stops.len() - 1].1);
+                    let shade = gpui::linear_gradient(
+                        turn,
+                        gpui::linear_color_stop(to_hsla(from, object.opacity * from.a as f32 / 255.0), 0.0),
+                        gpui::linear_color_stop(to_hsla(to, object.opacity * to.a as f32 / 255.0), 1.0),
+                    );
+                    window.paint_path(path, shade);
+                }
+                None => window.paint_path(path, to_hsla(color, object.opacity)),
+            }
         }
     }
     if let Some(stroke) = object.stroke.filter(|s| s.width > 0.0) {

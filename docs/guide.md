@@ -98,7 +98,11 @@ With a vector object selected, the list beside its fill in Properties chooses wh
 
 With the Pointer, a gradient shows two handles on the canvas: a round one where it starts and a square one where it ends. Drag them to move, turn, lengthen or shorten the gradient; they may lie outside the object. Contour follows the outline of the object and has no handles.
 
-Edit opens the gradient's colors: click under the gradient to add a stop, drag a stop to move it, pull one away to remove it, and set the color, place and opacity of the stop that is picked. Presets replaces the gradient with a ready-made one. For a pattern, Edit chooses the pattern and its scale. Styles, Paste Attributes and files keep the fill.
+An Ellipse or Rectangle gradient has a third, smaller handle that sets how wide it is. Web Dither fills with two colors pixel by pixel in turn. Text can be filled with a gradient or pattern like any shape.
+
+Under the fill list, Edge sets how the edge of the fill is drawn: Hard, Anti-Alias, or Feather with the number of pixels it fades over. Texture lays one of the patterns into the fill, as strongly as its percentage.
+
+Edit opens the gradient's colors: click under the gradient to add a color stop, drag a stop to move it, pull one away to remove it, and set the color and place of the stop that is picked. Opacity stops work the same way above the gradient: each sets how opaque the gradient is at its place. Presets replaces the gradient with a ready-made one. For a pattern, Edit chooses the pattern and its scale. Styles, Paste Attributes and files keep the fill.
 
 ## Image Preview
 

@@ -1081,7 +1081,7 @@ impl Workspace {
                         .items_center()
                         .gap_1()
                         .child(label(t("Edge:")))
-                        .child(self.combo(Combo::FillEdge, look.edge.label(), 110., cx).bg(rgb(PANEL_RAISED)))
+                        .child(self.combo(Combo::FillEdge, look.edge.label(), 132., cx).bg(rgb(PANEL_RAISED)))
                         .when(look.edge == crate::model::FillEdge::Feather, |d| d.child(self.field(FieldId::FillFeather, 30., cx))),
                 )
                 .child(

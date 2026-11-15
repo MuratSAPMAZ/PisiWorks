@@ -630,6 +630,8 @@ pub struct Workspace {
     /// The stop picked in the gradient of Photoshop Live Effects, and the one being dragged.
     pub gradient_stop: Option<usize>,
     pub gradient_drag: Option<usize>,
+    /// Whether the stop picked is one of the opacity stops above the gradient, not one of the color stops under it.
+    pub gradient_opacity: bool,
     pub gradient_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// With Preview off in a filter dialog, the filter as edited so far; the object
     /// meanwhile shows the filters it had before the dialog opened.
@@ -889,6 +891,7 @@ impl Workspace {
             marquee_dialog: None,
             gradient_stop: None,
             gradient_drag: None,
+            gradient_opacity: false,
             gradient_bounds: Rc::new(Cell::new(Bounds::default())),
             filter_draft: None,
             filter_dropper: None,
@@ -1193,22 +1196,30 @@ impl Workspace {
         crate::pseffects::gradient_of(&filter, self.ps_effect)
     }
 
-    /// The stops of the gradient being edited: the fill's while its dialog is open,
-    /// otherwise that of the effect on show in Photoshop Live Effects.
+    /// The stops of the gradient being edited, of the kind picked last (color or
+    /// opacity): the fill's while its dialog is open, otherwise that of the effect
+    /// on show in Photoshop Live Effects.
     pub fn shown_stops(&self) -> Option<Vec<crate::pseffects::Stop>> {
+        self.shown_track(self.gradient_opacity)
+    }
+
+    /// The color stops of the gradient being edited, or its opacity stops.
+    pub fn shown_track(&self, opacity: bool) -> Option<Vec<crate::pseffects::Stop>> {
         if self.fill_dialog.is_some() {
-            return self.current_fill_style().filter(|style| style.kind != FillKind::Pattern).map(|style| style.stops.clone());
+            let style = self.current_fill_style().filter(|style| style.kind != FillKind::Pattern)?;
+            return Some(if opacity { style.opacity_stops } else { style.stops });
         }
         let gradient = self.shown_filter_gradient()?;
-        Some(self.edited_filter()?.1.gradient(gradient))
+        Some(self.edited_filter()?.1.gradient_stops(gradient, opacity))
     }
 
     /// Writes the stops of the gradient being edited back to where they came from.
     fn write_stops(&mut self, stops: Vec<crate::pseffects::Stop>, commit: bool) {
+        let opacity = self.gradient_opacity;
         if self.fill_dialog.is_some() {
-            self.change_fill_style(commit, |style| style.stops = stops.clone());
+            self.change_fill_style(commit, |style| if opacity { style.opacity_stops = stops.clone() } else { style.stops = stops.clone() });
         } else if let Some(gradient) = self.shown_filter_gradient() {
-            self.edit_filter(commit, |filter| filter.set_gradient(gradient, stops.clone()));
+            self.edit_filter(commit, |filter| filter.set_gradient_stops(gradient, opacity, stops.clone()));
         }
     }
 
@@ -1228,29 +1239,45 @@ impl Workspace {
         self.write_stops(stops, true);
     }
 
-    /// Where a place on screen is along the gradient, from 0 to 1, how far a stop reaches, and whether it is well away from the gradient.
-    fn gradient_place(&self, at: Point<Pixels>) -> (f32, f32, bool) {
+    /// Where a place on screen is along the gradient, from 0 to 1, how far a stop
+    /// reaches, whether it is above the gradient, where the opacity stops are, and
+    /// whether it is well away from the row of stops being worked on.
+    fn gradient_place(&self, at: Point<Pixels>) -> (f32, f32, bool, bool) {
         let bounds = self.gradient_bounds.get();
         let width = f32::from(bounds.size.width).max(1.0);
-        let below = f32::from(at.y - bounds.origin.y) - f32::from(bounds.size.height);
-        (f32::from(at.x - bounds.origin.x) / width, 6.0 / width, !(-45.0..=30.0).contains(&below))
+        let (above, below) = (f32::from(bounds.origin.y - at.y), f32::from(at.y - bounds.origin.y) - f32::from(bounds.size.height));
+        let away = if self.gradient_opacity { !(-25.0..=45.0).contains(&above) } else { !(-45.0..=30.0).contains(&below) };
+        (f32::from(at.x - bounds.origin.x) / width, 6.0 / width, above > 0.0, away)
     }
 
-    /// A press under the gradient: picks the stop there, or adds one.
+    /// A press beside the gradient: above it works on the opacity stops, under it
+    /// on the color stops. It picks the stop there, or adds one.
     pub fn press_gradient(&mut self, at: Point<Pixels>) {
         self.commit_field();
+        let (place, reach, above, _) = self.gradient_place(at);
+        self.gradient_opacity = above;
         let Some(stops) = self.shown_stops() else { return };
-        let (place, reach, _) = self.gradient_place(at);
-        let (stops, index) = crate::pseffects::stop_pressed(stops, place, reach);
+        let (stops, index) = if above && stops.is_empty() {
+            // The first opacity stop is opaque: it changes nothing until it is set.
+            (vec![(place.clamp(0.0, 1.0), Color::BLACK)], 0)
+        } else {
+            crate::pseffects::stop_pressed(stops, place, reach)
+        };
         self.write_stops(stops, false);
         (self.gradient_stop, self.gradient_drag) = (Some(index), Some(index));
     }
 
     /// Moves the held gradient stop to the mouse; pulled well away from the gradient, it is taken off.
+    /// The last two color stops stay; the opacity stops can all go.
     pub fn drag_gradient(&mut self, at: Point<Pixels>) -> bool {
-        let (Some(index), Some(stops)) = (self.gradient_drag, self.shown_stops()) else { return false };
-        let (place, _, away) = self.gradient_place(at);
-        let (stops, held) = crate::pseffects::stop_dragged(stops, index, place, away);
+        let (Some(index), Some(mut stops)) = (self.gradient_drag, self.shown_stops()) else { return false };
+        let (place, _, _, away) = self.gradient_place(at);
+        let (stops, held) = if self.gradient_opacity && away && index < stops.len() {
+            stops.remove(index);
+            (stops, None)
+        } else {
+            crate::pseffects::stop_dragged(stops, index, place, away)
+        };
         (self.gradient_stop, self.gradient_drag) = (held, held);
         self.write_stops(stops, false);
         true
@@ -1258,7 +1285,11 @@ impl Workspace {
 
     /// Replaces the gradient on show with one of the ready-made ones.
     pub fn use_gradient_preset(&mut self, which: usize) {
+        // A ready-made gradient brings its own opacity with its colors.
         self.gradient_stop = None;
+        self.gradient_opacity = true;
+        self.write_stops(Vec::new(), false);
+        self.gradient_opacity = false;
         self.write_stops(crate::pseffects::preset(which), true);
     }
 

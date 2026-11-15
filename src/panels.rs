@@ -1174,9 +1174,33 @@ impl Workspace {
     /// A press under the gradient adds a stop, a drag moves one, and one pulled away is removed.
     fn gradient_editor(&self, name: &'static str, name_width: f32, stops: Vec<crate::pseffects::Stop>, cx: &mut Context<Self>) -> AnyElement {
         const WIDTH: f32 = 220.;
-        let picked = self.gradient_stop.filter(|index| *index < stops.len());
+        let opacity_stops = self.shown_track(true).unwrap_or_default();
+        let on_opacity = self.gradient_opacity;
+        let picked_any = self.gradient_stop.filter(|index| *index < if on_opacity { opacity_stops.len() } else { stops.len() });
+        let (picked, picked_opacity) = if on_opacity { (None, picked_any) } else { (picked_any, None) };
         let cell = self.gradient_bounds.clone();
-        let (ramp_stops, marks) = (stops.clone(), stops);
+        let (ramp_stops, marks) = (crate::pseffects::baked(&stops, &opacity_stops), stops);
+        // The opacity stops stand above the gradient, pointing down at it: black where it is opaque, white where it is clear.
+        let opacity_marks = canvas(|_, _, _| (), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            for (index, (place, color)) in opacity_stops.iter().enumerate() {
+                let x = bounds.origin.x + px(place * f32::from(bounds.size.width));
+                let bottom = bounds.origin.y + bounds.size.height;
+                let edge = rgb(if picked_opacity == Some(index) { TEXT } else { INPUT_BORDER });
+                let mut roof = gpui::PathBuilder::fill();
+                roof.move_to(point(x, bottom));
+                roof.line_to(point(x + px(5.), bottom - px(5.)));
+                roof.line_to(point(x - px(5.), bottom - px(5.)));
+                roof.close();
+                if let Ok(roof) = roof.build() {
+                    window.paint_path(roof, edge);
+                }
+                let body = Bounds { origin: point(x - px(5.), bottom - px(13.)), size: size(px(10.), px(8.)) };
+                let gray = 255 - color.a as u32;
+                window.paint_quad(fill(body, rgb(gray << 16 | gray << 8 | gray)).border_widths(if picked_opacity == Some(index) { 2. } else { 1. }).border_color(edge));
+            }
+        })
+        .w(px(WIDTH))
+        .h(px(14.));
         let ramp = canvas(move |bounds, _, _| cell.set(bounds), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
             let (width, height) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
             for x in 0..width.ceil() as usize {
@@ -1230,20 +1254,24 @@ impl Workspace {
                             cx.notify();
                         }),
                     )
+                    .child(opacity_marks)
                     .child(div().border_1().border_color(rgb(INPUT_BORDER)).child(ramp))
                     .child(stop_marks),
             )
+            // A color stop has a color and a place; an opacity stop an opacity and a place.
             .when(picked.is_some(), |d| {
+                d.child(div().flex().items_center().gap_1().child(self.swatch(ColorTarget::GradientStop, 18., cx)).child(label(t("Location:"))).child(self.field(FieldId::GradientPlace, 36., cx)))
+            })
+            .when(picked_opacity.is_some(), |d| {
                 d.child(
                     div()
                         .flex()
                         .items_center()
                         .gap_1()
-                        .child(self.swatch(ColorTarget::GradientStop, 18., cx))
-                        .child(label(t("Location:")))
-                        .child(self.field(FieldId::GradientPlace, 36., cx))
                         .child(label(t("Opacity:")))
-                        .child(self.field(FieldId::GradientOpacity, 36., cx)),
+                        .child(self.field(FieldId::GradientOpacity, 36., cx))
+                        .child(label(t("Location:")))
+                        .child(self.field(FieldId::GradientPlace, 36., cx)),
                 )
             })
             .into_any_element()
@@ -1328,7 +1356,7 @@ impl Workspace {
                     labelled_row(label(name), name_width, self.combo(Combo::FilterChoice(index(shown, slot)), modes[current].label(), 150., cx).bg(rgb(PANEL_RAISED))).into_any_element()
                 }
                 Row::Color { name, color } => labelled_row(label(name), name_width, self.swatch(ColorTarget::PsEffect(color), 18., cx)).into_any_element(),
-                Row::Gradient { name, gradient } => self.gradient_editor(label(name), name_width, filter.gradient(gradient), cx),
+                Row::Gradient { name, gradient } => self.gradient_editor(label(name), name_width, filter.gradient_stops(gradient, false), cx),
             });
         }
         vec![

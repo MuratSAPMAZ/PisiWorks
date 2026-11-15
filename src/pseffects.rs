@@ -169,6 +169,27 @@ pub fn gradient_color(stops: &[Stop], place: f32) -> ([f32; 3], f32) {
     parts(stops[stops.len() - 1].1)
 }
 
+/// A gradient with its opacity stops worked into its color stops: at every place
+/// either kind has a stop, the color found there with the opacity found there.
+/// With no opacity stops the colors are as they are.
+pub fn baked(colors: &[Stop], opacity: &[Stop]) -> Vec<Stop> {
+    if opacity.is_empty() {
+        return colors.to_vec();
+    }
+    let mut places: Vec<f32> = colors.iter().chain(opacity).map(|stop| stop.0).collect();
+    places.sort_by(f32::total_cmp);
+    places.dedup_by(|a, b| (*a - *b).abs() < 0.0005);
+    let channel = |v: f32| (v * 255.0).round().clamp(0.0, 255.0) as u8;
+    places
+        .into_iter()
+        .map(|place| {
+            let (color, own) = gradient_color(colors, place);
+            let (_, track) = gradient_color(opacity, place);
+            (place, Color { r: channel(color[0]), g: channel(color[1]), b: channel(color[2]), a: channel(own * track) })
+        })
+        .collect()
+}
+
 /// A press under a gradient at `place`: the stop within `reach` of it is taken
 /// hold of, or a new one is put there in the color the gradient has at that place.
 pub fn stop_pressed(mut stops: Vec<Stop>, place: f32, reach: f32) -> (Vec<Stop>, usize) {
@@ -1070,6 +1091,23 @@ mod tests {
             let stops = preset(which);
             assert!(stops.len() >= 2 && stops[0].0 == 0.0 && stops[stops.len() - 1].0 == 1.0 && stops.windows(2).all(|pair| pair[0].0 <= pair[1].0));
         }
+    }
+
+    #[test]
+    fn opacity_stops_are_a_track_of_their_own() {
+        let colors = preset(0);
+        assert_eq!(baked(&colors, &[]), colors);
+        // Opaque at the left, clear at the right, whatever the colors do.
+        let clear = |alpha: u8| Color { r: 0, g: 0, b: 0, a: alpha };
+        let fading = baked(&colors, &[(0.0, clear(255)), (1.0, clear(0))]);
+        assert_eq!((gradient_color(&fading, 0.0).1, gradient_color(&fading, 1.0).1), (1.0, 0.0));
+        assert!((gradient_color(&fading, 0.5).1 - 0.5).abs() < 0.01 && (gradient_color(&fading, 0.5).0[0] - 0.5).abs() < 0.01);
+        // A stop in the middle of the track is a place in the result, with the color the gradient has there.
+        let dip = baked(&colors, &[(0.0, clear(255)), (0.25, clear(0)), (1.0, clear(255))]);
+        assert_eq!(dip.len(), 3);
+        assert_eq!((dip[1].0, dip[1].1.a, dip[1].1.r), (0.25, 0, 64));
+        // One opacity stop alone sets the whole gradient to it.
+        assert!((gradient_color(&baked(&colors, &[(0.3, clear(128))]), 0.9).1 - 128.0 / 255.0).abs() < 0.01);
     }
 
     #[test]
