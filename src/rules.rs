@@ -18,9 +18,10 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::{t, tf};
 
 /// What a rule waits for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EventKind {
     /// The film starts, or starts again.
+    #[default]
     Start,
     /// A scene starts: at the beginning of the film, and whenever the film goes to another scene.
     Scene,
@@ -100,7 +101,7 @@ impl EventKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub kind: EventKind,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -112,7 +113,7 @@ pub struct Event {
 }
 
 /// What a rule does.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StepKind {
     /// Moves the object `a` by `x` to the right and `y` down.
     Move,
@@ -127,6 +128,7 @@ pub enum StepKind {
     /// Throws the object up at `x` pixels a second; it comes down if it has Fall and Jump.
     Jump,
     /// Adds `x` to the number `a`.
+    #[default]
     Add,
     /// Makes the number `a` be `x`.
     Set,
@@ -151,13 +153,15 @@ pub enum StepKind {
     RandomNumber,
     /// Makes the object blink for a moment, as a thing that has been hit does.
     Flash,
+    /// Waits `x` seconds before the steps that follow it.
+    Wait,
     /// Stops the film and everything that moves in it.
     StopAll,
     /// Starts the film again from the beginning, with every number as it started.
     Restart,
 }
 
-pub const STEPS: [StepKind; 23] = [
+pub const STEPS: [StepKind; 24] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -172,6 +176,7 @@ pub const STEPS: [StepKind; 23] = [
     StepKind::Random,
     StepKind::RandomTop,
     StepKind::Jump,
+    StepKind::Wait,
     StepKind::Sound,
     StepKind::NextScene,
     StepKind::GotoScene,
@@ -207,6 +212,7 @@ impl StepKind {
             StepKind::Faster => "Make an object faster",
             StepKind::RandomNumber => "Set a number at random",
             StepKind::Flash => "Make an object blink for a moment",
+            StepKind::Wait => "Wait",
             StepKind::StopAll => "Stop everything",
             StepKind::Restart => "Start again",
         }
@@ -235,6 +241,7 @@ impl StepKind {
             StepKind::Faster => "faster",
             StepKind::RandomNumber => "rnd",
             StepKind::Flash => "flash",
+            StepKind::Wait => "wait",
             StepKind::StopAll => "halt",
             StepKind::Restart => "restart",
         }
@@ -254,13 +261,14 @@ impl StepKind {
             StepKind::RandomNumber => (Some(Pick::Variable), None, Some(("At least:", 1.0)), Some(("Up to:", 6.0))),
             StepKind::GotoFrame | StepKind::GotoFrameStop => (None, None, Some(("Frame:", 1.0)), None),
             StepKind::GotoScene => (None, None, Some(("Scene:", 1.0)), None),
+            StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
             StepKind::Sound => (Some(Pick::Sound), None, None, None),
             StepKind::StopFilm | StepKind::PlayFilm | StepKind::NextScene | StepKind::StopAll | StepKind::Restart => (None, None, None, None),
         }
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Step {
     pub kind: StepKind,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -268,28 +276,60 @@ pub struct Step {
     /// A second name, for the kinds that have one.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub b: String,
+    /// The first and the second number written as a sum to work out, such as `Score * 2` or `Hero.x + 10`,
+    /// where they are not plain numbers. See [`crate::script`].
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ex: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub ey: String,
     #[serde(default)]
     pub x: f32,
     #[serde(default)]
     pub y: f32,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Rule {
     pub event: Event,
     /// What must also be so for the rule to be followed, if anything.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub when: Option<Condition>,
+    /// Further things that must be so as well. The lists set one condition; the written language any number.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<Condition>,
     #[serde(default)]
     pub steps: Vec<Step>,
+    /// What to do when the event happens and the conditions do not hold.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub otherwise: Vec<Step>,
 }
 
 /// "Only if": a number held against a value, as [`COMPARES`] has the three ways.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Condition {
     pub number: String,
     pub how: String,
     pub value: f32,
+    /// The value written as a sum to work out, where it is not a plain number.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub expr: String,
+}
+
+impl Condition {
+    /// The condition as the sentence says it: "Score is more than 2".
+    pub fn phrase(&self) -> String {
+        let value = if self.expr.is_empty() { plain(self.value) } else { self.expr.clone() };
+        match self.how.as_str() {
+            ">" => tf("{} is more than {}", &[&self.number, &value]),
+            "<" => tf("{} is less than {}", &[&self.number, &value]),
+            _ => tf("{} is {}", &[&self.number, &value]),
+        }
+    }
+
+    fn text(&self) -> String {
+        let value = if self.expr.is_empty() { self.value.to_string() } else { quoted(&self.expr) };
+        format!("[{},{},{value}]", quoted(&self.number), quoted(&self.how))
+    }
 }
 
 /// The three ways as "only if" says them: the word the script knows each by, and its name in English.
@@ -408,11 +448,22 @@ fn quoted(text: &str) -> String {
 impl Step {
     pub fn new(kind: StepKind) -> Step {
         let (_, _, x, y) = kind.needs();
-        Step { kind, a: String::new(), b: String::new(), x: x.map_or(0.0, |x| x.1), y: y.map_or(0.0, |y| y.1) }
+        Step { kind, x: x.map_or(0.0, |x| x.1), y: y.map_or(0.0, |y| y.1), ..Default::default() }
+    }
+
+    /// The first number as it is written: the sum, if it is one.
+    pub fn first(&self) -> String {
+        if self.ex.is_empty() { plain(self.x) } else { self.ex.clone() }
+    }
+
+    pub fn second(&self) -> String {
+        if self.ey.is_empty() { plain(self.y) } else { self.ey.clone() }
     }
 
     pub fn sentence(&self) -> String {
-        let (a, x, y) = (&self.a, plain(self.x), plain(self.y));
+        let (a, x, y) = (&self.a, self.first(), self.second());
+        // Taking away reads as taking away only where the number is a plain one.
+        let down = self.ex.is_empty() && self.x < 0.0;
         match self.kind {
             StepKind::Move => tf("move {} by {} right and {} down", &[a, &x, &y]),
             StepKind::GoTo => tf("put {} at {}, {}", &[a, &x, &y]),
@@ -421,12 +472,13 @@ impl Step {
             StepKind::Show => tf("show {}", &[a]),
             StepKind::Hide => tf("hide {}", &[a]),
             StepKind::Jump => tf("make {} jump at {}", &[a, &x]),
-            StepKind::Add if self.x < 0.0 => tf("decrease {} by {}", &[a, &plain(-self.x)]),
+            StepKind::Add if down => tf("decrease {} by {}", &[a, &plain(-self.x)]),
             StepKind::Add => tf("increase {} by {}", &[a, &x]),
             StepKind::Spawn => tf("make a copy of {} at {}", &[a, &self.b]),
             StepKind::Remove => tf("remove {}", &[a]),
             StepKind::Flash => tf("make {} blink for a moment", &[a]),
-            StepKind::Faster if self.x < 0.0 => tf("make {} slower by {} percent", &[a, &plain(-self.x)]),
+            StepKind::Wait => tf("wait {} seconds", &[&x]),
+            StepKind::Faster if down => tf("make {} slower by {} percent", &[a, &plain(-self.x)]),
             StepKind::Faster => tf("make {} faster by {} percent", &[a, &x]),
             StepKind::RandomNumber => tf("set {} at random from {} to {}", &[a, &x, &y]),
             StepKind::Set => tf("set {} to {}", &[a, &x]),
@@ -445,28 +497,35 @@ impl Step {
 
 impl Rule {
     pub fn new() -> Rule {
-        Rule { event: Event::new(EventKind::Start), when: None, steps: Vec::new() }
+        Rule::default()
+    }
+
+    /// Every condition of the rule, the one the lists set first.
+    pub fn conditions(&self) -> impl Iterator<Item = &Condition> {
+        self.when.iter().chain(self.also.iter())
+    }
+
+    /// The event and what must also be so, as the first line of the rule in the written language.
+    pub fn head(&self) -> String {
+        let event = self.event.sentence();
+        let conditions: Vec<String> = self.conditions().map(Condition::phrase).collect();
+        if conditions.is_empty() {
+            event
+        } else {
+            tf("{}, if {}", &[&event, &conditions.join(t(" and "))])
+        }
     }
 
     /// The rule as one sentence: the event, what must also be so, then the steps.
     pub fn sentence(&self) -> String {
         let steps: Vec<String> = self.steps.iter().map(Step::sentence).collect();
-        let event = self.event.sentence();
-        let head = match &self.when {
-            None => event,
-            Some(only) => {
-                let value = plain(only.value);
-                match only.how.as_str() {
-                    ">" => tf("{}, if {} is more than {}", &[&event, &only.number, &value]),
-                    "<" => tf("{}, if {} is less than {}", &[&event, &only.number, &value]),
-                    _ => tf("{}, if {} is {}", &[&event, &only.number, &value]),
-                }
-            }
-        };
+        let head = self.head();
+        let rest: Vec<String> = self.otherwise.iter().map(Step::sentence).collect();
+        let rest = if rest.is_empty() { String::new() } else { format!(" — {}: {}", t("otherwise"), rest.join("; ")) };
         if steps.is_empty() {
-            format!("{head}: …")
+            format!("{head}: …{rest}")
         } else {
-            format!("{head}: {}", steps.join("; "))
+            format!("{head}: {}{rest}", steps.join("; "))
         }
     }
 
@@ -480,30 +539,40 @@ impl Rule {
         if b == Some(Pick::Object) {
             names.push(self.event.b.as_str());
         }
-        names.extend(self.steps.iter().filter(|step| step.kind.needs().0 == Some(Pick::Object)).map(|step| step.a.as_str()));
-        names.extend(self.steps.iter().filter(|step| step.kind.needs().1 == Some(Pick::Object)).map(|step| step.b.as_str()));
+        let steps = || self.steps.iter().chain(self.otherwise.iter());
+        names.extend(steps().filter(|step| step.kind.needs().0 == Some(Pick::Object)).map(|step| step.a.as_str()));
+        names.extend(steps().filter(|step| step.kind.needs().1 == Some(Pick::Object)).map(|step| step.b.as_str()));
+        // And the objects whose places its sums ask for: `Hero.x`.
+        let sums = steps().flat_map(|step| [step.ex.as_str(), step.ey.as_str()]).chain(self.conditions().map(|only| only.expr.as_str()));
+        names.extend(sums.flat_map(crate::script::objects_in));
         names.retain(|name| !name.is_empty());
         names
     }
 
     /// What the script of the published page reads. A sound is given by its place in `sounds`.
     pub fn text(&self, sounds: &[String]) -> String {
-        let steps: Vec<String> = self
-            .steps
-            .iter()
-            .map(|step| {
-                let x = if step.kind == StepKind::Sound { sounds.iter().position(|name| *name == step.a).map_or(-1.0, |at| at as f32) } else { step.x };
-                format!("[\"{}\",{},{},{},{}]", step.kind.key(), quoted(&step.a), x, step.y, quoted(&step.b))
-            })
-            .collect();
-        let only = self.when.as_ref().map_or_else(|| "null".to_string(), |only| format!("[{},{},{}]", quoted(&only.number), quoted(&only.how), only.value));
-        format!("{{\"e\":{},\"c\":{only},\"s\":[{}]}}", self.event.text(), steps.join(","))
-    }
-}
-
-impl Default for Rule {
-    fn default() -> Self {
-        Rule::new()
+        // A number that is a sum goes as its text, for the script to work out when the step is taken.
+        let written = |steps: &[Step]| -> String {
+            let list: Vec<String> = steps
+                .iter()
+                .map(|step| {
+                    let x = if step.kind == StepKind::Sound {
+                        sounds.iter().position(|name| *name == step.a).map_or(-1.0, |at| at as f32).to_string()
+                    } else if step.ex.is_empty() {
+                        step.x.to_string()
+                    } else {
+                        quoted(&step.ex)
+                    };
+                    let y = if step.ey.is_empty() { step.y.to_string() } else { quoted(&step.ey) };
+                    format!("[\"{}\",{},{x},{y},{}]", step.kind.key(), quoted(&step.a), quoted(&step.b))
+                })
+                .collect();
+            list.join(",")
+        };
+        let conditions: Vec<String> = self.conditions().map(Condition::text).collect();
+        let only = if conditions.is_empty() { "null".to_string() } else { format!("[{}]", conditions.join(",")) };
+        let otherwise = if self.otherwise.is_empty() { String::new() } else { format!(",\"o\":[{}]", written(&self.otherwise)) };
+        format!("{{\"e\":{},\"c\":{only},\"s\":[{}]{otherwise}}}", self.event.text(), written(&self.steps))
     }
 }
 
@@ -519,12 +588,12 @@ mod tests {
     fn rule() -> Rule {
         Rule {
             event: Event { kind: EventKind::Touch, a: "Elma".into(), b: "Sepet".into(), n: 0.0 },
-            when: None,
             steps: vec![
-                Step { kind: StepKind::Add, a: "Puan".into(), b: String::new(), x: 1.0, y: 0.0 },
-                Step { kind: StepKind::RandomTop, a: "Elma".into(), b: String::new(), x: 0.0, y: 0.0 },
-                Step { kind: StepKind::Sound, a: "zil".into(), b: String::new(), x: 0.0, y: 0.0 },
+                Step { kind: StepKind::Add, a: "Puan".into(), x: 1.0, ..Default::default() },
+                Step { kind: StepKind::RandomTop, a: "Elma".into(), ..Default::default() },
+                Step { kind: StepKind::Sound, a: "zil".into(), ..Default::default() },
             ],
+            ..Default::default()
         }
     }
 
@@ -536,12 +605,13 @@ mod tests {
         // "Only if" comes between the event and the steps; taking away reads as taking away; a copy is made at another object.
         let fire = Rule {
             event: Event { kind: EventKind::Key, a: " ".into(), b: String::new(), n: 0.0 },
-            when: Some(Condition { number: "Mermi".into(), how: ">".into(), value: 0.0 }),
-            steps: vec![Step { kind: StepKind::Spawn, a: "Ok".into(), b: "Gemi".into(), x: 0.0, y: 0.0 }, Step { kind: StepKind::Add, a: "Mermi".into(), b: String::new(), x: -1.0, y: 0.0 }],
+            when: Some(Condition { number: "Mermi".into(), how: ">".into(), ..Default::default() }),
+            steps: vec![Step { kind: StepKind::Spawn, a: "Ok".into(), b: "Gemi".into(), ..Default::default() }, Step { kind: StepKind::Add, a: "Mermi".into(), x: -1.0, ..Default::default() }],
+            ..Default::default()
         };
         assert_eq!(fire.sentence(), "When the Space key is pressed, if Mermi is more than 0: make a copy of Ok at Gemi; decrease Mermi by 1");
         assert_eq!(fire.objects(), vec!["Ok", "Gemi"]);
-        assert_eq!(fire.text(&[]), "{\"e\":[\"key\",\" \",\"\",0],\"c\":[\"Mermi\",\">\",0],\"s\":[[\"spawn\",\"Ok\",0,0,\"Gemi\"],[\"add\",\"Mermi\",-1,0,\"\"]]}");
+        assert_eq!(fire.text(&[]), "{\"e\":[\"key\",\" \",\"\",0],\"c\":[[\"Mermi\",\">\",0]],\"s\":[[\"spawn\",\"Ok\",0,0,\"Gemi\"],[\"add\",\"Mermi\",-1,0,\"\"]]}");
         assert_eq!(rule.objects(), vec!["Elma", "Sepet", "Elma"]);
         let key = Event { kind: EventKind::Key, a: " ".into(), b: String::new(), n: 0.0 };
         assert_eq!(key.sentence(), "When the Space key is pressed");

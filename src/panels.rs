@@ -481,6 +481,26 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::ScriptEvent => crate::script::event_sentences()
+                .into_iter()
+                .map(|sentence| {
+                    item(sentence.clone().into(), false, cx, Box::new(move |this, _, _| {
+                        if let Some(script) = this.script.as_mut() {
+                            script.add_sentence(&sentence, true);
+                        }
+                    }))
+                })
+                .collect(),
+            Combo::ScriptStep => crate::script::step_sentences()
+                .into_iter()
+                .map(|sentence| {
+                    item(sentence.clone().into(), false, cx, Box::new(move |this, _, _| {
+                        if let Some(script) = this.script.as_mut() {
+                            script.add_sentence(&sentence, false);
+                        }
+                    }))
+                })
+                .collect(),
             Combo::RuleNew => crate::rules::EVENTS.into_iter().map(|kind| item(t(kind.name()).into(), false, cx, Box::new(move |this, _, _| this.add_rule(kind)))).collect(),
             Combo::RuleEvent => {
                 let now = self.ed.doc.rules.get(self.rule_picked).map(|rule| rule.event.kind);
@@ -541,7 +561,7 @@ impl Workspace {
                             this.edit_rule(|rule| {
                                 rule.when = value.map(|number| match rule.when.take() {
                                     Some(only) => crate::rules::Condition { number, ..only },
-                                    None => crate::rules::Condition { number, how: ">".to_string(), value: 0.0 },
+                                    None => crate::rules::Condition { number, how: ">".to_string(), ..Default::default() },
                                 });
                             });
                         }))
@@ -752,7 +772,7 @@ impl Workspace {
                         .id("combo-popup")
                         .occlude()
                         // The lists of Rules and Numbers hold whole phrases.
-                        .w(px(if matches!(combo, Combo::RuleNew | Combo::RuleEvent | Combo::RuleStepAdd | Combo::RuleStep(_)) { 310. } else { 170. }))
+                        .w(px(if matches!(combo, Combo::RuleNew | Combo::RuleEvent | Combo::RuleStepAdd | Combo::RuleStep(_) | Combo::ScriptEvent | Combo::ScriptStep) { 330. } else { 170. }))
                         .max_h(px(COMBO_MAX_HEIGHT))
                         .overflow_y_scroll()
                         .py_1()
@@ -2208,6 +2228,131 @@ impl Workspace {
         Some(self.dialog_frame(290., t("Auto Vector Mask"), rows, buttons))
     }
 
+    /// Rules > Rules as Text: the rules and numbers as text to write in, with what cannot be read marked as it is typed.
+    pub(crate) fn script_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let script = self.script.as_ref()?;
+        const SIZE: f32 = 13.;
+        // The width of a letter in a font whose letters are all one width.
+        const ADVANCE: f32 = SIZE * 0.6;
+        const GUTTER: f32 = 40.;
+        const LINE: f32 = 18.;
+        let bad: Vec<usize> = script.mistakes().iter().map(|m| m.line).collect();
+        // A space that the drawing of text does not fold away.
+        let shown = |text: &str| text.replace(' ', "\u{a0}");
+        let lines: Vec<AnyElement> = script
+            .lines
+            .iter()
+            .enumerate()
+            .map(|(index, line)| {
+                let text = if index == script.row {
+                    let before: String = line.chars().take(script.col).collect();
+                    let after: String = line.chars().skip(script.col).collect();
+                    div().flex().items_center().child(shown(&before)).child(div().w(px(1.)).h(px(15.)).flex_none().bg(rgb(0x000000))).child(shown(&after))
+                } else {
+                    div().child(shown(line))
+                };
+                div()
+                    .h(px(LINE))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .when(bad.contains(&(index + 1)), |d| d.bg(rgb(0xffd6d6)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                            // The letters are all one width, so the place of the click tells the letter.
+                            let left = f32::from(this.script_scroll.bounds().origin.x) + GUTTER + 1.;
+                            let col = ((f32::from(ev.position.x) - left) / ADVANCE).round().max(0.) as usize;
+                            if let Some(script) = this.script.as_mut() {
+                                script.place(index, col);
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .child(div().w(px(GUTTER)).pr_2().flex().flex_none().justify_end().text_color(rgb(0x8d8d8d)).child((index + 1).to_string()))
+                    .child(text)
+                    .into_any_element()
+            })
+            .collect();
+        let raised = |combo: Div| combo.bg(rgb(PANEL_RAISED));
+        let mut rows: Vec<AnyElement> = vec![
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(label(t("Put in a sentence:")))
+                .child(raised(self.combo(Combo::ScriptEvent, t("An event"), 130., cx)))
+                .child(raised(self.combo(Combo::ScriptStep, t("A step"), 130., cx)))
+                .child(div().text_color(rgb(TEXT_DIM)).child(label(t("then write a name or a number in place of each ?"))))
+                .into_any_element(),
+            div()
+                .id("script-lines")
+                .h(px(LINE * 19.))
+                .flex()
+                .flex_col()
+                .overflow_y_scroll()
+                .track_scroll(&self.script_scroll)
+                .bg(rgb(INPUT))
+                .border_1()
+                .border_color(rgb(INPUT_BORDER))
+                .font_family(crate::fonts::mono())
+                .text_size(px(SIZE))
+                .children(lines)
+                .into_any_element(),
+        ];
+        match &script.outcome {
+            Some(Ok(read)) => {
+                rows.push(div().text_color(rgb(0x1c7a30)).child(label(tf("The text reads: {} rules, {} numbers", &[&read.rules.len(), &read.variables.len()]))).into_any_element());
+                let sounds: Vec<String> = self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect();
+                let strangers = crate::script::strangers(&read.rules, &self.ed.doc.object_names(), &sounds);
+                if !strangers.is_empty() {
+                    rows.push(div().text_color(rgb(0xa05a00)).child(label(tf("Nothing in the document is called: {}", &[&strangers.join(", ")]))).into_any_element());
+                }
+            }
+            Some(Err(mistakes)) => {
+                for mistake in mistakes.iter().take(5) {
+                    let line = mistake.line;
+                    rows.push(
+                        div()
+                            .text_color(rgb(0xb01818))
+                            .hover(|s| s.bg(rgb(HOVER)))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    if let Some(script) = this.script.as_mut() {
+                                        script.place(line.saturating_sub(1), usize::MAX);
+                                    }
+                                    this.script_scroll.scroll_to_item(line.saturating_sub(1));
+                                    cx.notify();
+                                }),
+                            )
+                            .child(label(tf("Line {}: {}", &[&mistake.line, &mistake.what])))
+                            .into_any_element(),
+                    );
+                }
+                if mistakes.len() > 5 {
+                    rows.push(div().text_color(rgb(0xb01818)).child(label(tf("and {} more", &[&(mistakes.len() - 5)]))).into_any_element());
+                }
+            }
+            None => {}
+        }
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Take the Text"), true, cx, |this, _, _| {
+                this.apply_script();
+            }))
+            .child(self.text_button(t("Take It and Test Movie"), true, cx, |this, window, cx| {
+                if this.apply_script() {
+                    this.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx);
+                }
+            }))
+            .child(self.text_button(t("Close"), true, cx, |this, _, _| this.script = None));
+        Some(self.dialog_frame(780., t("Rules as Text"), rows, buttons))
+    }
+
     /// Rules > Rules and Numbers: the rules as sentences, the rule on show taken apart into lists, and the numbers.
     pub(crate) fn rules_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         use crate::rules::{choice_name, Pick};
@@ -2328,7 +2473,15 @@ impl Workspace {
                     .into_any_element(),
             );
         }
-        rows.push(div().flex().child(self.text_button(t("New Number"), true, cx, |this, _, _| this.add_variable())).into_any_element());
+        rows.push(
+            div()
+                .flex()
+                .gap_1()
+                .child(self.text_button(t("New Number"), true, cx, |this, _, _| this.add_variable()))
+                .child(div().flex_1())
+                .child(self.text_button(t("Rules as Text..."), true, cx, |this, _, _| this.open_script()))
+                .into_any_element(),
+        );
         if doc.object_names().is_empty() {
             rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Rules are about objects by name: give your objects names in Properties first."))).into_any_element());
         }

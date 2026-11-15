@@ -246,8 +246,8 @@ pub(crate) fn stop_here(e: &mut Editor) {
 pub(crate) fn rule(event: (EventKind, &str, &str, f32), steps: &[(StepKind, &str, f32, f32)]) -> Rule {
     Rule {
         event: Event { kind: event.0, a: event.1.to_string(), b: event.2.to_string(), n: event.3 },
-        when: None,
-        steps: steps.iter().map(|(kind, a, x, y)| Step { kind: *kind, a: a.to_string(), b: String::new(), x: *x, y: *y }).collect(),
+        steps: steps.iter().map(|(kind, a, x, y)| Step { kind: *kind, a: a.to_string(), x: *x, y: *y, ..Default::default() }).collect(),
+        ..Default::default()
     }
 }
 
@@ -718,7 +718,7 @@ mod tests {
         assert_eq!(doc.rules[1].sentence(), "When Hero touches Coin: increase Score by 1; make a copy of Sparkle at Coin; remove Coin; play the sound ding");
         let html = crate::publish::html(&doc, "x").unwrap();
         assert_eq!((html.matches("[\"solid\",0,0]").count(), html.matches("\"n\":\"Coin\"").count(), html.matches("\"n\":\"Hero\"").count()), (4, 3, 1));
-        assert!(html.contains("\"c\":[\"Score\",\">\",2]") && html.contains("[\"expire\",0.35,0]") && doc.scenes().len() == 3);
+        assert!(html.contains("\"c\":[[\"Score\",\">\",2]]") && html.contains("[\"expire\",0.35,0]") && doc.scenes().len() == 3);
         // The shooter: every shot is a copy of the one bullet, made where the ship is; every hit a copy of the one explosion.
         let doc = find("Game: space shooter");
         assert_eq!(doc.rules[1].sentence(), "When the Space key is pressed: make a copy of Bullet at Ship; play the sound zap");

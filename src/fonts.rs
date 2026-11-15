@@ -46,6 +46,21 @@ pub fn family() -> &'static str {
     &picked().family
 }
 
+/// A font whose letters are all of one width, for text written in lines: the first of these that is installed.
+pub fn mono() -> &'static str {
+    static MONO: OnceLock<String> = OnceLock::new();
+    MONO.get_or_init(|| {
+        let db = database();
+        let has = |family: Family| db.query(&Query { families: &[family], ..Query::default() });
+        ["DejaVu Sans Mono", "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", "Courier New"]
+            .iter()
+            .find(|name| has(Family::Name(name)).is_some())
+            .map(|name| name.to_string())
+            .or_else(|| has(Family::Monospace).and_then(|id| db.face(id)).and_then(|face| face.families.first().map(|family| family.0.clone())))
+            .unwrap_or_else(|| "monospace".to_string())
+    })
+}
+
 fn database() -> &'static Database {
     static DATABASE: OnceLock<Database> = OnceLock::new();
     DATABASE.get_or_init(|| {

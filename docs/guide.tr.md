@@ -357,7 +357,55 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 Yirmi sekiz kuralın hepsi **Kurallar > Kurallar ve Sayılar**'da okunabilir.
 
-Kuralların henüz yapmadıkları: hareket eden platform üstündekini taşımaz; değme, elipsler dışında kutulara göre hesaplanır; sayılar tam ya da ondalıklıdır, sözcük saklanmaz; bir kuralın tek koşulu vardır, "değilse" yoktur. Sahneden büyük bölümler, kamera ve birkaç animasyonu olan karakter kuralların değil, bir oyun stüdyosunun işidir.
+Kuralların henüz yapmadıkları: hareket eden platform üstündekini taşımaz; değme, elipsler dışında kutulara göre hesaplanır; sayılar tam ya da ondalıklıdır, sözcük saklanmaz; listelerde bir kuralın tek koşulu vardır; birden çok koşul ve "değilse" yazılı dilde vardır. Sahneden büyük bölümler, kamera ve birkaç animasyonu olan karakter kuralların değil, bir oyun stüdyosunun işidir.
+
+**Kuralları yazmak: dil.** Kurallar ve Sayılar penceresindeki her cümle yazılabilir de. **Kurallar > Kuralları Yaz** bütün kuralları ve sayıları bir metin olarak açar; listelerle kurduğunuz oyun burada yazılı hâliyle durur, burada yazdığınız da listelerde görünür. İkisi aynı şeyin iki yüzüdür.
+
+```
+Sayılar:
+    Puan = 0
+    Can = 5
+
+Elma nesnesi Sepet nesnesine değince:
+    Puan sayısını 1 artır
+    Elma nesnesini üstte rastgele bir yere koy
+
+Can sayısı 1 değerinin altına inince:
+    2. sahneye git
+```
+
+- *Biçim.* Bir kural, kenardan başlayıp iki noktayla biten bir olay satırı ve altında, içeriden yazılan eylemlerdir. Olay satırından sonra Enter'a basınca imleç kendiliğinden içeri girer. `Sayılar:` başlığının altına her sayı `Ad = değer` diye yazılır. `#` ile başlayan satır not sayılır, okunmaz.
+- *Yazarken okunur.* Metin her tuşta yeniden okunur. Okunamayan satır kırmızı olur ve altında nedeni satır numarasıyla yazar: "Satır 7: bu, bildiğim bir eylem değil", "Satır 9: Puan adında bir sayı yok". Nedene tıklayınca imleç o satıra gider. Belgede olmayan bir nesne ya da ses adı uyarı olarak gösterilir; metin yine de alınır.
+- *Cümle ekle.* Cümleleri ezberlemek gerekmez: üstteki **Bir olay** ve **Bir eylem** listeleri cümleyi yazar, siz her `?` yerine bir ad ya da sayı koyarsınız.
+- *Almak.* **Metni Al** (Ctrl+S) yazılanı belgeye alır; **Al ve Filmi Test Et** (Ctrl+Enter) alıp oyunu tarayıcıda açar. Okunamayan satır varken metin alınmaz. Esc pencereyi kapatır.
+- *Yapıştırmak.* Ctrl+V başka bir yerden kopyalanmış kuralları yapıştırır: bir oyunun kuralları bir arkadaşa metin olarak gönderilebilir.
+
+Yazının listelere göre fazlası dört şeydir:
+
+- *İşlem.* Sayı beklenen her yere bir işlem yazılabilir: `Puan sayısını Puan * 2 yap`, `Can sayısını Puan / 10 artır`. Dört işlem ve ayraç kullanılır. Bir nesnenin yeri `Ad.x` ve `Ad.y` ile okunur: `Mermi nesnesini Gemi.x + 20, Gemi.y konumuna koy`. Rastgele bir tam sayı `rastgele(1, 6)` ile alınır. Adında boşluk olan nesne tırnak içine yazılır: `"Dev Fare".x`. (Listelerdeki sayı kutuları da işlem kabul eder.)
+- *Birden çok koşul.* Koşullar `ve` ile sıralanır: `Kahraman nesnesi Kapı nesnesine değince, Puan sayısı 2 değerinden büyükse ve Can sayısı 0 değerinden büyükse:`. Hepsi doğruysa kural izlenir.
+- *Değilse.* Eylemlerden sonra kenara `değilse:` yazılır; koşullar tutmadığında onun altındakiler yapılır.
+- *Bekle.* `1 saniye bekle` ardından gelen eylemleri erteler: önce ses, bir saniye sonra sahne değişimi.
+
+```
+Kahraman nesnesi Kapı nesnesine değince, Puan sayısı 2 değerinden büyükse ve Can sayısı 0 değerinden büyükse:
+    zafer sesini çal
+    1 saniye bekle
+    2. sahneye git
+değilse:
+    eyvah sesini çal
+    Kahraman nesnesini Kahraman.x - 40, 322 konumuna koy
+```
+
+Olay cümleleri: `Film başlayınca`, `Bir sahne başlayınca`, `… tuşuna basılınca`, `… nesnesine tıklanınca`, `… nesnesi sahnenin … değince`, `… nesnesi … nesnesine değince`, `Her … saniyede bir`, `… saniye sonra`, `… sayısı … değerini geçince`, `… sayısı … değerinin altına inince`, `… sayısı … olunca`.
+
+Eylem cümleleri: `… nesnesini … sağa, … aşağı taşı`, `… nesnesini rastgele bir yere koy`, `… nesnesini üstte rastgele bir yere koy`, `… nesnesini …, … konumuna koy`, `… nesnesini göster`, `… nesnesini gizle`, `… nesnesini … hızla zıplat`, `… sayısını … azalt`, `… sayısını … artır`, `… nesnesinin kopyasını … nesnesinin yerinde oluştur`, `… nesnesini sil`, `… nesnesini bir an yanıp söndür`, `… nesnesini yüzde … yavaşlat`, `… nesnesini yüzde … hızlandır`, `… sayısını … ile … arasında rastgele yap`, `… sayısını … yap`, `… saniye bekle`, `filmi durdur`, `filmi oynat`, `…. kareye git ve oynat`, `…. kareye git ve dur`, `sonraki sahneye git`, `…. sahneye git`, `… sesini çal`, `her şeyi durdur`, `baştan başla`.
+
+Koşullar: `… sayısı … ise`, `… sayısı … değerinden büyükse`, `… sayısı … değerinden küçükse`. Tuş adları: Boşluk, Yukarı Ok, Aşağı Ok, Sol Ok, Sağ Ok, Enter, harfler ve rakamlar. Kenarlar: bir kenarına, alt kenarına, üst kenarına, sol kenarına, sağ kenarına.
+
+Program İngilizce kullanılırken aynı kurallar İngilizce cümlelerle yazılır ve okunur (`When Apple touches Basket:`); belgedeki kurallar dilden bağımsız saklandığı için bir dilde yazılan oyun ötekinde o dilin cümleleriyle görünür. Nesnelerin ve sayıların adları çevrilmez.
+
+Dilin henüz yapmadıkları: döngü ("3 kez yap") ve kendi komutunu tanımlama yoktur; sayılar dışında değer (sözcük, liste) saklanmaz; bir nesnenin yalnız yeri okunur, boyu ya da görünürlüğü okunmaz. Yazı alanı sade bir düzenleyicidir: seçme, geri alma ve bul-değiştir yoktur; uzun bir metni kendi düzenleyicinizde yazıp Ctrl+V ile yapıştırabilirsiniz.
 
 **Eklem yerinden döndürmek.** Hareket ara doldurması, nesneyi Flash'taki gibi *dönüştürme noktasının* çevresinde döndürür. Bu nokta başlangıçta nesnenin ortasındadır. Taşımak için nesneyi seçin, **Ölçekle** aracını (Q) alın ve kutunun ortasındaki küçük kareyi nesnenin döneceği yere sürükleyin: bir kolun omuz ucuna, bir tekerleğin göbeğine, bir kapının menteşesine. Enter'a basın. Nokta bundan sonra nesneyle birlikte kalır; taşımada, döndürmede ve yeni anahtar karelerde de. Ara doldurma noktayı anahtar kareden anahtar kareye düz götürür, nesne onun çevresinde döner. Noktayı ilk anahtar karede, ötekileri eklemeden önce yerine koyun. Bir grup ya da resim için önce sembole dönüştürün (F8); Flash da her hareket ara doldurması için bunu ister.
 

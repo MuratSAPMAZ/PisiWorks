@@ -118,6 +118,9 @@ pub enum Combo {
     /// "Only if": the number it is about, or none; and which way the number is held against the value.
     RuleIf,
     RuleIfHow,
+    /// Rules as Text: the sentences an event can be, and those a step can be, to put one in.
+    ScriptEvent,
+    ScriptStep,
     /// The action of the frame on show, or, with `true`, of the selected button.
     Action(bool),
     FrameSound,
@@ -772,6 +775,9 @@ pub struct Workspace {
     pub behavior_tick: usize,
     /// Whether the picture of the page now on the canvas was made with the behaviors at work.
     raster_behaved: bool,
+    /// Rules as Text while it is open: the text being written, and where its lines are scrolled to.
+    pub script: Option<crate::script_edit::ScriptEdit>,
+    pub script_scroll: gpui::ScrollHandle,
     /// Whether Rules and Numbers is open, and which rule it shows.
     pub rules_dialog: bool,
     pub rule_picked: usize,
@@ -1179,6 +1185,8 @@ impl Workspace {
             behavior_tick: 0,
             raster_behaved: false,
             behavior_dialog: false,
+            script: None,
+            script_scroll: gpui::ScrollHandle::new(),
             rules_dialog: false,
             rule_picked: 0,
             loop_playback: false,
@@ -3605,6 +3613,72 @@ impl Workspace {
         }
     }
 
+    /// Rules > Rules as Text: the rules and the numbers written out, to be read and written by hand.
+    pub fn open_script(&mut self) {
+        self.commit_field();
+        self.rules_dialog = false;
+        self.script = Some(crate::script_edit::ScriptEdit::new(&crate::script::write(&self.ed.doc.variables, &self.ed.doc.rules)));
+    }
+
+    /// Takes the text into the document, if all of it reads. Says whether it did.
+    pub fn apply_script(&mut self) -> bool {
+        let Some(script) = self.script.as_mut() else { return false };
+        match script.outcome.clone() {
+            Some(Ok(read)) => {
+                script.changed = false;
+                self.status = tf("{} rules and {} numbers were taken from the text", &[&read.rules.len(), &read.variables.len()]);
+                (self.ed.doc.rules, self.ed.doc.variables) = (read.rules, read.variables);
+                self.rule_picked = 0;
+                self.ed.commit(t("Rules as Text"));
+                true
+            }
+            _ => {
+                self.status = t("The text has lines that cannot be read: they are marked in red").into();
+                false
+            }
+        }
+    }
+
+    /// A key pressed while Rules as Text is open.
+    fn script_key(&mut self, key: &str, control: bool, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(script) = self.script.as_mut() else { return };
+        match (key, control) {
+            ("escape", _) => self.script = None,
+            ("enter", true) => {
+                // Ctrl+Enter: take the text and see the film, as Test Movie does anywhere else.
+                if self.apply_script() {
+                    self.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx);
+                }
+            }
+            ("s", true) => {
+                self.apply_script();
+            }
+            ("v", true) => {
+                if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
+                    script.insert(&text);
+                }
+            }
+            (_, true) => {}
+            ("enter", _) => script.newline(),
+            ("backspace", _) => script.backspace(),
+            ("delete", _) => script.delete(),
+            ("tab", _) => script.insert("\t"),
+            ("left", _) => script.step(0, -1),
+            ("right", _) => script.step(0, 1),
+            ("up", _) => script.step(-1, 0),
+            ("down", _) => script.step(1, 0),
+            ("pageup", _) => script.step(-12, 0),
+            ("pagedown", _) => script.step(12, 0),
+            ("home", _) => script.home(),
+            ("end", _) => script.end(),
+            _ => {}
+        }
+        // The line the caret is on is kept in sight.
+        if let Some(script) = self.script.as_ref() {
+            self.script_scroll.scroll_to_item(script.row);
+        }
+    }
+
     /// What a name in a rule can be chosen from: the value kept, and how the list shows it.
     pub fn rule_choices(&self, pick: crate::rules::Pick) -> Vec<(String, String)> {
         use crate::rules::{choice_name, Pick, COMPARES, CONDITIONS, EDGES, KEYS};
@@ -3653,7 +3727,7 @@ impl Workspace {
     pub fn add_rule(&mut self, kind: crate::rules::EventKind) {
         self.commit_field();
         let event = self.fresh_event(kind);
-        self.ed.doc.rules.push(crate::rules::Rule { event, when: None, steps: Vec::new() });
+        self.ed.doc.rules.push(crate::rules::Rule { event, ..Default::default() });
         self.rule_picked = self.ed.doc.rules.len() - 1;
         self.ed.commit(t("New Rule"));
     }
@@ -3828,6 +3902,7 @@ impl Workspace {
             Cmd::OpenInOther => self.open_in_other(),
             Cmd::Behavior(behavior) => self.run_behavior(behavior),
             Cmd::Rules => self.rules_dialog = true,
+            Cmd::Script => self.open_script(),
             Cmd::Guide => self.open_guide(),
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
@@ -6847,6 +6922,12 @@ impl Workspace {
             cx.notify();
             return;
         }
+        // Rules as Text takes every key while it is open and no field or list is.
+        if self.script.is_some() && self.field.is_none() && self.open_combo.is_none() {
+            self.script_key(key, m.control, window, cx);
+            cx.notify();
+            return;
+        }
         let typing = self.field.is_some() || self.text_edit.is_some();
         if is_sahne() && !typing && m.control && !m.alt && !m.shift && key == "enter" {
             self.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx);
@@ -7231,8 +7312,8 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::RuleNumber => self.ed.doc.rules.get(self.rule_picked).map_or_else(String::new, |rule| number(rule.event.n)),
-            FieldId::RuleIfValue => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.when.as_ref()).map_or_else(String::new, |only| number(only.value)),
-            FieldId::RuleStep(which, second) => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(which)).map_or_else(String::new, |step| number(if second { step.y } else { step.x })),
+            FieldId::RuleIfValue => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.when.as_ref()).map_or_else(String::new, |only| if only.expr.is_empty() { number(only.value) } else { only.expr.clone() }),
+            FieldId::RuleStep(which, second) => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(which)).map_or_else(String::new, |step| if second { step.second() } else { step.first() }),
             FieldId::VariableName(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| v.name.clone()),
             FieldId::VariableStart(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| number(v.start)),
             FieldId::Behavior(which, second) => self.shown_behaviors().get(which).map_or_else(String::new, |b| number(if second { b.b } else { b.a })),
@@ -7371,6 +7452,8 @@ impl Workspace {
                 field.fresh = false;
             }
             field.buffer.push_str(text);
+        } else if let Some(script) = self.script.as_mut() {
+            script.insert(text);
         } else if self.text_edit.is_some() {
             self.edit_text(|t| t.push_str(text));
         }
@@ -7484,21 +7567,43 @@ impl Workspace {
                 self.edit_rule(|rule| rule.event.n = v);
             }
             FieldId::RuleIfValue => {
-                let Some(v) = number else { return };
+                let names: Vec<String> = self.ed.doc.variables.iter().map(|v| v.name.clone()).collect();
+                let read = match crate::script::amount(text, &names) {
+                    Ok(read) => read,
+                    Err(why) => {
+                        self.status = why;
+                        return;
+                    }
+                };
                 self.edit_rule(|rule| {
                     if let Some(only) = rule.when.as_mut() {
-                        only.value = v;
+                        (only.value, only.expr) = match read {
+                            crate::script::Amount::Plain(v) => (v, String::new()),
+                            crate::script::Amount::Sum(sum) => (0.0, sum),
+                        };
                     }
                 });
             }
             FieldId::RuleStep(which, second) => {
-                let Some(v) = number else { return };
+                // A plain number, or a sum such as Score * 2: what the written language takes, the lists take too.
+                let names: Vec<String> = self.ed.doc.variables.iter().map(|v| v.name.clone()).collect();
+                let read = match crate::script::amount(text, &names) {
+                    Ok(read) => read,
+                    Err(why) => {
+                        self.status = why;
+                        return;
+                    }
+                };
                 self.edit_rule(|rule| {
                     if let Some(step) = rule.steps.get_mut(which) {
+                        let (plain, sum) = match read {
+                            crate::script::Amount::Plain(v) => (v, String::new()),
+                            crate::script::Amount::Sum(sum) => (0.0, sum),
+                        };
                         if second {
-                            step.y = v;
+                            (step.y, step.ey) = (plain, sum);
                         } else {
-                            step.x = v;
+                            (step.x, step.ex) = (plain, sum);
                         }
                     }
                 });

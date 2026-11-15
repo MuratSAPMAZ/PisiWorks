@@ -355,7 +355,55 @@ The first ten show when you play inside the program (Enter): the film then plays
 
 All twenty-eight rules can be read in **Rules > Rules and Numbers**.
 
-What rules do not do yet: a moving platform does not carry what stands on it; touching goes by boxes, except for ellipses; a number is whole or decimal, there are no words to keep; a rule has one "only if" and no "otherwise". Levels larger than the stage, a camera and a character with several animations belong to a game studio, not to rules.
+What rules do not do yet: a moving platform does not carry what stands on it; touching goes by boxes, except for ellipses; a number is whole or decimal, there are no words to keep; in the lists a rule has one "only if"; several conditions and "otherwise" are in the written language. Levels larger than the stage, a camera and a character with several animations belong to a game studio, not to rules.
+
+**Writing the rules: the language.** Every sentence of Rules and Numbers can be typed as well. **Rules > Rules as Text** opens all the rules and numbers as a text; a game made with the lists stands here written out, and what is written here shows in the lists. They are two faces of one thing.
+
+```
+Numbers:
+    Score = 0
+    Lives = 5
+
+When Apple touches Basket:
+    increase Score by 1
+    put Apple at the top, at random
+
+When Lives goes below 1:
+    go to scene 2
+```
+
+- *The shape.* A rule is a line for its event, starting at the edge and ending with a colon, and its steps under it, written further in. Enter after an event line puts the caret further in by itself. Under the heading `Numbers:` each number is written `Name = value`. A line that starts with `#` is a remark and is not read.
+- *Read as it is written.* The text is read again at every key. A line that cannot be read turns red, and the reason stands below with its line: "Line 7: this is not a step I know", "Line 9: there is no number called Score". A click on the reason takes the caret to the line. A name of an object or a sound that the document has not got is shown as a warning; the text is taken all the same.
+- *Put in a sentence.* The sentences need not be known by heart: the lists **An event** and **A step** at the top write one, and you put a name or a number in place of each `?`.
+- *Taking it.* **Take the Text** (Ctrl+S) takes what is written into the document; **Take It and Test Movie** (Ctrl+Enter) takes it and opens the game in the browser. The text is not taken while a line cannot be read. Esc closes the window.
+- *Pasting.* Ctrl+V pastes rules copied from elsewhere: the rules of a game can be sent to a friend as text.
+
+What the writing has over the lists is four things:
+
+- *Sums.* Wherever a number goes, a sum may be written: `set Score to Score * 2`, `increase Lives by Score / 10`. The four signs and brackets are used. The place of an object is read with `Name.x` and `Name.y`: `put Bullet at Ship.x + 20, Ship.y`. A whole number at random is `random(1, 6)`. An object with a space in its name is written between quotation marks: `"Giant Rat".x`. (The number boxes of the lists take sums too.)
+- *Several conditions.* Conditions are joined by `and`: `When Hero touches Door, if Score is more than 2 and Lives is more than 0:`. The rule is followed when all of them hold.
+- *Otherwise.* After the steps, `otherwise:` is written at the edge; what stands under it is done when the conditions do not hold.
+- *Waiting.* `wait 1 seconds` puts off the steps after it: the sound first, the change of scene a second later.
+
+```
+When Hero touches Door, if Score is more than 2 and Lives is more than 0:
+    play the sound fanfare
+    wait 1 seconds
+    go to scene 2
+otherwise:
+    play the sound oops
+    put Hero at Hero.x - 40, 322
+```
+
+The sentences for events: `When the film starts`, `When a scene starts`, `When the … key is pressed`, `When … is clicked`, `When … touches … of the stage`, `When … touches …`, `Every … seconds`, `After … seconds`, `When … goes above …`, `When … goes below …`, `When … becomes …`.
+
+The sentences for steps: `move … by … right and … down`, `put … somewhere at random`, `put … at the top, at random`, `put … at …, …`, `show …`, `hide …`, `make … jump at …`, `decrease … by …`, `increase … by …`, `make a copy of … at …`, `remove …`, `make … blink for a moment`, `make … slower by … percent`, `make … faster by … percent`, `set … at random from … to …`, `set … to …`, `wait … seconds`, `stop the film`, `play the film`, `go to frame … and play`, `go to frame … and stop`, `go to the next scene`, `go to scene …`, `play the sound …`, `stop everything`, `start again`.
+
+Conditions: `… is …`, `… is more than …`, `… is less than …`. The names of keys: Space, Up Arrow, Down Arrow, Left Arrow, Right Arrow, Enter, the letters and the digits. Edges: any edge, the bottom edge, the top edge, the left edge, the right edge.
+
+With the program in Turkish the same rules are written and read in Turkish sentences (`Elma nesnesi Sepet nesnesine değince:`); the rules are kept in the document apart from any language, so a game written in one shows in the other in that language's sentences. The names of objects and numbers are not translated.
+
+What the language does not do yet: there are no loops ("do 3 times") and no way to define a command of one's own; nothing but numbers is kept (no words, no lists); only the place of an object is read, not its size or whether it shows. The writing area is a plain editor: there is no selecting, no undo and no find and replace; a long text can be written in an editor of your own and pasted with Ctrl+V.
 
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 

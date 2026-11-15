@@ -361,8 +361,9 @@ const PAGE: &str = r#"<!doctype html>
 // and whether it is round (r).
 // A text that shows a number ("t") is written here, with the number in place of its {name}.
 // rules: what makes the film a game. Each has an event (e): [kind, first name, second name, number]
-// what must also be so (c): [number, how, value] or nothing; and steps (s): [kind, name, first number,
-// second number, second name]. numbers: the numbers by name, as they start.
+// what must also be so (c): a list of [number, how, value], or nothing; steps (s): [kind, name, first number,
+// second number, second name]; and steps to take otherwise (o). A value or a number may be a sum, written
+// as text: "Score * 2", "Hero.x + 10", "random(1, 6)". numbers: the numbers by name, as they start.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
@@ -383,6 +384,8 @@ var actors = {}, keys = {}, mouse = null, grips = [], dragging = null;
 var numbers = {}, frozen = false, ticks = 0, seen = {};
 // The copies rules have made, each with the scene it was made in; and what is solid on this frame.
 var clones = [], made = 0, walls = [];
+// The steps that wait their turn: each with the frame it is to go on at.
+var waiting = [];
 var sounds = movie.sounds.map(function (source) { return new Audio(source); });
 var images = movie.pictures.map(function (source) {
   var image = new Image();
@@ -554,8 +557,44 @@ function startNumbers() {
 }
 // Does one step of a rule. `who` says which objects the event was about, by name, so that
 // "hide Apple" after "Apple touches Basket" hides that apple and not every apple.
+// Works out a sum: numbers by name, an object's place as Name.x and Name.y, a number at random as
+// random(from, to), the four signs and brackets. What it cannot read counts as nothing.
+function sum(text, who, players) {
+  var at = 0;
+  function skip() { while (at < text.length && /\s/.test(text[at])) at += 1; }
+  function sign(c) { skip(); if (text[at] === c) { at += 1; return true; } return false; }
+  function place(name, side) {
+    var p = players.filter(function (p) { return p.name === name && (who[name] === undefined || who[name] === p.key); })[0];
+    return p ? (side === "x" ? p.box[0] : p.box[1]) : 0;
+  }
+  function part() {
+    if (sign("-")) return -part();
+    if (sign("(")) { var inner = total(); sign(")"); return inner; }
+    var m = /^(\d+\.?\d*|\.\d+)/.exec(text.slice(at));
+    if (m) { at += m[0].length; return parseFloat(m[0]); }
+    var name;
+    if (text[at] === '"') { var end = text.indexOf('"', at + 1); if (end < 0) end = text.length; name = text.slice(at + 1, end); at = end + 1; }
+    else { m = /^[^\s+\-*\/().,"]+/.exec(text.slice(at)); if (!m) { at = text.length; return 0; } name = m[0]; at += name.length; }
+    if ((name === "random" || name === "rastgele") && sign("(")) {
+      var from = total(); sign(","); var to = total(); sign(")");
+      return Math.floor(Math.min(from, to) + Math.random() * (Math.abs(to - from) + 1));
+    }
+    if (sign(".")) { skip(); var side = text[at]; at += 1; return place(name, side); }
+    return numbers[name] || 0;
+  }
+  function term() {
+    var v = part();
+    for (;;) { if (sign("*")) v *= part(); else if (sign("/")) { var by = part(); v = by ? v / by : 0; } else return v; }
+  }
+  function total() {
+    var v = term();
+    for (;;) { if (sign("+")) v += term(); else if (sign("-")) v -= term(); else return v; }
+  }
+  return total();
+}
+function amount(value, who, players) { return typeof value === "string" ? sum(value, who, players) : value; }
 function take(step, who, players) {
-  var k = step[0], name = step[1], x = step[2], y = step[3];
+  var k = step[0], name = step[1], x = amount(step[2], who, players), y = amount(step[3], who, players);
   var meant = function (p, name) { return p.name === name && (who[name] === undefined || who[name] === p.key); };
   var them = players.filter(function (p) { return meant(p, name); });
   if (k === "show") {
@@ -609,10 +648,23 @@ function take(step, who, players) {
   else if (k === "halt") { frozen = true; playing = false; }
   else if (k === "restart") restart();
 }
-function follow(rule, who) {
-  if (rule.c && !holds(numbers[rule.c[0]] || 0, rule.c[1], rule.c[2])) return;
+// Takes steps in order from one of them on. A step that waits puts the rest by until its time has come.
+function run(steps, who, from) {
   var players = cast();
-  rule.s.forEach(function (step) { take(step, who || {}, players); });
+  for (var i = from || 0; i < steps.length; i += 1) {
+    if (steps[i][0] === "wait") {
+      waiting.push({ at: ticks + Math.max(1, Math.round(amount(steps[i][2], who, players) * movie.fps)), steps: steps, from: i + 1, who: who });
+      return;
+    }
+    take(steps[i], who, players);
+  }
+}
+// Follows a rule: its steps if everything it asks is so, and otherwise the steps it has for that.
+function follow(rule, who) {
+  who = who || {};
+  var players = cast();
+  var so = !rule.c || rule.c.every(function (c) { return holds(numbers[c[0]] || 0, c[1], amount(c[2], who, players)); });
+  if (so) run(rule.s, who); else if (rule.o) run(rule.o, who);
 }
 // Follows every rule of a kind that `fits` says is meant.
 function happen(kind, fits, who) {
@@ -656,7 +708,7 @@ function judge() {
 }
 // Starts the film again from the beginning, with every number as it started.
 function restart() {
-  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null; clones = [];
+  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null; clones = []; waiting = [];
   startNumbers();
   var same = scene === 0;
   go(0, 0, true);
@@ -743,6 +795,10 @@ function tick() {
     depth = 0;
     enter();
   }
+  // The steps whose wait is over go on from where they stopped.
+  var due = waiting.filter(function (w) { return w.at <= ticks; });
+  waiting = waiting.filter(function (w) { return w.at > ticks; });
+  due.forEach(function (w) { run(w.steps, w.who, w.from); });
   judge();
   draw();
 }

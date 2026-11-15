@@ -233,6 +233,8 @@ pub enum Cmd {
     Guide,
     /// Opens Rules and Numbers.
     Rules,
+    /// Opens Rules as Text, where the rules are written in the language.
+    Script,
     /// Gives the selection a ready-made motion, takes it away, or opens the motions' settings.
     Behavior(BehaviorCmd),
     ManageCommands,
@@ -393,7 +395,7 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
         ],
     ),
     ("Behaviors", BEHAVIOR_MENU),
-    ("Rules", &[cmd("Rules and Numbers...", "", Cmd::Rules), Sep, cmd("Test Movie", "Ctrl+Enter", Cmd::Frame(FrameCmd::TestMovie))]),
+    ("Rules", &[cmd("Rules and Numbers...", "", Cmd::Rules), cmd("Rules as Text...", "", Cmd::Script), Sep, cmd("Test Movie", "Ctrl+Enter", Cmd::Frame(FrameCmd::TestMovie))]),
 ];
 
 /// The menus at the right end of the menu bar, for the program that is running.

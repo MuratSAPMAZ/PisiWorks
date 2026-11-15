@@ -299,7 +299,7 @@ pub fn platform_game() -> Document {
     e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }, Variable { name: lives.to_string(), start: 3.0 }];
     // The door lets the hero through only with every coin: a rule with "only if".
     let mut open = rule((EventKind::Touch, hero_name, door_name, 0.0), &[sound(sfx.win), (StepKind::GotoScene, "", 2.0, 0.0)]);
-    open.when = Some(Condition { number: score.to_string(), how: ">".to_string(), value: 2.0 });
+    open.when = Some(Condition { number: score.to_string(), how: ">".to_string(), value: 2.0, ..Default::default() });
     e.doc.rules = vec![
         rule((EventKind::Start, "", "", 0.0), &[(StepKind::Hide, spark, 0.0, 0.0)]),
         placed(rule((EventKind::Touch, hero_name, coin_name, 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::Spawn, spark, 0.0, 0.0), (StepKind::Remove, coin_name, 0.0, 0.0), sound(sfx.ding)]), &[coin_name]),

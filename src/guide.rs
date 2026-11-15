@@ -64,8 +64,21 @@ pub fn page(language: Language, title: &str, contents: &str) -> (String, String)
         }
     };
     let mut lines = source.lines().peekable();
+    let mut fenced = false;
     while let Some(line) = lines.next() {
         let line = line.trim_end();
+        // Between two lines of three backticks the text is shown as it is written, line for line: rules in the language.
+        if line.trim_start().starts_with("```") {
+            close(&mut body, &mut open);
+            body.push_str(if fenced { "</pre>\n" } else { "<pre>" });
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            body.push_str(&escape(line));
+            body.push('\n');
+            continue;
+        }
         if let Some(heading) = line.strip_prefix("## ") {
             close(&mut body, &mut open);
             count += 1;
@@ -156,6 +169,7 @@ const PAGE: &str = r#"<!doctype html>
   h2 { font-size: 22px; margin: 40px 0 10px; padding-top: 12px; border-top: 2px solid #1e78d2; }
   p, li { margin: 8px 0; }
   code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  pre { background: #1c2438; color: #f4f6fa; padding: 12px 16px; border-radius: 8px; font: 14px/1.5 "DejaVu Sans Mono", "Liberation Mono", monospace; overflow-x: auto; }
   table { border-collapse: collapse; margin: 12px 0; width: 100%; }
   th, td { border: 1px solid #c8d0dc; padding: 5px 9px; text-align: left; vertical-align: top; }
   th { background: #eef2f7; }
@@ -203,7 +217,8 @@ mod tests {
             assert!(html.contains("<table>") && html.contains("<ol>") && html.contains("<ul>") && html.contains("<code>"));
             assert!(!html.contains("**") && !html.contains("\n|") && !html.contains("<p>- "), "Markdown left in the page");
             // The marks are balanced: what is opened is closed.
-            for tag in ["b", "i", "code", "ul", "ol", "table", "p"] {
+            assert!(html.contains("<pre>") && !html.contains("```"));
+            for tag in ["b", "i", "code", "ul", "ol", "table", "p", "pre"] {
                 assert_eq!(html.matches(&format!("<{tag}>")).count() + html.matches(&format!("<{tag} ")).count(), html.matches(&format!("</{tag}>")).count(), "{tag}");
             }
         }

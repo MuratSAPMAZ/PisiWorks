@@ -25,6 +25,8 @@ pub mod optimize;
 pub mod panels;
 pub mod print;
 pub mod rules;
+pub mod script;
+pub mod script_edit;
 pub mod sahne_examples;
 pub mod sahne_games;
 pub mod sahne_showcase;
