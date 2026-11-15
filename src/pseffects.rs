@@ -85,6 +85,8 @@ pub enum Row {
     List { name: &'static str, slot: usize, items: &'static [&'static str], start: usize },
     Blend { name: &'static str, slot: usize, start: BlendMode },
     Color { name: &'static str, color: usize },
+    /// One of the filter's gradients, edited in place.
+    Gradient { name: &'static str, gradient: usize },
 }
 
 const fn number(name: &'static str, slot: usize, min: f32, max: f32, start: f32) -> Row {
@@ -107,6 +109,109 @@ const fn color(effect: usize) -> Row {
     Row::Color { name: "Color:", color: effect }
 }
 
+/// The gradients of the filter, by their numbers: the overlay's, the stroke's, and the two glows'.
+pub const OVERLAY_GRADIENT: usize = 0;
+pub const STROKE_GRADIENT: usize = 1;
+pub const OUTER_GLOW_GRADIENT: usize = 2;
+pub const INNER_GLOW_GRADIENT: usize = 3;
+
+/// A stop of a gradient: where it is, from 0 to 1, and its color, whose alpha is how opaque the gradient is there.
+pub type Stop = (f32, Color);
+
+/// The gradient a filter has when none was made for it: the two colors older
+/// files kept, or for a glow its color fading to nothing.
+pub fn start_gradient(filter: &LiveFilter, gradient: usize) -> Vec<Stop> {
+    let clear = |color: Color| Color { a: 0, ..color };
+    match gradient {
+        OVERLAY_GRADIENT => vec![(0.0, filter.ps_color(GRADIENT_OVERLAY)), (1.0, filter.ps_color(GRADIENT_END))],
+        STROKE_GRADIENT => vec![(0.0, filter.ps_color(STROKE)), (1.0, filter.ps_color(STROKE_END))],
+        OUTER_GLOW_GRADIENT => vec![(0.0, filter.ps_color(OUTER_GLOW)), (1.0, clear(filter.ps_color(OUTER_GLOW)))],
+        _ => vec![(0.0, filter.ps_color(INNER_GLOW)), (1.0, clear(filter.ps_color(INNER_GLOW)))],
+    }
+}
+
+/// Gradients to start from, by name.
+pub const PRESETS: [(&str, &[(f32, [u8; 4])]); 10] = [
+    ("Black, White", &[(0.0, [0, 0, 0, 255]), (1.0, [255, 255, 255, 255])]),
+    ("White, Black", &[(0.0, [255, 255, 255, 255]), (1.0, [0, 0, 0, 255])]),
+    ("Black, Transparent", &[(0.0, [0, 0, 0, 255]), (1.0, [0, 0, 0, 0])]),
+    ("Blue, Red, Yellow", &[(0.0, [0, 0, 255, 255]), (0.5, [255, 0, 0, 255]), (1.0, [255, 255, 0, 255])]),
+    ("Red, Green, Blue", &[(0.0, [255, 0, 0, 255]), (0.5, [0, 255, 0, 255]), (1.0, [0, 0, 255, 255])]),
+    ("Violet, Orange", &[(0.0, [41, 10, 89, 255]), (1.0, [255, 124, 0, 255])]),
+    ("Copper", &[(0.0, [151, 70, 26, 255]), (0.3, [251, 216, 197, 255]), (0.83, [108, 46, 22, 255]), (1.0, [239, 219, 205, 255])]),
+    ("Silver", &[(0.0, [110, 110, 110, 255]), (0.3, [245, 245, 245, 255]), (0.6, [140, 140, 140, 255]), (1.0, [235, 235, 235, 255])]),
+    ("Pastels", &[(0.0, [255, 204, 204, 255]), (0.33, [255, 255, 204, 255]), (0.66, [204, 255, 204, 255]), (1.0, [204, 204, 255, 255])]),
+    (
+        "Spectrum",
+        &[(0.0, [255, 0, 0, 255]), (0.17, [255, 255, 0, 255]), (0.33, [0, 255, 0, 255]), (0.5, [0, 255, 255, 255]), (0.67, [0, 0, 255, 255]), (0.83, [255, 0, 255, 255]), (1.0, [255, 0, 0, 255])],
+    ),
+];
+
+pub fn preset(which: usize) -> Vec<Stop> {
+    PRESETS[which.min(PRESETS.len() - 1)].1.iter().map(|(place, [r, g, b, a])| (*place, Color { r: *r, g: *g, b: *b, a: *a })).collect()
+}
+
+/// The color of a gradient at a place from 0 to 1, and how opaque it is there.
+pub fn gradient_color(stops: &[Stop], place: f32) -> ([f32; 3], f32) {
+    let parts = |color: Color| (rgb(color), color.a as f32 / 255.0);
+    let Some(first) = stops.first() else { return ([0.0; 3], 1.0) };
+    if place <= first.0 {
+        return parts(first.1);
+    }
+    for pair in stops.windows(2) {
+        let (from, to) = (pair[0], pair[1]);
+        if place <= to.0 {
+            let part = if to.0 > from.0 { (place - from.0) / (to.0 - from.0) } else { 1.0 };
+            let ((a, a_opacity), (b, b_opacity)) = (parts(from.1), parts(to.1));
+            return ([0, 1, 2].map(|c| a[c] + (b[c] - a[c]) * part), a_opacity + (b_opacity - a_opacity) * part);
+        }
+    }
+    parts(stops[stops.len() - 1].1)
+}
+
+/// A press under a gradient at `place`: the stop within `reach` of it is taken
+/// hold of, or a new one is put there in the color the gradient has at that place.
+pub fn stop_pressed(mut stops: Vec<Stop>, place: f32, reach: f32) -> (Vec<Stop>, usize) {
+    let place = place.clamp(0.0, 1.0);
+    let nearest = stops.iter().enumerate().min_by(|a, b| (a.1.0 - place).abs().total_cmp(&(b.1.0 - place).abs()));
+    if let Some((index, _)) = nearest.filter(|(_, stop)| (stop.0 - place).abs() <= reach) {
+        return (stops, index);
+    }
+    let (color, opacity) = gradient_color(&stops, place);
+    let channel = |v: f32| (v * 255.0).round().clamp(0.0, 255.0) as u8;
+    let index = stops.iter().position(|stop| stop.0 > place).unwrap_or(stops.len());
+    stops.insert(index, (place, Color { r: channel(color[0]), g: channel(color[1]), b: channel(color[2]), a: channel(opacity) }));
+    (stops, index)
+}
+
+/// The held stop dragged to `place`. Stops can pass one another. Pulled `away`
+/// from the gradient it is taken off, unless only two are left. Gives the stops
+/// and where the held one is now, if it is still there.
+pub fn stop_dragged(mut stops: Vec<Stop>, index: usize, place: f32, away: bool) -> (Vec<Stop>, Option<usize>) {
+    if index >= stops.len() {
+        return (stops, None);
+    }
+    if away && stops.len() > 2 {
+        stops.remove(index);
+        return (stops, None);
+    }
+    let place = (place.clamp(0.0, 1.0) * 100.0).round() / 100.0;
+    stops[index].0 = place;
+    // Sorting keeps the order of stops at the same place, so the held one is found again by counting.
+    let before = stops[..index].iter().filter(|stop| stop.0 <= place).count() + stops[index + 1..].iter().filter(|stop| stop.0 < place).count();
+    let held = stops.remove(index);
+    stops.insert(before, held);
+    (stops, Some(before))
+}
+
+/// Which gradient an effect has, if its settings now call for one.
+pub fn gradient_of(filter: &LiveFilter, effect: usize) -> Option<usize> {
+    rows(effect).iter().filter(|row| row_shows(filter, effect, row)).find_map(|row| match *row {
+        Row::Gradient { gradient, .. } => Some(gradient),
+        _ => None,
+    })
+}
+
 pub const TECHNIQUES: [&str; 2] = ["Softer", "Precise"];
 pub const SOURCES: [&str; 2] = ["Center", "Edge"];
 pub const BEVEL_STYLES: [&str; 5] = ["Outer Bevel", "Inner Bevel", "Emboss", "Pillow Emboss", "Stroke Emboss"];
@@ -114,6 +219,7 @@ pub const BEVEL_TECHNIQUES: [&str; 3] = ["Smooth", "Chisel Hard", "Chisel Soft"]
 pub const DIRECTIONS: [&str; 2] = ["Up", "Down"];
 pub const POSITIONS: [&str; 3] = ["Outside", "Inside", "Center"];
 pub const FILL_TYPES: [&str; 3] = ["Color", "Gradient", "Pattern"];
+pub const GLOW_FILLS: [&str; 2] = ["Color", "Gradient"];
 pub const GRADIENT_STYLES: [&str; 5] = ["Linear", "Radial", "Angle", "Reflected", "Diamond"];
 pub const PATTERNS: [&str; 7] = ["Checkerboard", "Horizontal Stripes", "Vertical Stripes", "Diagonal Stripes", "Dots", "Grid", "Bricks"];
 
@@ -138,21 +244,27 @@ const INNER_SHADOW_ROWS: [Row; 8] = [
     number("Size:", SIZE, 0.0, 250.0, 5.0),
     number("Noise:", NOISE, 0.0, 100.0, 0.0),
 ];
-const OUTER_GLOW_ROWS: [Row; 8] = [
+const OUTER_GLOW_ROWS: [Row; 11] = [
     blend(BlendMode::Screen),
     opacity(75.0),
     number("Noise:", NOISE, 0.0, 100.0, 0.0),
+    Row::List { name: "Fill Type:", slot: FLAG, items: &GLOW_FILLS, start: 0 },
     color(OUTER_GLOW),
+    Row::Gradient { name: "Gradient:", gradient: OUTER_GLOW_GRADIENT },
+    number("Jitter:", ALIGN, 0.0, 100.0, 0.0),
     Row::List { name: "Technique:", slot: STYLE, items: &TECHNIQUES, start: 0 },
     number("Spread:", SPREAD, 0.0, 100.0, 0.0),
     number("Size:", SIZE, 0.0, 250.0, 5.0),
     number("Range:", RANGE, 1.0, 100.0, 50.0),
 ];
-const INNER_GLOW_ROWS: [Row; 9] = [
+const INNER_GLOW_ROWS: [Row; 12] = [
     blend(BlendMode::Screen),
     opacity(75.0),
     number("Noise:", NOISE, 0.0, 100.0, 0.0),
+    Row::List { name: "Fill Type:", slot: FLAG, items: &GLOW_FILLS, start: 0 },
     color(INNER_GLOW),
+    Row::Gradient { name: "Gradient:", gradient: INNER_GLOW_GRADIENT },
+    number("Jitter:", ALIGN, 0.0, 100.0, 0.0),
     Row::List { name: "Technique:", slot: STYLE, items: &TECHNIQUES, start: 0 },
     Row::List { name: "Source:", slot: SOURCE, items: &SOURCES, start: 1 },
     number("Choke:", SPREAD, 0.0, 100.0, 0.0),
@@ -176,7 +288,7 @@ const BEVEL_ROWS: [Row; 15] = [
     Row::Color { name: "Color:", color: BEVEL_SHADE },
     number("Opacity:", FLAG, 0.0, 100.0, 75.0),
 ];
-const SATIN_ROWS: [Row; 7] = [
+const SATIN_ROWS: [Row; 8] = [
     blend(BlendMode::Multiply),
     color(SATIN),
     opacity(50.0),
@@ -184,6 +296,7 @@ const SATIN_ROWS: [Row; 7] = [
     number("Distance:", DISTANCE, 1.0, 250.0, 11.0),
     number("Size:", SIZE, 0.0, 250.0, 14.0),
     Row::Toggle { name: "Invert", slot: FLAG, start: true },
+    Row::Toggle { name: "Anti-aliased", slot: ALIGN, start: true },
 ];
 const COLOR_OVERLAY_ROWS: [Row; 3] = [blend(BlendMode::Normal), color(COLOR_OVERLAY), opacity(100.0)];
 const STROKE_ROWS: [Row; 8] = [
@@ -193,14 +306,13 @@ const STROKE_ROWS: [Row; 8] = [
     opacity(100.0),
     Row::List { name: "Fill Type:", slot: STYLE, items: &FILL_TYPES, start: 0 },
     color(STROKE),
-    Row::Color { name: "Gradient:", color: STROKE_END },
+    Row::Gradient { name: "Gradient:", gradient: STROKE_GRADIENT },
     Row::List { name: "Pattern:", slot: SPREAD, items: &PATTERNS, start: 0 },
 ];
-const GRADIENT_ROWS: [Row; 9] = [
+const GRADIENT_ROWS: [Row; 8] = [
     blend(BlendMode::Normal),
     opacity(100.0),
-    Row::Color { name: "Gradient:", color: GRADIENT_OVERLAY },
-    Row::Color { name: "Color:", color: GRADIENT_END },
+    Row::Gradient { name: "Gradient:", gradient: OVERLAY_GRADIENT },
     Row::Toggle { name: "Reverse", slot: FLAG, start: false },
     Row::List { name: "Style:", slot: STYLE, items: &GRADIENT_STYLES, start: 0 },
     Row::Toggle { name: "Align with Layer", slot: ALIGN, start: true },
@@ -252,7 +364,7 @@ static SETTINGS: LazyLock<Vec<Setting>> = LazyLock::new(|| {
                 Row::Toggle { name, slot, start } => (slot, Setting { name, min: 0.0, max: 1.0, start: if start { 1.0 } else { 0.0 }, toggle: true }),
                 Row::List { name, slot, items, start } => (slot, Setting { name, min: 0.0, max: (items.len() - 1) as f32, start: start as f32, toggle: false }),
                 Row::Blend { name, slot, start } => (slot, Setting { name, min: 0.0, max: (BlendMode::ALL.len() - 1) as f32, start: blend_index(start) as f32, toggle: false }),
-                Row::Heading(_) | Row::Color { .. } => continue,
+                Row::Heading(_) | Row::Color { .. } | Row::Gradient { .. } => continue,
             };
             debug_assert!(slot < SLOTS);
             all[index(effect, slot)] = setting;
@@ -278,14 +390,20 @@ pub fn choices(setting: usize) -> Option<Vec<&'static str>> {
 /// Whether a line of an effect's settings is in use, given the others: a stroke
 /// shows only what its fill type needs.
 pub fn row_shows(filter: &LiveFilter, effect: usize, row: &Row) -> bool {
-    if effect != STROKE {
-        return true;
-    }
-    let fill = filter.value(index(STROKE, STYLE)).round() as usize;
-    match *row {
-        Row::Color { color: STROKE, .. } => fill != 2,
-        Row::Color { color: STROKE_END, .. } => fill == 1,
-        Row::List { slot: SPREAD, .. } => fill == 2,
+    let choice = |slot: usize| filter.value(index(effect, slot)).round() as usize;
+    match effect {
+        STROKE => match *row {
+            Row::Color { .. } => choice(STYLE) == 0,
+            Row::Gradient { .. } => choice(STYLE) == 1,
+            Row::List { slot: SPREAD, .. } => choice(STYLE) == 2,
+            _ => true,
+        },
+        // A glow is one color or a gradient, and only a gradient can jitter.
+        OUTER_GLOW | INNER_GLOW => match *row {
+            Row::Color { .. } => choice(FLAG) == 0,
+            Row::Gradient { .. } | Row::Number { slot: ALIGN, .. } => choice(FLAG) == 1,
+            _ => true,
+        },
         _ => true,
     }
 }
@@ -531,17 +649,17 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         tint(&mut out, &|_| strength, &|at| pattern(which, (at % w) as f32 / scale, (at / w) as f32 / scale), mode(PATTERN_OVERLAY, BLEND));
     }
     if on(GRADIENT_OVERLAY) {
-        let (from, to) = (shade(GRADIENT_OVERLAY), shade(GRADIENT_END));
+        let stops = filter.gradient(OVERLAY_GRADIENT);
         let (style, degrees, scale, strength) = (choice(GRADIENT_OVERLAY, STYLE), v(GRADIENT_OVERLAY, ANGLE), v(GRADIENT_OVERLAY, RANGE) / 100.0, v(GRADIENT_OVERLAY, OPACITY) / 100.0);
         let reverse = v(GRADIENT_OVERLAY, FLAG) >= 0.5;
         // Aligned with the layer, the gradient spans the object; otherwise all that is drawn of it.
         let span = if v(GRADIENT_OVERLAY, ALIGN) >= 0.5 { bounds } else { (0.0, 0.0, w as f32, h as f32) };
         let color = |at: usize| {
             let place = gradient_place(style, (at % w) as f32, (at / w) as f32, span, degrees, scale);
-            let place = if reverse { 1.0 - place } else { place };
-            [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * place)
+            gradient_color(&stops, if reverse { 1.0 - place } else { place })
         };
-        tint(&mut out, &|_| strength, &color, mode(GRADIENT_OVERLAY, BLEND));
+        // Where the gradient is see-through, the object shows as it was.
+        tint(&mut out, &|at| strength * color(at).1, &|at| color(at).0, mode(GRADIENT_OVERLAY, BLEND));
     }
     if on(COLOR_OVERLAY) {
         let (color, strength) = (shade(COLOR_OVERLAY), v(COLOR_OVERLAY, OPACITY) / 100.0);
@@ -554,8 +672,11 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         let (one, other) = (shifted(&blurred, w, h, dx * distance, dy * distance, 0.0), shifted(&blurred, w, h, -dx * distance, -dy * distance, 0.0));
         let invert = v(SATIN, FLAG) >= 0.5;
         let color = shade(SATIN);
+        let smooth = v(SATIN, ALIGN) >= 0.5;
         let sheen = |at: usize| {
             let differ = (one[at] - other[at]).abs();
+            // Without anti-aliasing the shading goes in a few flat steps.
+            let differ = if smooth { differ } else { (differ * 8.0).round() / 8.0 };
             (if invert { 1.0 - differ } else { differ }) * strength
         };
         tint(&mut out, &sheen, &|_| color, mode(SATIN, BLEND));
@@ -577,9 +698,25 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         speckle(&mut mask, w, v(effect, NOISE) / 100.0);
         mask
     };
+    // The color of a glow where it is `amount` strong, and how opaque: one color, or a
+    // gradient that starts at the edge of the object and may be jittered along its length.
+    let glow_color = |effect: usize, gradient: usize| {
+        let (stops, jitter, plain) = (filter.gradient(gradient), v(effect, ALIGN) / 100.0, shade(effect));
+        let graded = choice(effect, FLAG) == 1;
+        move |at: usize, amount: f32| -> ([f32; 3], f32) {
+            if !graded {
+                return (plain, amount);
+            }
+            let place = (1.0 - amount + noise(at % w, at / w, 11) * jitter / 2.0).clamp(0.0, 1.0);
+            let (color, opacity) = gradient_color(&stops, place);
+            (color, if amount > 0.0 { opacity } else { 0.0 })
+        }
+    };
     if on(INNER_GLOW) {
-        let (edge, strength, from_center, color) = (glow(&outside, INNER_GLOW), v(INNER_GLOW, OPACITY) / 100.0, choice(INNER_GLOW, SOURCE) == 0, shade(INNER_GLOW));
-        tint(&mut out, &|at| (if from_center { 1.0 - edge[at] } else { edge[at] }) * strength, &|_| color, mode(INNER_GLOW, BLEND));
+        let (edge, strength, from_center) = (glow(&outside, INNER_GLOW), v(INNER_GLOW, OPACITY) / 100.0, choice(INNER_GLOW, SOURCE) == 0);
+        let color = glow_color(INNER_GLOW, INNER_GLOW_GRADIENT);
+        let amount = |at: usize| if from_center { 1.0 - edge[at] } else { edge[at] };
+        tint(&mut out, &|at| color(at, amount(at)).1 * strength, &|at| color(at, amount(at)).0, mode(INNER_GLOW, BLEND));
     }
     // Photoshop's angles point at the light, and a shadow falls the other way.
     let fall = |effect: usize| {
@@ -596,13 +733,12 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
     }
     if on(STROKE) {
         let (strength, fill) = (v(STROKE, OPACITY) / 100.0, choice(STROKE, STYLE));
-        let (from, to, which) = (shade(STROKE), shade(STROKE_END), choice(STROKE, SPREAD));
+        let (from, stops, which) = (shade(STROKE), filter.gradient(STROKE_GRADIENT), choice(STROKE, SPREAD));
         // A gradient stroke runs from its first color at the bottom to its second at the top, over the stroke's own box.
         let span = extent(&band, w, h);
         let color = |at: usize| match fill {
             1 => {
-                let place = gradient_place(0, (at % w) as f32, (at / w) as f32, span, 90.0, 1.0);
-                [0, 1, 2].map(|c| from[c] + (to[c] - from[c]) * place)
+                gradient_color(&stops, gradient_place(0, (at % w) as f32, (at / w) as f32, span, 90.0, 1.0)).0
             }
             2 => pattern(which, (at % w) as f32, (at / w) as f32),
             _ => from,
@@ -615,11 +751,12 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
 
     // What lies behind the object.
     if on(OUTER_GLOW) {
-        let (mut mask, strength) = (glow(&alpha, OUTER_GLOW), v(OUTER_GLOW, OPACITY) / 100.0);
-        for m in &mut mask {
-            *m *= strength;
+        let (mask, strength) = (glow(&alpha, OUTER_GLOW), v(OUTER_GLOW, OPACITY) / 100.0);
+        let color = glow_color(OUTER_GLOW, OUTER_GLOW_GRADIENT);
+        for (at, px) in out.pixels.iter_mut().enumerate().filter(|(at, _)| mask[*at] > 0.0) {
+            let (tone, opacity) = color(at, mask[at]);
+            *px = over(*px, [tone[0], tone[1], tone[2], (opacity * strength).clamp(0.0, 1.0)]);
         }
-        behind(&mut out, &mask, shade(OUTER_GLOW));
     }
     if on(DROP_SHADOW) {
         let (dx, dy) = fall(DROP_SHADOW);
@@ -760,13 +897,20 @@ mod tests {
     fn every_name_in_the_dialog_has_a_turkish_entry() {
         let table: std::collections::HashMap<&str, &str> = crate::i18n::tr::ENTRIES.iter().copied().collect();
         let known = |name: &str| table.contains_key(name) || table.contains_key(format!("{name}|photoshop").as_str());
-        let lists: [&[&str]; 9] = [&TECHNIQUES, &SOURCES, &BEVEL_STYLES, &BEVEL_TECHNIQUES, &DIRECTIONS, &POSITIONS, &FILL_TYPES, &GRADIENT_STYLES, &PATTERNS];
+        let presets: Vec<&str> = PRESETS.iter().map(|(name, _)| *name).collect();
+        let lists: [&[&str]; 10] = [&presets, &TECHNIQUES, &SOURCES, &BEVEL_STYLES, &BEVEL_TECHNIQUES, &DIRECTIONS, &POSITIONS, &FILL_TYPES, &GRADIENT_STYLES, &PATTERNS];
         for name in NAMES.iter().chain(lists.iter().flat_map(|list| list.iter())) {
             assert!(known(name), "{name}");
         }
         for effect in 0..NAMES.len() {
             for row in rows(effect) {
-                let (Row::Heading(name) | Row::Number { name, .. } | Row::Toggle { name, .. } | Row::List { name, .. } | Row::Blend { name, .. } | Row::Color { name, .. }) = *row;
+                let (Row::Heading(name)
+                | Row::Number { name, .. }
+                | Row::Toggle { name, .. }
+                | Row::List { name, .. }
+                | Row::Blend { name, .. }
+                | Row::Color { name, .. }
+                | Row::Gradient { name, .. }) = *row;
                 assert!(known(name), "{name}");
             }
         }
@@ -786,7 +930,7 @@ mod tests {
         let mut stroke = only(STROKE);
         assert_eq!(shown(&stroke), 6);
         stroke.set_value(index(STROKE, STYLE), 1.0);
-        assert_eq!(shown(&stroke), 7);
+        assert_eq!(shown(&stroke), 6);
         stroke.set_value(index(STROKE, STYLE), 2.0);
         assert_eq!(shown(&stroke), 6);
     }
@@ -881,6 +1025,64 @@ mod tests {
         // With its own colors.
         gradient.set_ps_color(GRADIENT_END, Color::rgb(0, 255, 0));
         assert!(at(&apply(&layer, &gradient), 55, 40)[1] > 0.95);
+        // With three stops it passes through the middle one, and where a stop is clear the object shows.
+        gradient.set_value(index(GRADIENT_OVERLAY, RANGE), 100.0);
+        gradient.set_gradient(OVERLAY_GRADIENT, vec![(0.0, Color::rgb(255, 0, 0)), (0.5, Color::rgb(0, 255, 0)), (1.0, Color { r: 0, g: 0, b: 0, a: 0 })]);
+        let three = apply(&layer, &gradient);
+        assert!(at(&three, 20, 40)[0] > 0.95 && at(&three, 39, 40)[1] > 0.9, "{:?}", at(&three, 39, 40));
+        assert!(at(&three, 59, 40)[2] > 0.9 && at(&three, 59, 40)[3] == 1.0, "{:?}", at(&three, 59, 40));
+    }
+
+    #[test]
+    fn gradient_stops_are_added_moved_and_pulled_away() {
+        let two = preset(0);
+        assert_eq!(gradient_color(&two, 0.5).0, [0.5, 0.5, 0.5]);
+        assert_eq!(gradient_color(&two, -1.0).0, [0.0; 3]);
+        assert_eq!(gradient_color(&preset(2), 0.5).1, 0.5);
+        // A press between the stops adds one in the color found there; a press on a stop takes hold of it.
+        let (three, held) = stop_pressed(two.clone(), 0.5, 0.03);
+        assert_eq!((three.len(), held, three[1]), (3, 1, (0.5, Color { r: 128, g: 128, b: 128, a: 255 })));
+        assert_eq!(stop_pressed(three.clone(), 0.98, 0.03), (three.clone(), 2));
+        // A dragged stop can pass another, and is still the one held.
+        let (moved, held) = stop_dragged(three.clone(), 1, 1.4, false);
+        assert_eq!((held, moved[1].1.r, moved[1].0), (Some(1), 128, 1.0), "at the same place they keep their order");
+        let (moved, held) = stop_dragged(three.clone(), 2, 0.2, false);
+        assert_eq!((held, moved[1].1.r, moved[2].0), (Some(1), 255, 0.5));
+        let (moved, held) = stop_dragged(three.clone(), 0, 0.704, false);
+        assert_eq!((held, moved[1], moved[0].0), (Some(1), (0.7, Color::BLACK), 0.5));
+        // Pulled away it is gone, but the last two stay.
+        let (fewer, held) = stop_dragged(three, 1, 0.5, true);
+        assert_eq!((fewer.clone(), held), (two.clone(), None));
+        assert_eq!(stop_dragged(two.clone(), 0, 0.2, true).1, Some(0));
+        // Every preset runs from 0 to 1 in order.
+        for which in 0..PRESETS.len() {
+            let stops = preset(which);
+            assert!(stops.len() >= 2 && stops[0].0 == 0.0 && stops[stops.len() - 1].0 == 1.0 && stops.windows(2).all(|pair| pair[0].0 <= pair[1].0));
+        }
+    }
+
+    #[test]
+    fn a_glow_can_be_a_gradient_and_only_then_shows_jitter() {
+        let layer = square();
+        let mut glow = only(OUTER_GLOW);
+        glow.set_value(index(OUTER_GLOW, SIZE), 12.0);
+        glow.set_value(index(OUTER_GLOW, STYLE), 1.0);
+        glow.set_value(index(OUTER_GLOW, OPACITY), 100.0);
+        assert_eq!(gradient_of(&glow, OUTER_GLOW), None);
+        glow.set_value(index(OUTER_GLOW, FLAG), 1.0);
+        assert_eq!(gradient_of(&glow, OUTER_GLOW), Some(OUTER_GLOW_GRADIENT));
+        // Red at the edge of the object, turning blue further out.
+        glow.set_gradient(OUTER_GLOW_GRADIENT, vec![(0.0, Color::rgb(255, 0, 0)), (1.0, Color::rgb(0, 0, 255))]);
+        let graded = apply(&layer, &glow);
+        assert!(at(&graded, 18, 40)[0] > 0.7 && at(&graded, 10, 40)[2] > 0.7, "{:?} {:?}", at(&graded, 18, 40), at(&graded, 10, 40));
+        assert!(at(&graded, 2, 40)[3] == 0.0);
+        // Jittered, pixels the same distance out differ.
+        glow.set_value(index(OUTER_GLOW, ALIGN), 100.0);
+        let jittered = apply(&layer, &glow);
+        let column: std::collections::HashSet<u32> = (25..55).map(|y| (at(&jittered, 14, y)[0] * 1000.0) as u32).collect();
+        assert!(column.len() > 10);
+        // The stroke and the overlay have gradients of their own.
+        assert_eq!((gradient_of(&only(GRADIENT_OVERLAY), GRADIENT_OVERLAY), gradient_of(&only(STROKE), STROKE)), (Some(OVERLAY_GRADIENT), None));
     }
 
     #[test]

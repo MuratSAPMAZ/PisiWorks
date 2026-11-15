@@ -53,7 +53,9 @@ Düzeyler, her düzeyde kaç piksel olduğunu ve girişte siyah, orta gri ve bey
 
 Filtre pencerelerinde Önizleme kutusu vardır. Kapalıyken nesne, kutu yeniden işaretlenene veya pencere Tamam ile kapatılana kadar pencere açılmadan önceki haliyle görünür.
 
-Photoshop Canlı Efektleri; Alt Gölge, İç Gölge, Dış Işıma, İç Işıma, Eğim Ver ve Kabart, Saten, Renk Kaplama, Degrade Kaplama, Desen Kaplama ve Kontur efektlerini bir arada tutan tek bir filtredir. İstediklerinizi işaretleyin ve ayarlarını görmek için efektin adına tıklayın: gölge ve ışımalarda karışım modu, opaklık, renk, açı, mesafe, yayılma veya boğma, boyut ve parazit; eğimde stil, teknik, derinlik, yön, yumuşatma, yükseklik, açıkton ve gölge; degradede stil, açı, ölçek ve iki renk; konturda konum ve dolgu türü. Degradeler iki renk arasında uzanır, desenler kısa bir yerleşik listeden seçilir.
+Photoshop Canlı Efektleri; Alt Gölge, İç Gölge, Dış Işıma, İç Işıma, Eğim Ver ve Kabart, Saten, Renk Kaplama, Degrade Kaplama, Desen Kaplama ve Kontur efektlerini bir arada tutan tek bir filtredir. İstediklerinizi işaretleyin ve ayarlarını görmek için efektin adına tıklayın: gölge ve ışımalarda karışım modu, opaklık, renk, açı, mesafe, yayılma veya boğma, boyut ve parazit; eğimde stil, teknik, derinlik, yön, yumuşatma, yükseklik, açıkton ve gölge; degradede stil, açı ve ölçek; konturda konum ve dolgu türü. Desenler kısa bir yerleşik listeden seçilir.
+
+Degrade, altında duraklarıyla gösterilir. Durak eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için degradeden uzağa çekin. Seçili durağın rengi, yüzde olarak konumu ve opaklığı görünür. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Kaplamanın, degrade konturun ve degrade ışımanın ayrı degradeleri vardır; degrade ışıma nesnenin kenarından başlar ve Değişim renklerini dağıtır.
 
 ## Maskeler
 

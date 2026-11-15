@@ -51,7 +51,9 @@ Levels shows how many pixels have each level, with the levels taken as black, mi
 
 Filter dialogs have a Preview box. With it off, the object shows as it was before the dialog opened, until the box is ticked again or the dialog is closed with OK.
 
-Photoshop Live Effects is one filter holding Drop Shadow, Inner Shadow, Outer Glow, Inner Glow, Bevel and Emboss, Satin, Color Overlay, Gradient Overlay, Pattern Overlay and Stroke. Tick the ones you want, and click a name to see its settings: blend mode, opacity, color, angle, distance, spread or choke, size and noise for shadows and glows; style, technique, depth, direction, soften, altitude, highlight and shadow for a bevel; style, angle, scale and two colors for a gradient; position and fill type for a stroke. Gradients run between two colors, and patterns come from a short built-in list.
+Photoshop Live Effects is one filter holding Drop Shadow, Inner Shadow, Outer Glow, Inner Glow, Bevel and Emboss, Satin, Color Overlay, Gradient Overlay, Pattern Overlay and Stroke. Tick the ones you want, and click a name to see its settings: blend mode, opacity, color, angle, distance, spread or choke, size and noise for shadows and glows; style, technique, depth, direction, soften, altitude, highlight and shadow for a bevel; style, angle and scale for a gradient; position and fill type for a stroke. Patterns come from a short built-in list.
+
+A gradient is shown with its stops under it. Click under the gradient to add a stop, drag a stop to move it, and pull one away from the gradient to remove it. The stop that is picked shows its color, its place in percent and its opacity. Presets replaces the gradient with a ready-made one. The overlay, a gradient stroke and a gradient glow each have a gradient of their own; a gradient glow starts at the edge of the object, and Jitter scatters its colors.
 
 ## Masks
 

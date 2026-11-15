@@ -387,6 +387,11 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::GradientPreset => crate::pseffects::PRESETS
+                .iter()
+                .enumerate()
+                .map(|(which, (name, _))| item(crate::pseffects::label(name).into(), false, cx, Box::new(move |this, _, _| this.use_gradient_preset(which))))
+                .collect(),
             Combo::FilterChoice(setting) => {
                 let current = self.edited_filter().map_or(0, |(_, filter)| filter.value(setting).round() as usize);
                 let names: Vec<&'static str> = match self.edited_filter().map(|(_, filter)| filter.kind) {
@@ -831,7 +836,7 @@ impl Workspace {
                     .occlude()
                     // A point of the curve follows the mouse anywhere over the window, not only inside its box.
                     .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
-                        if this.drag_curve(ev.position) || this.drag_level(ev.position) {
+                        if this.drag_curve(ev.position) || this.drag_level(ev.position) || this.drag_gradient(ev.position) {
                             cx.notify();
                         }
                     }))
@@ -1096,6 +1101,86 @@ impl Workspace {
         ]
     }
 
+    /// A gradient to edit in place: ready-made ones to start from, the gradient with
+    /// its stops under it, and the color, place and opacity of the stop that is picked.
+    /// A press under the gradient adds a stop, a drag moves one, and one pulled away is removed.
+    fn gradient_editor(&self, name: &'static str, name_width: f32, stops: Vec<crate::pseffects::Stop>, cx: &mut Context<Self>) -> AnyElement {
+        const WIDTH: f32 = 220.;
+        let picked = self.gradient_stop.filter(|index| *index < stops.len());
+        let cell = self.gradient_bounds.clone();
+        let (ramp_stops, marks) = (stops.clone(), stops);
+        let ramp = canvas(move |bounds, _, _| cell.set(bounds), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            let (width, height) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
+            for x in 0..width.ceil() as usize {
+                let (color, opacity) = crate::pseffects::gradient_color(&ramp_stops, x as f32 / (width - 1.0).max(1.0));
+                // Where the gradient is see-through, a checkerboard shows through it: the upper half on light, the lower on dark squares.
+                for half in 0..2 {
+                    let back = if (x / 4 + half) % 2 == 0 { 1.0 } else { 0.75 };
+                    let channel = |c: usize| ((back + (color[c] - back) * opacity) * 255.0).round().clamp(0.0, 255.0) as u32;
+                    let origin = point(bounds.origin.x + px(x as f32), bounds.origin.y + px(half as f32 * height / 2.0));
+                    window.paint_quad(fill(Bounds { origin, size: size(px(1.2), px(height / 2.0)) }, rgb(channel(0) << 16 | channel(1) << 8 | channel(2))));
+                }
+            }
+        })
+        .w(px(WIDTH))
+        .h(px(16.));
+        let stop_marks = canvas(|_, _, _| (), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            for (index, (place, color)) in marks.iter().enumerate() {
+                let x = bounds.origin.x + px(place * f32::from(bounds.size.width));
+                let top = bounds.origin.y;
+                // A small house under the gradient, pointing at its place, in the color of the stop.
+                let mut roof = gpui::PathBuilder::fill();
+                roof.move_to(point(x, top));
+                roof.line_to(point(x + px(5.), top + px(5.)));
+                roof.line_to(point(x - px(5.), top + px(5.)));
+                roof.close();
+                if let Ok(roof) = roof.build() {
+                    window.paint_path(roof, rgb(if picked == Some(index) { TEXT } else { INPUT_BORDER }));
+                }
+                let body = Bounds { origin: point(x - px(5.), top + px(5.)), size: size(px(10.), px(8.)) };
+                let shade = (color.r as u32) << 16 | (color.g as u32) << 8 | color.b as u32;
+                window.paint_quad(fill(body, rgb(shade)).border_widths(if picked == Some(index) { 2. } else { 1. }).border_color(rgb(if picked == Some(index) { TEXT } else { INPUT_BORDER })));
+            }
+        })
+        .w(px(WIDTH))
+        .h(px(14.));
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(labelled_row(name, name_width, self.combo(Combo::GradientPreset, t("Presets"), 150., cx).bg(rgb(PANEL_RAISED))))
+            .child(
+                div()
+                    .w(px(WIDTH))
+                    .ml(px(5.))
+                    .flex()
+                    .flex_col()
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                            this.press_gradient(ev.position);
+                            cx.notify();
+                        }),
+                    )
+                    .child(div().border_1().border_color(rgb(INPUT_BORDER)).child(ramp))
+                    .child(stop_marks),
+            )
+            .when(picked.is_some(), |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(self.swatch(ColorTarget::GradientStop, 18., cx))
+                        .child(label(t("Location:")))
+                        .child(self.field(FieldId::GradientPlace, 36., cx))
+                        .child(label(t("Opacity:")))
+                        .child(self.field(FieldId::GradientOpacity, 36., cx)),
+                )
+            })
+            .into_any_element()
+    }
+
     /// Photoshop Live Effects: the effects in a list, each with a box that switches it
     /// on, and beside it the settings of the one picked.
     fn photoshop_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
@@ -1127,7 +1212,7 @@ impl Workspace {
                                 MouseButton::Left,
                                 cx.listener(move |this, _, _, cx| {
                                     this.commit_field();
-                                    this.ps_effect = effect;
+                                    (this.ps_effect, this.gradient_stop) = (effect, None);
                                     this.set_filter_value(index(effect, 0), if on { 0.0 } else { 1.0 });
                                     cx.notify();
                                 }),
@@ -1141,7 +1226,7 @@ impl Workspace {
                                 MouseButton::Left,
                                 cx.listener(move |this, _, _, cx| {
                                     this.commit_field();
-                                    this.ps_effect = effect;
+                                    (this.ps_effect, this.gradient_stop) = (effect, None);
                                     cx.notify();
                                 }),
                             )
@@ -1154,7 +1239,7 @@ impl Workspace {
         let names: Vec<&'static str> = lines
             .iter()
             .filter_map(|row| match **row {
-                Row::Number { name, .. } | Row::List { name, .. } | Row::Blend { name, .. } | Row::Color { name, .. } => Some(label(name)),
+                Row::Number { name, .. } | Row::List { name, .. } | Row::Blend { name, .. } | Row::Color { name, .. } | Row::Gradient { name, .. } => Some(label(name)),
                 Row::Heading(_) | Row::Toggle { .. } => None,
             })
             .collect();
@@ -1175,6 +1260,7 @@ impl Workspace {
                     labelled_row(label(name), name_width, self.combo(Combo::FilterChoice(index(shown, slot)), modes[current].label(), 150., cx).bg(rgb(PANEL_RAISED))).into_any_element()
                 }
                 Row::Color { name, color } => labelled_row(label(name), name_width, self.swatch(ColorTarget::PsEffect(color), 18., cx)).into_any_element(),
+                Row::Gradient { name, gradient } => self.gradient_editor(label(name), name_width, filter.gradient(gradient), cx),
             });
         }
         vec![

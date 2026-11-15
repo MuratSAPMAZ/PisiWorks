@@ -70,6 +70,8 @@ pub enum ColorTarget {
     Filter,
     /// The color of one of the effects in the Photoshop Live Effects being edited.
     PsEffect(usize),
+    /// The color of the gradient stop picked in Photoshop Live Effects.
+    GradientStop,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -87,6 +89,8 @@ pub enum Combo {
     AddFilter,
     /// A setting of the filter being edited that is a choice from a list, by its place among the settings.
     FilterChoice(usize),
+    /// The gradients to start from, in Photoshop Live Effects.
+    GradientPreset,
     /// How the mask of the selection works.
     MaskKind,
     /// The blend mode of the selection.
@@ -219,6 +223,9 @@ pub enum FieldId {
     OptimizeSelective,
     /// A number of the live filter being edited, by its place among the settings.
     FilterValue(usize),
+    /// Where the picked gradient stop is, in percent, and how opaque it is.
+    GradientPlace,
+    GradientOpacity,
     OptimizeSmoothing,
     OptimizeColors,
     Mixer(usize),
@@ -464,6 +471,10 @@ pub struct Workspace {
     pub curve_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The effect whose settings show in the Photoshop Live Effects dialog.
     pub ps_effect: usize,
+    /// The stop picked in the gradient of Photoshop Live Effects, and the one being dragged.
+    pub gradient_stop: Option<usize>,
+    pub gradient_drag: Option<usize>,
+    pub gradient_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// With Preview off in a filter dialog, the filter as edited so far; the object
     /// meanwhile shows the filters it had before the dialog opened.
     pub filter_draft: Option<LiveFilter>,
@@ -690,6 +701,9 @@ impl Workspace {
             curve_point: None,
             curve_bounds: Rc::new(Cell::new(Bounds::default())),
             ps_effect: 0,
+            gradient_stop: None,
+            gradient_drag: None,
+            gradient_bounds: Rc::new(Cell::new(Bounds::default())),
             filter_draft: None,
             filter_dropper: None,
             level_drag: None,
@@ -837,6 +851,7 @@ impl Workspace {
         self.filter_dialog = Some((index, before));
         (self.curve_drag, self.curve_point, self.ps_effect) = (None, None, 0);
         (self.filter_draft, self.filter_dropper, self.level_drag) = (None, None, None);
+        (self.gradient_stop, self.gradient_drag) = (None, None);
         self.filter_histogram = self.histogram_before(index).map(Rc::new);
     }
 
@@ -945,6 +960,64 @@ impl Workspace {
         true
     }
 
+    /// The gradient of the effect on show in Photoshop Live Effects: its number and its stops.
+    pub fn shown_gradient(&self) -> Option<(usize, Vec<crate::pseffects::Stop>)> {
+        let (_, filter) = self.edited_filter()?;
+        let gradient = crate::pseffects::gradient_of(&filter, self.ps_effect)?;
+        Some((gradient, filter.gradient(gradient)))
+    }
+
+    /// The gradient stop that is picked.
+    pub fn picked_stop(&self) -> Option<crate::pseffects::Stop> {
+        self.shown_gradient()?.1.get(self.gradient_stop?).copied()
+    }
+
+    /// Changes the picked stop of the gradient on show.
+    fn change_picked_stop(&mut self, change: impl Fn(&mut crate::pseffects::Stop)) {
+        let (Some((gradient, mut stops)), Some(index)) = (self.shown_gradient(), self.gradient_stop) else { return };
+        let Some(stop) = stops.get_mut(index) else { return };
+        change(stop);
+        // Typing a place can carry the stop past its neighbors.
+        let (stops, held) = crate::pseffects::stop_dragged(stops.clone(), index, stops[index].0, false);
+        self.gradient_stop = held;
+        self.edit_filter(true, |filter| filter.set_gradient(gradient, stops.clone()));
+    }
+
+    /// Where a place on screen is along the gradient, from 0 to 1, how far a stop reaches, and whether it is well away from the gradient.
+    fn gradient_place(&self, at: Point<Pixels>) -> (f32, f32, bool) {
+        let bounds = self.gradient_bounds.get();
+        let width = f32::from(bounds.size.width).max(1.0);
+        let below = f32::from(at.y - bounds.origin.y) - f32::from(bounds.size.height);
+        (f32::from(at.x - bounds.origin.x) / width, 6.0 / width, !(-45.0..=30.0).contains(&below))
+    }
+
+    /// A press under the gradient: picks the stop there, or adds one.
+    pub fn press_gradient(&mut self, at: Point<Pixels>) {
+        self.commit_field();
+        let Some((gradient, stops)) = self.shown_gradient() else { return };
+        let (place, reach, _) = self.gradient_place(at);
+        let (stops, index) = crate::pseffects::stop_pressed(stops, place, reach);
+        self.edit_filter(false, |filter| filter.set_gradient(gradient, stops.clone()));
+        (self.gradient_stop, self.gradient_drag) = (Some(index), Some(index));
+    }
+
+    /// Moves the held gradient stop to the mouse; pulled well away from the gradient, it is taken off.
+    pub fn drag_gradient(&mut self, at: Point<Pixels>) -> bool {
+        let (Some(index), Some((gradient, stops))) = (self.gradient_drag, self.shown_gradient()) else { return false };
+        let (place, _, away) = self.gradient_place(at);
+        let (stops, held) = crate::pseffects::stop_dragged(stops, index, place, away);
+        (self.gradient_stop, self.gradient_drag) = (held, held);
+        self.edit_filter(false, |filter| filter.set_gradient(gradient, stops.clone()));
+        true
+    }
+
+    /// Replaces the gradient on show with one of the ready-made ones.
+    pub fn use_gradient_preset(&mut self, which: usize) {
+        let Some((gradient, _)) = self.shown_gradient() else { return };
+        self.gradient_stop = None;
+        self.edit_filter(true, |filter| filter.set_gradient(gradient, crate::pseffects::preset(which)));
+    }
+
     /// The five numbers of the Levels channel on show.
     fn shown_levels(&self) -> Option<[f32; 5]> {
         let (_, filter) = self.edited_filter()?;
@@ -1014,7 +1087,8 @@ impl Workspace {
 
     /// Lets go of a point of the curve or a slider of Levels.
     pub fn release_curve(&mut self) {
-        if (self.curve_drag.take().is_some() || self.level_drag.take().is_some()) && self.filter_draft.is_none() {
+        let held = [self.curve_drag.take(), self.level_drag.take(), self.gradient_drag.take()];
+        if held.iter().any(Option::is_some) && self.filter_draft.is_none() {
             self.ed.commit(t("Live Filters"));
         }
     }
@@ -1058,6 +1132,7 @@ impl Workspace {
         }
         (self.filter_histogram, self.curve_drag, self.curve_point) = (None, None, None);
         (self.filter_dropper, self.level_drag) = (None, None);
+        (self.gradient_stop, self.gradient_drag) = (None, None);
     }
 
     /// The blend mode the selection has, or Normal with nothing selected.
@@ -3705,6 +3780,8 @@ impl Workspace {
             FieldId::OptimizeQuality => page.export.quality.to_string(),
             FieldId::OptimizeSelective => page.export.selective_quality.to_string(),
             FieldId::FilterValue(setting) => self.edited_filter().map_or_else(String::new, |(_, filter)| number(filter.value(setting))),
+            FieldId::GradientPlace => self.picked_stop().map_or_else(String::new, |stop| number((stop.0 * 100.0).round())),
+            FieldId::GradientOpacity => self.picked_stop().map_or_else(String::new, |stop| number((stop.1.a as f32 / 2.55).round())),
             FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
             FieldId::OptimizeColors => page.export.colors.to_string(),
             FieldId::Mixer(channel) => {
@@ -3926,6 +4003,14 @@ impl Workspace {
                 let Some(v) = number else { return };
                 self.set_filter_value(setting, v);
             }
+            FieldId::GradientPlace => {
+                let Some(v) = number else { return };
+                self.change_picked_stop(|stop| stop.0 = (v / 100.0).clamp(0.0, 1.0));
+            }
+            FieldId::GradientOpacity => {
+                let Some(v) = number else { return };
+                self.change_picked_stop(|stop| stop.1.a = (v.clamp(0.0, 100.0) * 2.55).round() as u8);
+            }
             FieldId::OptimizeSelective => {
                 let Some(v) = number else { return };
                 self.set_export(|s| s.selective_quality = v.clamp(1.0, 100.0) as u8);
@@ -4003,6 +4088,7 @@ impl Workspace {
             ColorTarget::JpegMask => Some(self.ed.doc.page().jpeg_mask_color.unwrap_or(JPEG_MASK_COLOR)),
             ColorTarget::Filter => self.edited_filter().and_then(|(_, filter)| filter.color.or(filter.kind.start_color())),
             ColorTarget::PsEffect(effect) => self.edited_filter().map(|(_, filter)| filter.ps_color(effect)),
+            ColorTarget::GradientStop => self.picked_stop().map(|stop| Color { a: 255, ..stop.1 }),
         }
     }
 
@@ -4038,6 +4124,12 @@ impl Workspace {
                 // An effect always has a color: "none" leaves it as it was.
                 if let Some(color) = color {
                     self.edit_filter(true, |filter| filter.set_ps_color(effect, color));
+                }
+            }
+            ColorTarget::GradientStop => {
+                // The stop keeps how opaque it is; only its color changes.
+                if let Some(color) = color {
+                    self.change_picked_stop(|stop| stop.1 = Color { a: stop.1.a, ..color });
                 }
             }
             ColorTarget::JpegMask => {
