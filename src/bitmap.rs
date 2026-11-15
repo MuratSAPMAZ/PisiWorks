@@ -795,13 +795,31 @@ impl Bitmap {
         if !mask.fits(self) || mask.is_empty() {
             return None;
         }
-        let (mut low, mut high) = ([255u8; 4], [0u8; 4]);
+        // Every color in the selection counts by itself: a pixel is alike if it is within
+        // the tolerance of one of them, not merely somewhere between the darkest and the lightest.
+        // The colors are kept in boxes as wide as the tolerance, so a pixel is held against few of them.
+        let step = tolerance as u16 + 1;
+        let cell = |px: &[u8]| [px[0] as u16 / step, px[1] as u16 / step, px[2] as u16 / step, px[3] as u16 / step];
+        let mut boxes: std::collections::HashMap<[u16; 4], Vec<[u8; 4]>> = std::collections::HashMap::new();
         for (px, _) in self.rgba.chunks_exact(4).zip(&mask.cells).filter(|(_, set)| **set) {
-            for channel in 0..4 {
-                (low[channel], high[channel]) = (low[channel].min(px[channel]), high[channel].max(px[channel]));
+            let colors = boxes.entry(cell(px)).or_default();
+            let color = [px[0], px[1], px[2], px[3]];
+            if !colors.contains(&color) {
+                colors.push(color);
             }
         }
-        let alike = |px: &[u8]| (0..4).all(|c| px[c] >= low[c].saturating_sub(tolerance) && px[c] <= high[c].saturating_add(tolerance));
+        let near = |px: &[u8], color: &[u8; 4]| (0..4).all(|c| px[c].abs_diff(color[c]) <= tolerance);
+        let alike = |px: &[u8]| {
+            let at = cell(px);
+            // A color within the tolerance lies in the pixel's own box or in one beside it.
+            (0..81u16).any(|n| {
+                let beside = [at[0] + n % 3, at[1] + n / 3 % 3, at[2] + n / 9 % 3, at[3] + n / 27 % 3];
+                if beside.contains(&0) {
+                    return false;
+                }
+                boxes.get(&beside.map(|v| v - 1)).is_some_and(|colors| colors.iter().any(|color| near(px, color)))
+            })
+        };
         Some(Mask { width: self.width, height: self.height, cells: self.rgba.chunks_exact(4).map(alike).collect(), soft: None })
     }
 
@@ -1194,6 +1212,11 @@ mod tests {
         // With no room for difference only the same color is taken.
         assert_eq!(bitmap.similar(&picked, 0).unwrap().cells.iter().filter(|c| **c).count(), 1);
         assert!(bitmap.similar(&Mask::empty(9, 1), 32).is_none());
+        // Black and white picked together take black and white, and not the grey between them.
+        let grey = Bitmap::from_rgba(4, 1, vec![0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255, 250, 250, 250, 255]).unwrap();
+        let both = Mask::from_fn(4, 1, |x, _| x == 0 || x == 2);
+        let alike = grey.similar(&both, 10).unwrap();
+        assert_eq!((0..4).map(|x| alike.is_set(x, 0)).collect::<Vec<_>>(), [true, false, true, true]);
     }
 
     #[test]

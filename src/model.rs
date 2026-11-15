@@ -3188,6 +3188,13 @@ impl Editor {
                 o.fill_style = source.fill_style.clone();
             }
             (o.opacity, o.blend, o.filters) = (source.opacity, source.blend, source.filters.clone());
+            // From text to text the font, its size and what is done to the letters go along too.
+            if let (Shape::Text { size, style, .. }, Shape::Text { size: from_size, style: from_style, .. }) = (&mut o.shape, &source.shape) {
+                let on_path = (style.on_path, style.path_offset);
+                (*size, *style) = (*from_size, from_style.clone());
+                (style.on_path, style.path_offset) = on_path;
+                o.refit_text();
+            }
         });
         !self.selection.is_empty()
     }
@@ -3294,21 +3301,34 @@ impl Editor {
     /// Fireworks' Flatten Layers: everything on the layers that show becomes one
     /// bitmap on one layer. Hidden layers go; slices and hotspots stay as they are.
     pub fn flatten_layers(&mut self) -> bool {
-        let page = self.doc.page();
-        let shown: Vec<Object> = page.layers.iter().filter(|l| l.visible).flat_map(|l| &l.objects).filter(|o| !o.is_web() && o.visible).cloned().collect();
-        let web: Vec<Object> = page.layers.iter().flat_map(|l| &l.objects).filter(|o| o.is_web()).cloned().collect();
-        let Some((bitmap, area)) = crate::export::render_objects(&shown) else { return false };
+        self.leave_symbol();
+        self.close_groups();
+        let page = self.doc.page().clone();
+        // What a state shows on its visible layers, as one bitmap, with its web objects after it.
+        let flattened = |view: &Page| {
+            let shown: Vec<Object> = view.layers.iter().filter(|l| l.visible).flat_map(|l| &l.objects).filter(|o| !o.is_web() && o.visible).cloned().collect();
+            let web: Vec<Object> = view.layers.iter().flat_map(|l| &l.objects).filter(|o| o.is_web()).cloned().collect();
+            (crate::export::render_objects(&shown), web)
+        };
+        let (Some((bitmap, area)), web) = flattened(&page) else { return false };
         let flat = Object::new_bitmap(self.alloc_id(), t("Bitmap"), bitmap, area.x, area.y);
         let id = flat.id;
+        // Every other state is flattened the same way, as Fireworks does: one bitmap for each.
+        let mut others = Vec::new();
+        for index in (0..page.states.len()).filter(|index| *index != page.active_state) {
+            let (drawn, web) = flattened(&page.at_state(index));
+            let flat = drawn.map(|(bitmap, area)| Object::new_bitmap(self.alloc_id(), t("Bitmap"), bitmap, area.x, area.y));
+            others.push((index, flat.into_iter().chain(web).collect::<Vec<Object>>()));
+        }
         let page = self.doc.page_mut();
         let mut layer = Layer::new(tf("Layer {}", &[&1]));
         layer.objects = std::iter::once(flat).chain(web).collect();
         page.layers = vec![layer];
         page.active_layer = 0;
-        // The other states keep their objects, gathered on the one layer that is left.
-        for state in page.inactive_states_mut() {
-            state.objects = vec![std::mem::take(&mut state.objects).into_iter().flatten().collect()];
+        for (index, objects) in others {
+            page.states[index].objects = vec![objects];
         }
+        page.animations.clear();
         self.selection = vec![id];
         true
     }
@@ -5032,6 +5052,16 @@ mod tests {
         assert_eq!(page.layers[0].objects[0].bounds, Rect { x: 10.0, y: 10.0, w: 70.0, h: 20.0 });
         assert!(page.states.iter().all(|state| state.objects.len() <= 1), "the other states have one layer too");
         assert!(!Editor::new(Document::new(10, 10)).flatten_layers());
+        // A second state with two boxes of its own is flattened to one bitmap as well.
+        let mut e = three_boxes();
+        e.doc.page_mut().duplicate_state();
+        e.doc.page_mut().goto_state(0);
+        e.add_layer();
+        assert!(e.flatten_layers());
+        let other = e.doc.page().at_state(1);
+        assert_eq!(other.objects().count(), 1);
+        assert!(other.objects().next().unwrap().is_image());
+        assert_eq!(other.objects().next().unwrap().bounds, Rect { x: 10.0, y: 10.0, w: 70.0, h: 20.0 });
     }
 
     #[test]
@@ -5072,6 +5102,15 @@ mod tests {
         let (from, to) = (e.object(all[0]).unwrap().clone(), e.object(all[2]).unwrap().clone());
         assert_eq!((to.fill, to.stroke, to.opacity, to.filters.len()), (from.fill, from.stroke, 0.5, 1));
         assert_eq!(to.bounds, Rect { x: 60.0, y: 10.0, w: 20.0, h: 20.0 }, "it stays where and what it was");
+        // From text to text the size and the style of the letters go along; the words stay.
+        let bold = TextStyle { bold: true, align: TextAlign::Center, ..TextStyle::default() };
+        e.object_mut(all[0]).unwrap().shape = Shape::Text { content: "a".into(), size: 30.0, style: bold.clone() };
+        e.object_mut(all[2]).unwrap().shape = Shape::Text { content: "bc".into(), size: 12.0, style: TextStyle::default() };
+        e.selection = vec![all[0]];
+        e.copy();
+        e.selection = vec![all[2]];
+        assert!(e.paste_attributes());
+        assert_eq!(e.object(all[2]).unwrap().shape, Shape::Text { content: "bc".into(), size: 30.0, style: bold });
         // Nothing copied, or nothing selected, and nothing happens.
         e.selection.clear();
         assert!(!e.paste_attributes());

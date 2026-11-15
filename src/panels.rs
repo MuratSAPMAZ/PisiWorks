@@ -699,7 +699,8 @@ impl Workspace {
                 row()
                     .justify_between()
                     .child(label(size_text))
-                    .child(self.text_button(t("Export..."), true, cx, |this, window, cx| this.run(Cmd::Export, window, cx))),
+                    // Image Preview has an Export button of its own.
+                    .when(self.image_preview.is_none(), |d| d.child(self.text_button(t("Export..."), true, cx, |this, window, cx| this.run(Cmd::Export, window, cx)))),
             )
             .into_any_element()
     }
