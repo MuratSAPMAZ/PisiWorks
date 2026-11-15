@@ -1909,11 +1909,33 @@ impl Workspace {
     }
 
     /// Opens a menu where the mouse was right-clicked.
-    pub fn open_context_menu(&mut self, at: Point<Pixels>, entries: &'static [crate::menus::Entry]) {
+    pub fn open_context_menu(&mut self, at: Point<Pixels>, entries: &'static [crate::menus::Entry], window: &Window) {
         self.finish_pending();
         self.close_overlays();
         self.frames_playing = false;
-        self.context_menu = Some((at, entries));
+        // The menu is kept inside the window: near the right or bottom edge it opens leftward or upward.
+        let view = window.viewport_size();
+        let tall = entries.iter().map(|entry| if matches!(entry, crate::menus::Entry::Sep) { 9.0 } else { 20.0 }).sum::<f32>() + 10.0;
+        let x = f32::from(at.x).min(f32::from(view.width) - 244.0).max(0.0);
+        let y = f32::from(at.y).min(f32::from(view.height) - tall - 4.0).max(0.0);
+        self.context_menu = Some((point(px(x), px(y)), entries));
+    }
+
+    /// A right-click on the canvas: what is under the pointer is selected, unless it already is, and the menu for it opens.
+    pub fn canvas_context(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if self.awaiting_answer || self.view_mode != ViewMode::Original {
+            return;
+        }
+        window.focus(&self.focus);
+        self.finish_pending();
+        let p = self.view_map().to_doc(ev.position);
+        match self.ed.doc.page().hit_test(p, self.tolerance()) {
+            Some(id) if !self.ed.is_selected(id) => self.ed.selection = vec![id],
+            Some(_) => {}
+            None => self.ed.selection.clear(),
+        }
+        self.open_context_menu(ev.position, if is_sahne() { crate::menus::STAGE_MENU } else { crate::menus::CANVAS_MENU }, window);
+        cx.notify();
     }
 
     // ---- Panels ---------------------------------------------------------------------
@@ -3500,7 +3522,8 @@ impl Workspace {
         if !self.is_enabled(cmd) {
             return;
         }
-        if !matches!(cmd, Cmd::Panel(_) | Cmd::HidePanels) {
+        // Play is also Stop: it has to find the timeline still playing to stop it.
+        if !matches!(cmd, Cmd::Panel(_) | Cmd::HidePanels | Cmd::Frame(crate::menus::FrameCmd::Play)) {
             self.stop_playing();
         }
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));

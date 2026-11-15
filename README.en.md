@@ -173,7 +173,7 @@ Working at this stage:
 - Scenes: every page in the Scenes panel is a scene, and the film plays them one after another.
 - Sound: an MP3, OGG or WAV file is imported and started on a keyframe.
 - Test Movie (Ctrl+Enter) publishes the film and opens it in the browser.
-- Right-click menus in the timeline: on a frame, the tween, frame and keyframe commands; on a layer's name, the layer commands.
+- Right-click menus: in the timeline, on a frame, the tween, frame and keyframe commands, and on a layer's name the layer commands; on the stage, on an object or an empty spot, the editing, arranging, transforming and symbol commands. PisiWorks' canvas has the same menu.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - Six ready animations in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, and two scenes with buttons.
 - Exchange with PisiWorks: **PisiSahne > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **PisiWorks > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.

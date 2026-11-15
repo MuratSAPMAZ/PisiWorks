@@ -428,6 +428,60 @@ pub const FRAME_MENU: &[Entry] = &[
     cmd("Import Sound...", "", Cmd::Frame(FrameCmd::ImportSound)),
 ];
 
+/// The commands a right-click on the canvas offers in both programs: for what is selected, or for the page.
+const STAGE_COMMON: [Entry; 17] = [
+    cmd("Cut", "Ctrl+X", Cmd::Cut),
+    cmd("Copy", "Ctrl+C", Cmd::Copy),
+    cmd("Paste", "Ctrl+V", Cmd::Paste),
+    cmd("Clear", "Delete", Cmd::Clear),
+    cmd("Duplicate", "Ctrl+Alt+D", Cmd::Duplicate),
+    Sep,
+    Sub(
+        "Arrange",
+        &[
+            cmd("Bring to Front", "Ctrl+Shift+Up", Cmd::Arrange(Arrange::Front)),
+            cmd("Bring Forward", "Ctrl+Up", Cmd::Arrange(Arrange::Forward)),
+            cmd("Send Backward", "Ctrl+Down", Cmd::Arrange(Arrange::Backward)),
+            cmd("Send to Back", "Ctrl+Shift+Down", Cmd::Arrange(Arrange::Back)),
+        ],
+    ),
+    Sub(
+        "Transform",
+        &[
+            cmd("Rotate 90 CW", "", Cmd::Rotate { clockwise: true }),
+            cmd("Rotate 90 CCW", "", Cmd::Rotate { clockwise: false }),
+            cmd("Flip Horizontal", "", Cmd::FlipH),
+            cmd("Flip Vertical", "", Cmd::FlipV),
+        ],
+    ),
+    Sep,
+    cmd("Group", "Ctrl+G", Cmd::Group),
+    cmd("Ungroup", "Ctrl+Shift+G", Cmd::Ungroup),
+    Sep,
+    cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol),
+    cmd("Edit Symbol", "", Cmd::EditSymbol),
+    Sep,
+    cmd("Select All", "Ctrl+A", Cmd::SelectAll),
+    cmd("Deselect", "Ctrl+D", Cmd::Deselect),
+];
+
+/// What a right-click on PisiWorks' canvas offers.
+pub const CANVAS_MENU: &[Entry] = &STAGE_COMMON;
+
+/// What a right-click on the animation program's stage offers: the tweens of the frame on show first, as in Flash.
+pub const STAGE_MENU: &[Entry] = &{
+    let mut entries = [Sep; 21];
+    entries[0] = cmd("Create Motion Tween", "", Cmd::Frame(FrameCmd::Tween));
+    entries[1] = cmd("Create Shape Tween", "", Cmd::Frame(FrameCmd::ShapeTween));
+    entries[2] = cmd("Insert Keyframe", "F6", Cmd::Frame(FrameCmd::Keyframe));
+    let mut index = 0;
+    while index < 17 {
+        entries[4 + index] = STAGE_COMMON[index];
+        index += 1;
+    }
+    entries
+};
+
 /// What a right-click on a layer's name in the timeline offers.
 pub const LAYER_MENU: &[Entry] = &[
     cmd("New Layer", "", Cmd::AddLayer),

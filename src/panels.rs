@@ -1868,9 +1868,9 @@ impl Workspace {
                     )
                     .on_mouse_down(
                         MouseButton::Right,
-                        cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                        cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
                             this.ed.set_active_layer(index);
-                            this.open_context_menu(ev.position, crate::menus::LAYER_MENU);
+                            this.open_context_menu(ev.position, crate::menus::LAYER_MENU, window);
                             cx.notify();
                         }),
                     )
@@ -1922,9 +1922,9 @@ impl Workspace {
                         // A right-click goes to the frame and opens the menu of what can be done with it, as in Flash.
                         .on_mouse_down(
                             MouseButton::Right,
-                            cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                            cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
                                 this.show_frame(frame, Some(index));
-                                this.open_context_menu(ev.position, crate::menus::FRAME_MENU);
+                                this.open_context_menu(ev.position, crate::menus::FRAME_MENU, window);
                                 cx.notify();
                             }),
                         )

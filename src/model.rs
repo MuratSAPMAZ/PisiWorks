@@ -3248,8 +3248,78 @@ fn point_along(path: &[Vec2], distance: f32) -> Vec2 {
 /// The most frames a timeline may have.
 pub const MAX_FRAMES: usize = 20_000;
 
+/// How one outline has been turned, resized and moved to give another, if it has been
+/// and nothing else: the turn in radians clockwise, the change of size, and the middle
+/// of each. A shape turned by a command that redraws it as a path (Rotate 90°, a flip of
+/// a symmetrical shape) carries no record of the turn; its outline still tells it.
+fn turned_between(from: &[Vec2], to: &[Vec2]) -> Option<(f32, f32, Vec2, Vec2)> {
+    let count = from.len();
+    if count < 3 || count != to.len() {
+        return None;
+    }
+    let middle = |points: &[Vec2]| v2(points.iter().map(|p| p.x).sum::<f32>() / count as f32, points.iter().map(|p| p.y).sum::<f32>() / count as f32);
+    let (ca, cb) = (middle(from), middle(to));
+    let spread = |points: &[Vec2], c: Vec2| points.iter().map(|p| (p.x - c.x).powi(2) + (p.y - c.y).powi(2)).sum::<f32>();
+    let (sa, sb) = (spread(from, ca), spread(to, cb));
+    if sa <= 0.0 || sb <= 0.0 {
+        return None;
+    }
+    let scale = (sb / sa).sqrt();
+    // The corners of a redrawn shape may be numbered from another corner: each start is tried, and the best fit kept.
+    let shifts = if count <= 256 { count } else { 1 };
+    let mut best: Option<(f32, f32)> = None;
+    for shift in 0..shifts {
+        let (mut along, mut across) = (0.0, 0.0);
+        for (index, p) in from.iter().enumerate() {
+            let q = to[(index + shift) % count];
+            let (ax, ay, bx, by) = (p.x - ca.x, p.y - ca.y, q.x - cb.x, q.y - cb.y);
+            along += ax * bx + ay * by;
+            across += ax * by - ay * bx;
+        }
+        let angle = across.atan2(along);
+        // How far the points still are from their partners once turned and resized, against the size of the shape.
+        let (sin, cos) = angle.sin_cos();
+        let off: f32 = from
+            .iter()
+            .enumerate()
+            .map(|(index, p)| {
+                let q = to[(index + shift) % count];
+                let (ax, ay) = ((p.x - ca.x) * scale, (p.y - ca.y) * scale);
+                (ax * cos - ay * sin - (q.x - cb.x)).powi(2) + (ax * sin + ay * cos - (q.y - cb.y)).powi(2)
+            })
+            .sum::<f32>()
+            / sb;
+        // Point for point as they are numbered is the truth when it fits: a shape with many like sides, such as a
+        // gear, fits from other starts as well, with a turn it never made.
+        if shift == 0 && off < 1e-3 {
+            return Some((angle, scale, ca, cb));
+        }
+        if best.is_none_or(|(least, _)| off < least - 1e-4) {
+            best = Some((off, angle));
+        }
+    }
+    best.filter(|(off, _)| *off < 1e-3).map(|(_, angle)| (angle, scale, ca, cb))
+}
+
 /// An object on its way from how one keyframe has it to how the next has it.
 fn between(from: &Object, to: &Object, part: f32, turns: i32) -> Object {
+    // A shape that was turned between the keyframes without a record of it, or is asked to make whole turns, is
+    // carried round by what its outline shows: turned, resized and moved a part of the way.
+    if from.placement.is_none() && to.placement.is_none() && !matches!(from.shape, Shape::Text { .. } | Shape::Instance { .. } | Shape::Group { .. } | Shape::Image { .. }) {
+        if let Some((angle, scale, ca, cb)) = turned_between(&from.outline(), &to.outline()) {
+            if angle.abs() > 0.001 {
+                let sweep = angle + turns as f32 * std::f32::consts::TAU;
+                let center = v2(ca.x + (cb.x - ca.x) * part, ca.y + (cb.y - ca.y) * part);
+                let size = 1.0 + (scale - 1.0) * part;
+                let carry = Warp::fit(Rect { x: ca.x - 1.0, y: ca.y - 1.0, w: 2.0, h: 2.0 }, Rect { x: center.x - size, y: center.y - size, w: 2.0 * size, h: 2.0 * size }).then(&Warp::rotation(center, sweep * part));
+                let mut object = from.clone();
+                if object.warp(&carry) {
+                    object.opacity = from.opacity + (to.opacity - from.opacity) * part;
+                    return object;
+                }
+            }
+        }
+    }
     let pose = |object: &Object| {
         let frame = object.placement.map_or(object.bounds, |p| p.frame);
         (object.bounds.center(), frame.w, frame.h, object.placement.map_or(0.0, |p| p.warp.turn()), object.opacity)
@@ -6920,6 +6990,76 @@ mod tests {
         // and every point passes through the middle.
         let turned = morphed(&square, &square, 0.5, &[(v2(0.0, 0.0), v2(40.0, 40.0)), (v2(40.0, 0.0), v2(0.0, 40.0))]);
         assert!(turned.points.iter().all(|p| (p.x - 20.0).abs() < 0.01 && (p.y - 20.0).abs() < 0.01), "{:?}", &turned.points[..3]);
+    }
+
+    #[test]
+    fn a_gear_drawn_as_an_auto_shape_can_be_made_to_turn() {
+        let gear = |id: u64| {
+            let mut object = rect(id, 100.0, 100.0, 100.0, 100.0);
+            object.shape = Shape::Auto { kind: crate::autoshape::AutoKind::Gear, a: 0.7, b: 0.0, count: 12 };
+            object
+        };
+        let far = |a: &[Vec2], b: &[Vec2]| a.len() != b.len() || a.iter().zip(b).any(|(p, q)| (p.x - q.x).abs() + (p.y - q.y).abs() > 1.0);
+        // The way a user tries first: the same gear on two keyframes, and one whole turn asked of the tween.
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(gear(1));
+        e.doc.page_mut().start_timeline(24.0);
+        e.goto_frame(12);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween { turns: 1, ..Tween::default() })));
+        let start = e.doc.page().at_frame(0).objects().next().unwrap().outline();
+        let middle = e.doc.page().at_frame(1).objects().next().unwrap().outline();
+        assert!(far(&start, &middle), "one whole turn asked of the tween turns the gear");
+        // The other way: the gear turned by hand on the second keyframe, by a tenth of a turn.
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(gear(1));
+        e.doc.page_mut().start_timeline(24.0);
+        e.goto_frame(10);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.selection = vec![1];
+        e.for_selected(|o| {
+            o.warp(&Warp::rotation(v2(150.0, 150.0), 0.6));
+        });
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween::default())));
+        let end = e.doc.page().at_frame(10).objects().next().unwrap().outline();
+        let half = e.doc.page().at_frame(5).objects().next().unwrap().outline();
+        let expected: Vec<Vec2> = { let mut o = gear(1); o.warp(&Warp::rotation(v2(150.0, 150.0), 0.3)); o.outline() };
+        assert!(far(&start, &end) && !far(&expected, &half), "turned by hand, halfway is half as far");
+        // A third way: Rotate 90° from the Modify menu on the second keyframe.
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(gear(1));
+        e.doc.page_mut().start_timeline(24.0);
+        e.goto_frame(10);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.selection = vec![1];
+        e.rotate_selected(true);
+
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween::default())));
+        let half = e.doc.page().at_frame(5).objects().next().unwrap().outline();
+        let expected: Vec<Vec2> = { let mut o = gear(1); o.warp(&Warp::rotation(v2(150.0, 150.0), std::f32::consts::FRAC_PI_4)); o.outline() };
+        // The command redraws the gear as a path and keeps no record of the turn; the tween reads it off the outline.
+        assert!(far(&start, &half) && !far(&expected, &half), "halfway the gear is an eighth of a turn round");
+        // A box that is not square, turned the same way, is found from whichever corner its outline now starts at.
+        let mut e = Editor::new(Document::new(300, 300));
+        e.add_object(rect(1, 100.0, 120.0, 100.0, 60.0));
+        e.doc.page_mut().start_timeline(24.0);
+        e.goto_frame(10);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.selection = vec![1];
+        e.rotate_selected(true);
+        assert_eq!(e.selected()[0].bounds, Rect { x: 120.0, y: 100.0, w: 60.0, h: 100.0 });
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween::default())));
+        let half = e.doc.page().at_frame(5).objects().next().unwrap().clone();
+        // Halfway it stands on a corner: as wide as it is tall, and wider than either side was.
+        assert!((half.bounds.w - half.bounds.h).abs() < 0.5 && half.bounds.w > 110.0, "{:?}", half.bounds);
+        // A plain move is still a plain move: the box stays a box.
+        assert_eq!(turned_between(&[v2(0.0, 0.0), v2(10.0, 0.0), v2(10.0, 5.0)], &[v2(3.0, 4.0), v2(13.0, 4.0), v2(13.0, 9.0)]).map(|found| found.0.abs() < 0.001), Some(true));
+        // And a stretch is no turn at all.
+        assert!(turned_between(&[v2(0.0, 0.0), v2(10.0, 0.0), v2(10.0, 5.0), v2(0.0, 5.0)], &[v2(0.0, 0.0), v2(30.0, 0.0), v2(30.0, 5.0), v2(0.0, 5.0)]).is_none());
     }
 
     #[test]

@@ -228,9 +228,9 @@ PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline ove
 | . and , | One frame forward, one back |
 | Ctrl+Enter | Test Movie |
 
-**Right-click.** A right-click on a frame goes to it and opens a menu of the tween, frame and keyframe commands; those that do not fit the frame are greyed. A right-click on a layer's name opens the layer commands (new layer, delete, guide, mask, tie).
+**Right-click.** A right-click on a frame goes to it and opens a menu of the tween, frame and keyframe commands; those that do not fit the frame are greyed. A right-click on a layer's name opens the layer commands (new layer, delete, guide, mask, tie). A right-click on an object on the stage selects it and opens Cut, Copy, Arrange, Transform, Group, Convert to Symbol and the like; PisiWorks' canvas has the same menu.
 
-**Motion tween.** Draw the object on the first frame, insert a keyframe further on with F6 and move, resize or turn the object there; go back to the first keyframe and choose **Timeline > Create Motion Tween**. The frames between turn blue. **Ease** (−100 starts slowly, 100 ends slowly) and **Turns** (whole turns on the way) appear below.
+**Motion tween.** Draw the object on the first frame, insert a keyframe further on with F6 and move, resize or turn the object there; go back to the first keyframe and choose **Timeline > Create Motion Tween**. The frames between turn blue. **Ease** (−100 starts slowly, 100 ends slowly) and **Turns** (whole turns on the way) appear below. A turning wheel can be made two ways: turn the shape on the second keyframe (with the Scale tool, or Transform > Rotate 90), or leave the two keyframes alike and put 1 in **Turns**, which takes it once round.
 
 **Shape tween.** Draw a shape on the first frame and another on a blank keyframe (F7) further on; on the first frame choose **Create Shape Tween**. The frames between turn green. If the change does not go as you want, add marks with **Add Shape Hint** (Ctrl+Shift+H): drag the yellow mark on the first keyframe and the green one on the last to the points that are to become one another.
 

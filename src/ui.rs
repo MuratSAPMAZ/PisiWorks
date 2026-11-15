@@ -775,6 +775,7 @@ impl Workspace {
                     .overflow_hidden()
                     .cursor(cursor)
                     .on_mouse_down(MouseButton::Left, cx.listener(Self::canvas_down))
+                    .on_mouse_down(MouseButton::Right, cx.listener(Self::canvas_context))
                     .on_scroll_wheel(cx.listener(Self::canvas_scroll))
                     .child(
                         canvas(move |bounds, _, _| bounds_cell.set(bounds), move |bounds, _, window, cx| {

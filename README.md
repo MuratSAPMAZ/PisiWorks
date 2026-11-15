@@ -174,7 +174,7 @@ Bu aşamada çalışanlar:
 - Sahneler: Sahneler panelindeki her sayfa bir sahnedir; film sahneleri sırayla oynatır.
 - Ses: MP3, OGG ya da WAV dosyası içe aktarılır ve bir anahtar karede başlatılır.
 - Filmi Test Et (Ctrl+Enter): filmi yayımlayıp tarayıcıda açar.
-- Zaman çizelgesinde sağ tık menüleri: bir kareye sağ tıklayınca ara doldurma, kare ve anahtar kare komutları; katman adına sağ tıklayınca katman komutları.
+- Sağ tık menüleri: zaman çizelgesinde bir kareye sağ tıklayınca ara doldurma, kare ve anahtar kare komutları; katman adına sağ tıklayınca katman komutları; sahnede bir nesneye ya da boş yere sağ tıklayınca düzenleme, yerleştirme, dönüştürme ve sembol komutları. PisiWorks'ün tuvalinde de aynı menü vardır.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - Örnekler menüsünde altı hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, düğmeli iki sahne.
 - PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
