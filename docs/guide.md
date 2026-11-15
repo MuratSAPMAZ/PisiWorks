@@ -81,10 +81,14 @@ In the Layers panel a chain between an object and its mask shows that the two ar
 A button with a small triangle stands for several tools. Hold it down to list them, or press its key again to walk through them; the button shows the one used last.
 
 - Pointer (V): Select Behind picks the next object down under the mouse with each click.
+- Scale (Q): after Skew and Distort comes 9-Slice Scaling. Four blue lines cut the selection into nine parts; drag a line to move it, then drag a handle of the selection: the corners keep their size and only the middle stretches, so rounded corners stay round.
+- Crop (C): Export Area saves the part of the page you drag over as an image, with the settings of the Optimize panel. Press Enter or double-click to choose the file.
 - Marquee (M): Oval Marquee selects an oval. Lasso (L): Polygon Lasso selects with straight sides; click each corner, and double-click or click the first corner to close it.
 - Blur (R): Sharpen, Dodge (lightens), Burn (darkens) and Smudge (drags paint along the stroke) work under the brush like Blur.
 - Rubber Stamp (S): Replace Color changes the color the stroke starts on into the brush color. Red Eye Removal takes the red out of eyes in the area you drag over.
-- Pen (P): Vector Path draws a path freehand.
+- Pen (P): Vector Path draws a path freehand. Redraw Path replaces part of a path: start the stroke on the path and end it on the path again.
+- Freeform (O): Reshape Area pushes every point within its circle along with the mouse.
+- Hotspot (J): Circle Hotspot is drawn from its middle outward, and Polygon Hotspot corner by corner like the Polygon Lasso. Slice (K): Polygon Slice is drawn the same way. In the exported image map they are written as circles and polygons.
 - Rectangle (U): Ellipse, and Polygon, which is drawn from its middle outward; its number of sides is in the Auto Shape Properties panel.
 - Paint Bucket (G): Gradient fills the selected object with a gradient from where you start dragging to where you let go.
 

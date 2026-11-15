@@ -46,6 +46,13 @@ pub enum Tool {
     VectorPath,
     Polygon,
     Gradient,
+    ExportArea,
+    CircleHotspot,
+    PolygonHotspot,
+    PolygonSlice,
+    RedrawPath,
+    ReshapeArea,
+    NineSlice,
 }
 
 pub struct ToolSlot {
@@ -118,7 +125,7 @@ pub const TOOL_SECTIONS: &[(&str, &[ToolSlot])] = &[
 /// The tools that share the Scale button. Holding the button down lists them, and
 /// the button shows whichever was used last.
 pub const TRANSFORM_TOOLS: &[ToolSlot] =
-    &[on("Scale (Q)", "scale", Tool::Scale), on("Skew (Q)", "skew", Tool::Skew), on("Distort (Q)", "distort", Tool::Distort)];
+    &[on("Scale (Q)", "scale", Tool::Scale), on("Skew (Q)", "skew", Tool::Skew), on("Distort (Q)", "distort", Tool::Distort), on("9-Slice Scaling (Q)", "nine-slice", Tool::NineSlice)];
 
 /// The buttons that stand for several tools. Holding one down lists its tools, its
 /// key walks through them, and the button shows whichever was used last. The first
@@ -140,7 +147,11 @@ pub const TOOL_GROUPS: &[&[ToolSlot]] = &[
         on("Replace Color (S)", "replace-color", Tool::ReplaceColor),
         on("Red Eye Removal (S)", "red-eye", Tool::RedEye),
     ],
-    &[on("Pen (P)", "pen", Tool::Pen), on("Vector Path (P)", "vector-path", Tool::VectorPath)],
+    &[on("Pen (P)", "pen", Tool::Pen), on("Vector Path (P)", "vector-path", Tool::VectorPath), on("Redraw Path (P)", "redraw-path", Tool::RedrawPath)],
+    &[on("Crop (C)", "crop", Tool::Crop), on("Export Area (C)", "export-area", Tool::ExportArea)],
+    &[on("Freeform (O)", "freeform", Tool::Freeform), on("Reshape Area (O)", "reshape-area", Tool::ReshapeArea)],
+    &[on("Hotspot (J)", "hotspot", Tool::Hotspot), on("Circle Hotspot (J)", "circle-hotspot", Tool::CircleHotspot), on("Polygon Hotspot (J)", "polygon-hotspot", Tool::PolygonHotspot)],
+    &[on("Slice (K)", "slice", Tool::Slice), on("Polygon Slice (K)", "polygon-slice", Tool::PolygonSlice)],
     &[on("Rectangle (U)", "rect", Tool::Rect), on("Ellipse (U)", "ellipse", Tool::Ellipse), on("Polygon (U)", "polygon", Tool::Polygon)],
     &[on("Paint Bucket (G)", "bucket", Tool::Bucket), on("Gradient (G)", "gradient", Tool::Gradient)],
 ];

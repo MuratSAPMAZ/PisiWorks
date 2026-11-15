@@ -379,6 +379,12 @@ pub enum Drag {
     /// Moving the selection: where the mouse took hold, the box of the selection
     /// then, and how far it has been moved since, which snapping can make differ from the mouse.
     Move { start: Vec2, origin: Option<Rect>, moved: Vec2 },
+    /// Reshape Area: pushing the points of these paths that lie within a radius of the mouse.
+    Reshape { ids: Vec<u64>, last: Vec2, radius: f32 },
+    /// 9-slice scaling by a handle of the selection box, from the box and the objects as they were.
+    NineSlice { handle: usize, origin: Rect, originals: Vec<Object> },
+    /// Dragging one of the four cuts of 9-slice scaling: the two upright ones, then the two level ones.
+    NineGuide(usize),
     /// Dragging a handle of a gradient fill: its end, or else its start.
     FillHandle { end: bool },
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
@@ -465,6 +471,10 @@ pub struct Workspace {
     pub group_tools: Vec<Tool>,
     /// The Polygon Lasso under way: the bitmap it selects on, its corners so far, and how it combines with the selection.
     pub polygon_lasso: Option<(u64, Vec<Vec2>, MaskMode)>,
+    /// The corners clicked so far of a polygon hotspot or slice.
+    pub polygon_web: Option<Vec<Vec2>>,
+    /// The cuts of 9-slice scaling, as parts of the selection box: two upright, then two level.
+    pub nine_guides: [f32; 4],
     /// Counts presses of that button, so a hold that ended is not mistaken for one still held.
     tool_hold: u64,
     pub cursor_doc: Vec2,
@@ -725,6 +735,8 @@ impl Workspace {
             transform_tool: Tool::Scale,
             group_tools: crate::menus::TOOL_GROUPS.iter().filter_map(|group| match group.first().map(|slot| slot.action) { Some(crate::menus::SlotAction::Select(tool)) => Some(tool), _ => None }).collect(),
             polygon_lasso: None,
+            polygon_web: None,
+            nine_guides: [1.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0],
             tool_hold: 0,
             cursor_doc: Vec2::default(),
             cursor_screen: Point::default(),
@@ -1356,6 +1368,7 @@ impl Workspace {
         self.tool = tool;
         self.point_selection.clear();
         self.polygon_lasso = None;
+        self.polygon_web = None;
         if is_transform_tool(tool) {
             self.transform_tool = tool;
         }
@@ -2960,6 +2973,14 @@ impl Workspace {
         }
         match tool {
             Tool::SelectBehind => self.select_behind(p),
+            Tool::PolygonHotspot | Tool::PolygonSlice => self.polygon_web_down(ev, p),
+            Tool::CircleHotspot => {
+                let start = self.guide_snapped(p);
+                self.drag = Some(Drag::Create { start, current: start });
+            }
+            Tool::RedrawPath => self.drag = Some(Drag::Freehand { points: vec![p], target: None }),
+            Tool::ReshapeArea => self.reshape_down(p),
+            Tool::NineSlice => self.nine_slice_down(ev, p),
             Tool::PolygonLasso => self.polygon_lasso_down(ev, p),
             Tool::RedEye => match self.pixel_target(p) {
                 Some(target) => self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: MaskMode::Replace }),
@@ -3010,9 +3031,9 @@ impl Workspace {
                 Some(id) => self.drag = Some(Drag::Freehand { points: vec![p], target: Some(id) }),
                 None => self.status = t("The Eraser works on bitmaps. Open or import an image first.").into(),
             },
-            Tool::Crop => {
+            Tool::Crop | Tool::ExportArea => {
                 if ev.click_count >= 2 && self.crop_area.is_some() {
-                    self.apply_crop();
+                    self.apply_crop(window, cx);
                 } else {
                     let start = snap(p);
                     self.drag = Some(Drag::Crop { start, current: start });
@@ -3112,6 +3133,9 @@ impl Workspace {
             }
         }
         lines.extend(self.smart_lines.iter().map(|(horizontal, at)| (*horizontal, *at, SMART_GUIDE)));
+        if let Some(cuts) = self.nine_slice_lines() {
+            lines.extend(cuts.iter().enumerate().map(|(index, at)| (index >= 2, *at, 0x2060ff)));
+        }
         lines
     }
 
@@ -3943,7 +3967,7 @@ impl Workspace {
             return;
         }
         let Some(drag) = self.drag.as_mut() else {
-            if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() || self.polygon_lasso.is_some() {
+            if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() || self.polygon_lasso.is_some() || self.polygon_web.is_some() {
                 cx.notify();
             }
             return;
@@ -3951,6 +3975,33 @@ impl Workspace {
         match drag {
             Drag::Move { .. } => {}
             Drag::Guide { horizontal, at, .. } => *at = if *horizontal { p.y } else { p.x }.round(),
+            Drag::Reshape { ids, last, radius } => {
+                let (delta, from, radius) = (v2(p.x - last.x, p.y - last.y), *last, *radius);
+                *last = p;
+                for id in ids.clone() {
+                    if let Some(object) = self.ed.object_mut(id) {
+                        object.points = pull_points(&object.points, from, delta, radius);
+                        object.refit_to_points();
+                    }
+                }
+            }
+            Drag::NineSlice { handle, origin, originals } => {
+                let (target, origin, guides) = (resized(*origin, *handle, on_guides), *origin, self.nine_guides);
+                for original in originals.clone() {
+                    let mut scaled = original.clone();
+                    scaled.nine_slice(origin, target, guides);
+                    if let Some(object) = self.ed.object_mut(original.id) {
+                        *object = scaled;
+                    }
+                }
+            }
+            Drag::NineGuide(index) => {
+                let index = *index;
+                if let Some(b) = self.ed.selection_bounds() {
+                    let part = if index < 2 { (p.x - b.x) / b.w.max(1.0) } else { (p.y - b.y) / b.h.max(1.0) };
+                    self.nine_guides[index] = part.clamp(0.0, 1.0);
+                }
+            }
             Drag::FillHandle { end } => {
                 let end = *end;
                 self.ed.for_selected(|o| {
@@ -4158,6 +4209,30 @@ impl Workspace {
                 self.ed.commit(t("Move"));
             }
             Drag::FillHandle { .. } => self.ed.commit(t("Fill")),
+            Drag::Reshape { ids, .. } => {
+                // Pushing works on many short pieces, and the result is a curved path again.
+                for id in ids {
+                    if let Some(object) = self.ed.object_mut(id) {
+                        let closed = object.is_closed();
+                        (object.points, object.handles) = crate::fit::fit_curves(&object.points, closed, crate::fit::TOLERANCE);
+                        object.refit_to_points();
+                    }
+                }
+                self.ed.commit(t("Reshape Area"));
+            }
+            Drag::NineSlice { origin, .. } => {
+                // The cuts stay the same distance from the edges, so the next scaling keeps the same corners.
+                if let Some(now) = self.ed.selection_bounds() {
+                    let g = self.nine_guides;
+                    let keep = |near: f32, far: f32, old: f32, new: f32| (near * old / new.max(1.0), 1.0 - (1.0 - far) * old / new.max(1.0));
+                    let ((x0, x1), (y0, y1)) = (keep(g[0], g[1], origin.w, now.w), keep(g[2], g[3], origin.h, now.h));
+                    if x0 < x1 && y0 < y1 {
+                        self.nine_guides = [x0, x1, y0, y1];
+                    }
+                }
+                self.ed.commit(t("9-Slice Scaling"));
+            }
+            Drag::NineGuide(_) => {}
             Drag::Guide { horizontal, index, at } => {
                 // Let go over a ruler or off the canvas, a guide is thrown away.
                 let bounds = self.canvas_bounds.get();
@@ -4264,6 +4339,10 @@ impl Workspace {
         }
         let object = match self.tool {
             // A polygon is drawn from its middle outward, as in Fireworks.
+            Tool::CircleHotspot => {
+                let radius = (current.x - start.x).hypot(current.y - start.y);
+                Object::new_web_circle(self.ed.alloc_id(), Rect { x: start.x - radius, y: start.y - radius, w: radius * 2.0, h: radius * 2.0 })
+            }
             Tool::Polygon => {
                 let radius = (current.x - start.x).hypot(current.y - start.y);
                 let around = Rect { x: start.x - radius, y: start.y - radius, w: radius * 2.0, h: radius * 2.0 };
@@ -4296,15 +4375,163 @@ impl Workspace {
         }
     }
 
-    fn apply_crop(&mut self) {
+    fn apply_crop(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(area) = self.crop_area.take() else { return };
+        // The same box, drawn with Export Area, is saved as an image instead of cut out of the canvas.
+        if self.tool == Tool::ExportArea {
+            self.export_area(area, window, cx);
+            return;
+        }
         if self.ed.crop_canvas(area) {
             self.ed.commit(t("Crop Document"));
             self.status.clear();
         }
     }
 
+    /// Fireworks' Export Area: asks for a file and saves that part of the page, with the settings of the Optimize panel.
+    fn export_area(&mut self, area: Rect, window: &mut Window, cx: &mut Context<Self>) {
+        self.ed.end_mask_edit();
+        self.ed.close_groups();
+        let mut page = self.ed.export_page();
+        let (x, y) = (area.x.round(), area.y.round());
+        (page.width, page.height) = (area.w.round().max(1.0) as u32, area.h.round().max(1.0) as u32);
+        page.all_objects_mut().for_each(|o| o.translate(-x, -y));
+        let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").into(), |p| file_stem(p));
+        let extension = page.export.format.extension();
+        let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.{extension}")));
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(Ok(Some(mut path))) = picked.await {
+                if path.extension().is_none() {
+                    path.set_extension(extension);
+                }
+                this.update(cx, |this, cx| {
+                    this.status = match export_page(&page, &path) {
+                        Ok(()) => tf("Exported {}", &[&path.display()]),
+                        Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
+                    };
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
+    }
+
+    /// A click with the Polygon Hotspot or Polygon Slice tool: each adds a corner,
+    /// and a double-click or a click back on the first corner closes the area.
+    fn polygon_web_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        let p = self.guide_snapped(p);
+        let mut points = self.polygon_web.take().unwrap_or_default();
+        let reach = 6.0 / self.zoom;
+        let at_start = points.first().is_some_and(|first| (first.x - p.x).abs() <= reach && (first.y - p.y).abs() <= reach);
+        let closing = ev.click_count >= 2 || (at_start && points.len() >= 3);
+        if !closing {
+            points.push(p);
+            self.polygon_web = Some(points);
+            return;
+        }
+        if !at_start && points.last() != Some(&p) {
+            points.push(p);
+        }
+        if points.len() < 3 {
+            return;
+        }
+        let kind = if self.tool == Tool::PolygonSlice { WebKind::Slice } else { WebKind::Hotspot };
+        let object = Object::new_web_polygon(self.ed.alloc_id(), kind, &points);
+        let label = object.name.clone();
+        self.add_new(object, &label);
+    }
+
+    /// The paths Reshape Area and Redraw Path work on: the selected ones, or else the one nearest the mouse.
+    fn paths_near(&self, p: Vec2, reach: f32) -> Vec<u64> {
+        let selected: Vec<u64> = self.ed.selected().iter().filter(|o| o.reshapable()).map(|o| o.id).collect();
+        if !selected.is_empty() {
+            return selected;
+        }
+        self.ed.doc.page().nearest_path(p, reach, &self.ed.selection).into_iter().collect()
+    }
+
+    /// Reshape Area: every point of the paths within the circle is pushed along with the mouse.
+    fn reshape_down(&mut self, p: Vec2) {
+        let radius = self.freeform_size / 2.0;
+        let ids = self.paths_near(p, radius);
+        if ids.is_empty() {
+            self.status = t("Press near a vector path or shape to reshape it.").into();
+            return;
+        }
+        for id in &ids {
+            let Some(object) = self.ed.object_mut(*id) else { continue };
+            if object.to_path() {
+                object.flatten();
+                object.points = subdivide(&object.points, object.is_closed(), (radius * FREEFORM_DETAIL).max(1.0));
+            }
+        }
+        self.ed.selection = ids.clone();
+        self.drag = Some(Drag::Reshape { ids, last: p, radius });
+    }
+
+    /// Redraw Path: the stroke replaces the part of the path it was drawn along.
+    fn redraw(&mut self, stroke: Vec<Vec2>) {
+        let Some(first) = stroke.first().copied() else { return };
+        let reach = 8.0 / self.zoom;
+        let done = self.paths_near(first, reach).into_iter().any(|id| {
+            let Some(object) = self.ed.object_mut(id) else { return false };
+            if !object.to_path() {
+                return false;
+            }
+            let mut dense = object.clone();
+            dense.flatten();
+            let closed = dense.is_closed();
+            let points = subdivide(&dense.points, closed, 3.0);
+            let Some(redrawn) = crate::model::redraw_path(&points, closed, &stroke, reach) else { return false };
+            (object.points, object.handles) = crate::fit::fit_curves(&redrawn, closed, crate::fit::TOLERANCE);
+            object.refit_to_points();
+            true
+        });
+        if done {
+            self.ed.commit(t("Redraw Path"));
+        } else {
+            self.status = t("Start the stroke on a path to redraw part of it.").into();
+            self.ed.rollback();
+        }
+    }
+
+    /// The four cuts of 9-slice scaling on the page, for the selection as it is: two places across, then two down.
+    pub fn nine_slice_lines(&self) -> Option<[f32; 4]> {
+        if self.tool != Tool::NineSlice {
+            return None;
+        }
+        let b = self.ed.selection_bounds()?;
+        let g = self.nine_guides;
+        Some([b.x + b.w * g[0], b.x + b.w * g[1], b.y + b.h * g[2], b.y + b.h * g[3]])
+    }
+
+    /// A press with the 9-slice scaling tool: on a handle of the selection it
+    /// scales, on one of the cuts it moves that cut, and elsewhere it selects.
+    fn nine_slice_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        if let (Some(bounds), Some(lines)) = (self.ed.selection_bounds(), self.nine_slice_lines()) {
+            let map = self.view_map();
+            if let Some(handle) = handle_rects(bounds, map).iter().position(|r| r.contains(&ev.position)) {
+                let originals = self.ed.selected().into_iter().cloned().collect();
+                self.drag = Some(Drag::NineSlice { handle, origin: bounds, originals });
+                return;
+            }
+            let reach = 4.0 / self.zoom;
+            let inside = p.x >= bounds.x - reach && p.x <= bounds.right() + reach && p.y >= bounds.y - reach && p.y <= bounds.bottom() + reach;
+            let near = (0..4).find(|index| (if *index < 2 { p.x } else { p.y } - lines[*index]).abs() <= reach);
+            if let Some(index) = near.filter(|_| inside) {
+                self.drag = Some(Drag::NineGuide(index));
+                return;
+            }
+        }
+        self.ed.selection = self.ed.doc.page().hit_test(p, self.tolerance()).into_iter().collect();
+    }
+
     fn finish_freehand(&mut self, points: Vec<Vec2>, target: Option<u64>) {
+        if self.tool == Tool::RedrawPath {
+            self.redraw(points);
+            return;
+        }
         let width = self.freehand_width();
         let name = match self.tool {
             Tool::Pencil => t("Pencil"),
@@ -4518,20 +4745,21 @@ impl Workspace {
             "y" => Some(if self.tool == Tool::Pencil { Tool::Knife } else { Tool::Pencil }),
             "r" => Some(self.group_key(Tool::Blur)),
             "e" => Some(Tool::Eraser),
-            "c" => Some(Tool::Crop),
+            "c" => Some(self.group_key(Tool::Crop)),
             // Q walks through the three transform tools, as it does in Fireworks.
             "q" => Some(match self.tool {
                 Tool::Scale => Tool::Skew,
                 Tool::Skew => Tool::Distort,
+                Tool::Distort => Tool::NineSlice,
                 _ => Tool::Scale,
             }),
             "m" => Some(self.group_key(Tool::Marquee)),
             "l" => Some(self.group_key(Tool::Lasso)),
             "w" => Some(Tool::Wand),
             "s" => Some(self.group_key(Tool::Stamp)),
-            "o" => Some(Tool::Freeform),
-            "j" => Some(Tool::Hotspot),
-            "k" => Some(Tool::Slice),
+            "o" => Some(self.group_key(Tool::Freeform)),
+            "j" => Some(self.group_key(Tool::Hotspot)),
+            "k" => Some(self.group_key(Tool::Slice)),
             "i" => Some(Tool::Eyedropper),
             "g" => Some(self.group_key(Tool::Bucket)),
             "n" => Some(Tool::Line),
@@ -4555,11 +4783,12 @@ impl Workspace {
             }
             "delete" | "backspace" if self.tool == Tool::Subselect && self.delete_picked_points() => {}
             "delete" | "backspace" => self.run(Cmd::Clear, window, cx),
-            "enter" if self.crop_area.is_some() => self.apply_crop(),
+            "enter" if self.crop_area.is_some() => self.apply_crop(window, cx),
             "enter" if self.transform.is_some() => self.apply_transform(),
             "enter" => self.finish_pen(false),
             "escape" => {
                 self.polygon_lasso = None;
+                self.polygon_web = None;
                 self.pen.clear();
                 self.pen_handles.clear();
                 self.pen_resume = None;

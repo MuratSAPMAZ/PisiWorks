@@ -199,8 +199,9 @@ impl Scene {
         let mut crop = w.crop_area;
         match &w.drag {
             // The Polygon Lasso under way: its corners so far, and a line on to the mouse.
-            None if w.polygon_lasso.is_some() => {
-                if let Some((_, points, _)) = &w.polygon_lasso {
+            None if w.polygon_lasso.is_some() || w.polygon_web.is_some() => {
+                let corners = w.polygon_lasso.as_ref().map(|(_, points, _)| points).or(w.polygon_web.as_ref());
+                if let Some(points) = corners {
                     draft = points.iter().copied().chain([w.cursor_doc]).collect();
                     draft_color = Some(LASSO_PREVIEW);
                 }
@@ -229,6 +230,12 @@ impl Scene {
                 let r = Rect::from_corners(*start, *current);
                 match w.tool {
                     Tool::Hotspot | Tool::Slice => marquee = Some(r),
+                    // Drawn from their middle outward.
+                    Tool::CircleHotspot | Tool::Polygon => {
+                        let radius = (current.x - start.x).hypot(current.y - start.y);
+                        draft_closed = true;
+                        draft = Object::outline(&preview(Shape::Ellipse, Rect { x: start.x - radius, y: start.y - radius, w: radius * 2.0, h: radius * 2.0 }));
+                    }
                     Tool::Rect => {
                         draft_closed = true;
                         draft = Object::outline(&preview(Shape::Rect { radius: 0.0 }, r));
@@ -650,6 +657,17 @@ fn paint_web(object: &Object, map: ViewMap, window: &mut Window) {
         WebKind::Hotspot => (0.0, 0.8, 0.9),
         WebKind::Slice => (0.1, 0.9, 0.2),
     };
+    // A round or many-sided area is drawn along its own outline.
+    if let Some(corners) = object.web_outline() {
+        let on_screen: Vec<Point<Pixels>> = corners.iter().map(|p| map.to_screen(*p)).collect();
+        if let Some(path) = build_path(&on_screen, true, None) {
+            window.paint_path(path, Rgba { r, g, b, a: 0.35 });
+        }
+        if let Some(path) = build_path(&on_screen, true, Some(1.0)) {
+            window.paint_path(path, Rgba { r, g, b, a: 1.0 });
+        }
+        return;
+    }
     let area = screen_rect(map, object.bounds);
     window.paint_quad(fill(area, Rgba { r, g, b, a: 0.35 }));
     window.paint_quad(outline(area, Rgba { r, g, b, a: 1.0 }, BorderStyle::Solid));

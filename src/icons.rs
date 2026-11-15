@@ -107,6 +107,39 @@ pub fn colored(name: &str) -> Option<&'static [Layer]> {
             (INK, r#"<path d="M2.500 12c2-7 4-7 5.500-4s3.500 3 5.500-4"/>"#),
             (BLUE, r#"<circle cx="8" cy="8" r="1.800" fill="black"/>"#),
         ],
+        "nine-slice" => &[
+            (GRAY, r#"<rect x="2.500" y="2.500" width="11" height="11" fill="black" stroke="none"/>"#),
+            (INK, r#"<rect x="2.500" y="2.500" width="11" height="11"/>"#),
+            (BLUE, r#"<path d="M6 1.500v13M10 1.500v13M1.500 6h13M1.500 10h13"/>"#),
+        ],
+        "export-area" => &[
+            (INK, r#"<rect x="2.500" y="5.500" width="8" height="8" stroke-dasharray="2 1.400"/>"#),
+            (GREEN, r#"<path stroke-width="1.500" d="M8 8l5.500-5.500M10 2.500h3.500V6"/>"#),
+        ],
+        "reshape-area" => &[
+            (SKY, r#"<circle cx="9.500" cy="7" r="4.500" fill="black" stroke="none"/>"#),
+            (INK, r#"<path d="M2 12.500c2-6 4-7 6-4s3.500 3 6-3"/>"#),
+            (BLUE, r#"<circle cx="9.500" cy="7" r="4.500"/>"#),
+        ],
+        "redraw-path" => &[
+            (GRAY, r#"<path stroke-dasharray="1.500 1.200" d="M2 12c2-2 4-2 6 0s4 2 6 0"/>"#),
+            (INK, r#"<path d="M4.500 11c1-5 5-6 7 0"/>"#),
+            (ORANGE, r#"<path fill="black" stroke="none" d="M10.500 5l3.500-3.500 1 1-3.500 3.500z"/>"#),
+        ],
+        "circle-hotspot" => &[
+            (SKY, r#"<circle cx="8" cy="8" r="5.500" fill="black" stroke="none"/>"#),
+            (BLUE, r#"<circle cx="8" cy="8" r="5.500"/>"#),
+            (INK, r#"<path fill="black" stroke="none" d="M7 6l5 4.500H9.500l1 2.300-1 .4-1-2.300L7 12.500z"/>"#),
+        ],
+        "polygon-hotspot" => &[
+            (SKY, r#"<path fill="black" stroke="none" d="M3 4l6-2 4.500 4-2 6.500-7 1z"/>"#),
+            (BLUE, r#"<path d="M3 4l6-2 4.500 4-2 6.500-7 1z"/>"#),
+            (INK, r#"<path fill="black" stroke="none" d="M7 6l5 4.500H9.500l1 2.300-1 .4-1-2.300L7 12.500z"/>"#),
+        ],
+        "polygon-slice" => &[
+            (LIME, r#"<path fill="black" stroke="none" d="M3 4l6-2 4.500 4-2 6.500-7 1z"/>"#),
+            (GREEN, r#"<path d="M3 4l6-2 4.500 4-2 6.500-7 1zM3.500 8h9.500"/>"#),
+        ],
         "select-behind" => &[
             (GRAY, r#"<rect x="7.500" y="2.500" width="7" height="6" fill="black" stroke="none"/>"#),
             (INK, r#"<rect x="7.500" y="2.500" width="7" height="6" stroke-dasharray="1.500 1"/>"#),

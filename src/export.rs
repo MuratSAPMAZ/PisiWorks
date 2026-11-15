@@ -521,7 +521,7 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
         .flat_map(|l| l.objects.iter())
         .filter(|o| o.visible)
         .filter_map(|o| match &o.shape {
-            Shape::Web { kind, url } => Some((o, *kind, url.as_str())),
+            Shape::Web { kind, url, .. } => Some((o, *kind, url.as_str())),
             _ => None,
         })
         .collect();
@@ -542,7 +542,7 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
     let hotspots: Vec<_> = shapes.iter().filter(|(_, kind, _)| *kind == WebKind::Hotspot).collect();
     if !hotspots.is_empty() {
         let image = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let html = image_map(&image, page, hotspots.iter().map(|(object, _, url)| (object.bounds, object.name.as_str(), *url)));
+        let html = image_map(&image, page, hotspots.iter().map(|(object, _, url)| (*object, object.name.as_str(), *url)));
         let target = path.with_file_name(format!("{stem}_map.html"));
         std::fs::write(&target, html).with_context(|| tf("could not write {}", &[&target.display()]))?;
         written += 1;
@@ -554,24 +554,28 @@ fn escape_html(text: &str) -> String {
     text.replace('&', "&amp;").replace('"', "&quot;").replace('<', "&lt;").replace('>', "&gt;")
 }
 
-fn image_map<'a>(image: &str, page: &Page, areas: impl Iterator<Item = (Rect, &'a str, &'a str)>) -> String {
+fn image_map<'a>(image: &str, page: &Page, areas: impl Iterator<Item = (&'a Object, &'a str, &'a str)>) -> String {
     let mut html = format!(
         "<!doctype html>\n<img src=\"{}\" width=\"{}\" height=\"{}\" usemap=\"#map\" alt=\"\">\n<map name=\"map\">\n",
         escape_html(image),
         page.width,
         page.height
     );
-    for (b, name, url) in areas {
+    for (object, name, url) in areas {
         let href = if url.is_empty() { "#" } else { url };
-        html.push_str(&format!(
-            "  <area shape=\"rect\" coords=\"{},{},{},{}\" href=\"{}\" alt=\"{}\">\n",
-            b.x.round() as i32,
-            b.y.round() as i32,
-            b.right().round() as i32,
-            b.bottom().round() as i32,
-            escape_html(href),
-            escape_html(name)
-        ));
+        let b = object.bounds;
+        // A hotspot is a rectangle, a circle or a polygon, each with the coordinates HTML asks for.
+        let (shape, coords) = match &object.shape {
+            Shape::Web { form: crate::model::WebForm::Circle, .. } => {
+                ("circle", format!("{},{},{}", b.center().x.round() as i32, b.center().y.round() as i32, (b.w.min(b.h) / 2.0).round() as i32))
+            }
+            Shape::Web { form: crate::model::WebForm::Polygon(_), .. } => {
+                let corners = object.web_outline().unwrap_or_default();
+                ("poly", corners.iter().map(|p| format!("{},{}", p.x.round() as i32, p.y.round() as i32)).collect::<Vec<_>>().join(","))
+            }
+            _ => ("rect", format!("{},{},{},{}", b.x.round() as i32, b.y.round() as i32, b.right().round() as i32, b.bottom().round() as i32)),
+        };
+        html.push_str(&format!("  <area shape=\"{shape}\" coords=\"{coords}\" href=\"{}\" alt=\"{}\">\n", escape_html(href), escape_html(name)));
     }
     html.push_str("</map>\n");
     html
@@ -1020,7 +1024,7 @@ mod tests {
         let before = rgba(&render_page(&p).unwrap(), 5, 5);
         p.layers[0].objects.push(Object::new_web(7, WebKind::Slice, Rect { x: 0.0, y: 0.0, w: 10.0, h: 20.0 }));
         let mut hotspot = Object::new_web(8, WebKind::Hotspot, Rect { x: 5.0, y: 6.0, w: 10.0, h: 10.0 });
-        hotspot.shape = Shape::Web { kind: WebKind::Hotspot, url: "https://example.com/?a=1&b=2".into() };
+        hotspot.shape = Shape::Web { kind: WebKind::Hotspot, url: "https://example.com/?a=1&b=2".into(), form: Default::default() };
         p.layers[0].objects.push(hotspot);
         assert_eq!(rgba(&render_page(&p).unwrap(), 5, 5), before);
         assert_eq!(export_web(&p, &path).unwrap(), 2);
@@ -1029,6 +1033,14 @@ mod tests {
         let html = std::fs::read_to_string(dir.join("site_map.html")).unwrap();
         assert!(html.contains("coords=\"5,6,15,16\""));
         assert!(html.contains("a=1&amp;b=2"));
+        // A round hotspot and a many-sided one are written as HTML's circle and poly.
+        p.layers[0].objects.push(Object::new_web_circle(50, Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0 }));
+        p.layers[0].objects.push(Object::new_web_polygon(51, WebKind::Hotspot, &[Vec2 { x: 1.0, y: 2.0 }, Vec2 { x: 30.0, y: 2.0 }, Vec2 { x: 15.0, y: 25.0 }]));
+        export_web(&p, &path).unwrap();
+        let html = std::fs::read_to_string(path.with_file_name(format!("{}_map.html", path.file_stem().unwrap().to_string_lossy()))).unwrap();
+        assert!(html.contains("shape=\"circle\" coords=\"20,20,10\""), "{html}");
+        assert!(html.contains("shape=\"poly\" coords=\"1,2,30,2,15,25\""), "{html}");
+        assert!(html.contains("shape=\"rect\" coords=\"5,6,15,16\""));
         std::fs::remove_dir_all(dir).ok();
     }
 

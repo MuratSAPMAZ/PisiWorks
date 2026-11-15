@@ -549,7 +549,13 @@ pub enum Shape {
     /// Pixels are shared copy-on-write, so undo snapshots stay cheap.
     Image { bitmap: Arc<Bitmap> },
     /// A web area drawn over the artwork and left out of flattened images.
-    Web { kind: WebKind, url: String },
+    Web {
+        kind: WebKind,
+        url: String,
+        /// The outline of the area inside its box: the whole box, a circle, or a polygon.
+        #[serde(default, skip_serializing_if = "WebForm::is_rectangle")]
+        form: WebForm,
+    },
     /// A parametric shape whose outline is rebuilt from its bounds.
     Auto { kind: AutoKind, a: f32, b: f32, count: u32 },
     /// A placed copy of a library symbol. `objects` is rebuilt from the library on load.
@@ -560,6 +566,22 @@ pub enum Shape {
     },
     /// Objects that select and move as one. Positions are relative to their combined bounds.
     Group { objects: Arc<Vec<Object>> },
+}
+
+/// The outline of a hotspot or slice.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub enum WebForm {
+    #[default]
+    Rectangle,
+    Circle,
+    /// The corners, inside the object's box, which runs from 0 to 1 each way.
+    Polygon(Vec<Vec2>),
+}
+
+impl WebForm {
+    pub fn is_rectangle(&self) -> bool {
+        *self == WebForm::Rectangle
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -709,7 +731,7 @@ impl Object {
                 WebKind::Slice => t("Slice").into(),
             },
             bounds,
-            shape: Shape::Web { kind, url: String::new() },
+            shape: Shape::Web { kind, url: String::new(), form: WebForm::Rectangle },
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
@@ -723,6 +745,54 @@ impl Object {
             opacity: 1.0,
             visible: true,
             locked: false,
+        }
+    }
+
+    /// A hotspot or slice with straight sides through the given corners, in the order they were clicked.
+    pub fn new_web_polygon(id: u64, kind: WebKind, corners: &[Vec2]) -> Self {
+        let bounds = Rect::of_points(corners);
+        let inside = corners.iter().map(|p| v2((p.x - bounds.x) / bounds.w.max(0.001), (p.y - bounds.y) / bounds.h.max(0.001))).collect();
+        let mut area = Self::new_web(id, kind, bounds);
+        if let Shape::Web { form, .. } = &mut area.shape {
+            *form = WebForm::Polygon(inside);
+        }
+        area
+    }
+
+    /// A round hotspot inside a box.
+    pub fn new_web_circle(id: u64, bounds: Rect) -> Self {
+        let mut area = Self::new_web(id, WebKind::Hotspot, bounds);
+        if let Shape::Web { form, .. } = &mut area.shape {
+            *form = WebForm::Circle;
+        }
+        area
+    }
+
+    /// The outline of a round or many-sided web area on the page. A rectangular one has none of its own.
+    pub fn web_outline(&self) -> Option<Vec<Vec2>> {
+        let Shape::Web { form, .. } = &self.shape else { return None };
+        let b = self.bounds;
+        match form {
+            WebForm::Rectangle => None,
+            WebForm::Circle => Some((0..48).map(|step| step as f32 / 48.0 * std::f32::consts::TAU).map(|turn| v2(b.x + b.w / 2.0 * (1.0 + turn.cos()), b.y + b.h / 2.0 * (1.0 + turn.sin()))).collect()),
+            WebForm::Polygon(corners) => Some(corners.iter().map(|p| v2(b.x + p.x * b.w, b.y + p.y * b.h)).collect()),
+        }
+    }
+
+    /// Fireworks' 9-slice scaling: the object is resized from one box to another,
+    /// but only its middle stretches. `guides` are the two upright and the two level
+    /// cuts, as parts of the old box from 0 to 1; what lies outside them keeps its size.
+    pub fn nine_slice(&mut self, from: Rect, to: Rect, guides: [f32; 4]) {
+        let map = |p: Vec2| nine_slice_point(p, from, to, guides);
+        if self.reshapable() && self.to_path() {
+            // Handles are measured from their vertex, so each curve keeps its shape where its vertex goes.
+            let moved: Vec<Vec2> = self.points.iter().map(|p| map(*p)).collect();
+            self.points = moved;
+            self.refit_to_points();
+        } else {
+            // What cannot be reshaped is moved and sized by where its own corners go.
+            let (a, b) = (map(v2(self.bounds.x, self.bounds.y)), map(v2(self.bounds.right(), self.bounds.bottom())));
+            self.set_bounds(Rect::from_corners(a, b));
         }
     }
 
@@ -1624,6 +1694,79 @@ pub fn subdivide(points: &[Vec2], closed: bool, max_len: f32) -> Vec<Vec2> {
         out.extend(points.last());
     }
     out
+}
+
+/// Where a point goes when its box is resized by 9-slice scaling: outside the cuts
+/// it keeps its distance from the nearer edge, between them it is stretched.
+pub fn nine_slice_point(p: Vec2, from: Rect, to: Rect, guides: [f32; 4]) -> Vec2 {
+    // One direction at a time: the old edges, the new edges, and the two cuts as parts of the old length.
+    fn along(v: f32, from: (f32, f32), to: (f32, f32), cuts: (f32, f32)) -> f32 {
+        let length = from.1 - from.0;
+        let (near, far) = (length * cuts.0.min(cuts.1).clamp(0.0, 1.0), length * (1.0 - cuts.0.max(cuts.1).clamp(0.0, 1.0)));
+        let (middle, new_middle) = (length - near - far, (to.1 - to.0) - near - far);
+        // Too small for both ends to keep their size: everything scales alike.
+        if new_middle <= 0.0 || middle <= 0.0 {
+            return to.0 + (v - from.0) / length.max(0.001) * (to.1 - to.0);
+        }
+        if v <= from.0 + near {
+            to.0 + (v - from.0)
+        } else if v >= from.1 - far {
+            to.1 - (from.1 - v)
+        } else {
+            to.0 + near + (v - from.0 - near) / middle * new_middle
+        }
+    }
+    v2(
+        along(p.x, (from.x, from.right()), (to.x, to.right()), (guides[0], guides[1])),
+        along(p.y, (from.y, from.bottom()), (to.y, to.bottom()), (guides[2], guides[3])),
+    )
+}
+
+/// Fireworks' Redraw Path: the part of a path between where a freehand stroke
+/// starts and where it ends is replaced by the stroke. Both ends must come within
+/// `reach` of the path; on an open path a stroke that leaves the path replaces it
+/// from where it started to the nearer end.
+pub fn redraw_path(points: &[Vec2], closed: bool, stroke: &[Vec2], reach: f32) -> Option<Vec<Vec2>> {
+    let (first, last) = (*stroke.first()?, *stroke.last()?);
+    if points.len() < 2 || stroke.len() < 2 {
+        return None;
+    }
+    let nearest = |p: Vec2| points.iter().enumerate().map(|(index, q)| (index, (q.x - p.x).hypot(q.y - p.y))).min_by(|a, b| a.1.total_cmp(&b.1));
+    let (start, start_far) = nearest(first)?;
+    let (end, end_far) = nearest(last)?;
+    if start_far > reach {
+        return None;
+    }
+    let count = points.len();
+    let mut out = Vec::new();
+    if end_far > reach {
+        if closed {
+            return None;
+        }
+        // Drawn off the path: the nearer end of it is what gets redrawn.
+        if start < count / 2 {
+            out.extend(stroke.iter().rev());
+            out.extend(&points[start + 1..]);
+        } else {
+            out.extend(&points[..start]);
+            out.extend(stroke);
+        }
+        return Some(out);
+    }
+    if start == end {
+        return None;
+    }
+    let (low, high, ordered): (usize, usize, Vec<Vec2>) = if start < end { (start, end, stroke.to_vec()) } else { (end, start, stroke.iter().rev().copied().collect()) };
+    // On a closed path the shorter way round is the part meant.
+    if closed && high - low > count / 2 {
+        out.extend(&points[low + 1..high]);
+        out.extend(ordered.iter().rev());
+    } else {
+        out.extend(&points[..low]);
+        out.extend(&ordered);
+        out.extend(&points[high + 1..]);
+    }
+    Some(out)
 }
 
 /// Drags vertices near `start` by `delta`, fading smoothly to nothing at `radius`.
@@ -3683,6 +3826,70 @@ mod tests {
         e.set_active_state(1);
         e.set_active_state(0);
         assert!(e.doc.page().open_groups.is_empty() && e.object(group).is_some());
+    }
+
+    #[test]
+    fn nine_slice_scaling_stretches_only_the_middle() {
+        let from = Rect { x: 0.0, y: 0.0, w: 90.0, h: 30.0 };
+        let to = Rect { x: 0.0, y: 0.0, w: 180.0, h: 30.0 };
+        let thirds = [1.0 / 3.0, 2.0 / 3.0, 1.0 / 3.0, 2.0 / 3.0];
+        // The left third stays where it is, the right third keeps its distance from the right edge.
+        assert_eq!(nine_slice_point(v2(20.0, 10.0), from, to, thirds), v2(20.0, 10.0));
+        assert_eq!(nine_slice_point(v2(80.0, 10.0), from, to, thirds), v2(170.0, 10.0));
+        // The middle third, 30 wide, becomes 120 wide.
+        assert_eq!(nine_slice_point(v2(45.0, 15.0), from, to, thirds), v2(90.0, 15.0));
+        // Made smaller than its two ends together, it scales as a whole.
+        let tiny = Rect { x: 0.0, y: 0.0, w: 30.0, h: 30.0 };
+        assert_eq!(nine_slice_point(v2(45.0, 15.0), from, tiny, thirds).x, 15.0);
+        // A rounded rectangle keeps the size of its corners when made wider.
+        let mut pill = rect(1, 0.0, 0.0, 90.0, 30.0);
+        pill.shape = Shape::Rect { radius: 10.0 };
+        pill.nine_slice(from, to, thirds);
+        assert_eq!(pill.bounds, to);
+        let outline = pill.outline();
+        assert!(outline.iter().any(|p| (p.x - 10.0).abs() < 0.6 && p.y.abs() < 0.01), "the top side starts 10 in, as before");
+        assert!(outline.iter().any(|p| (p.x - 170.0).abs() < 0.6 && p.y.abs() < 0.01), "and ends 10 from the new right edge");
+    }
+
+    #[test]
+    fn redraw_path_replaces_the_part_under_the_stroke() {
+        let line: Vec<Vec2> = (0..=10).map(|i| v2(i as f32 * 10.0, 0.0)).collect();
+        // From the third point to the eighth, by way of a bump.
+        let bump = [v2(21.0, 1.0), v2(50.0, 30.0), v2(79.0, -1.0)];
+        let redrawn = redraw_path(&line, false, &bump, 5.0).unwrap();
+        assert_eq!(redrawn, [v2(0.0, 0.0), v2(10.0, 0.0), bump[0], bump[1], bump[2], v2(90.0, 0.0), v2(100.0, 0.0)]);
+        // Drawn the other way it gives the same path.
+        let back: Vec<Vec2> = bump.iter().rev().copied().collect();
+        assert_eq!(redraw_path(&line, false, &back, 5.0).unwrap(), redrawn);
+        // A stroke that starts off the path changes nothing.
+        assert!(redraw_path(&line, false, &[v2(20.0, 40.0), v2(60.0, 40.0)], 5.0).is_none());
+        // One that leaves an open path redraws it to the nearer end.
+        let tail = redraw_path(&line, false, &[v2(80.0, 0.0), v2(90.0, 20.0), v2(120.0, 40.0)], 5.0).unwrap();
+        assert_eq!((tail.len(), tail[7], tail[10]), (11, v2(70.0, 0.0), v2(120.0, 40.0)));
+        // On a closed square the shorter way round is replaced.
+        let square = [v2(0.0, 0.0), v2(10.0, 0.0), v2(20.0, 0.0), v2(20.0, 20.0), v2(0.0, 20.0)];
+        let dented = redraw_path(&square, true, &[v2(0.0, 0.0), v2(10.0, 8.0), v2(20.0, 0.0)], 2.0).unwrap();
+        assert!(dented.contains(&v2(10.0, 8.0)) && !dented.contains(&v2(10.0, 0.0)) && dented.contains(&v2(20.0, 20.0)));
+        assert!(redraw_path(&square, true, &[v2(0.0, 0.0), v2(50.0, 50.0)], 2.0).is_none());
+    }
+
+    #[test]
+    fn web_areas_can_be_round_or_many_sided() {
+        let corners = [v2(10.0, 10.0), v2(50.0, 10.0), v2(30.0, 40.0)];
+        let mut triangle = Object::new_web_polygon(1, WebKind::Slice, &corners);
+        assert_eq!(triangle.bounds, Rect { x: 10.0, y: 10.0, w: 40.0, h: 30.0 });
+        assert_eq!(triangle.web_outline().unwrap(), corners);
+        // Moved and resized, its corners go with its box.
+        triangle.set_bounds(Rect { x: 0.0, y: 0.0, w: 80.0, h: 60.0 });
+        assert_eq!(triangle.web_outline().unwrap(), [v2(0.0, 0.0), v2(80.0, 0.0), v2(40.0, 60.0)]);
+        let round = Object::new_web_circle(2, Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 });
+        let outline = round.web_outline().unwrap();
+        assert!(outline.iter().all(|p| ((p.x - 10.0).hypot(p.y - 10.0) - 10.0).abs() < 0.01));
+        assert!(Object::new_web(3, WebKind::Hotspot, Rect::default()).web_outline().is_none());
+        // The form is kept in the file, and a rectangular area is written as before.
+        let back: Object = serde_json::from_str(&serde_json::to_string(&triangle).unwrap()).unwrap();
+        assert_eq!(back.shape, triangle.shape);
+        assert!(!serde_json::to_string(&Object::new_web(3, WebKind::Hotspot, Rect::default())).unwrap().contains("form"));
     }
 
     #[test]
