@@ -264,6 +264,46 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 *İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
 
+**Kurallar: filmden oyuna.** Bu da PisiSahne'nin kendi özelliğidir. Bir kural *şu olunca şunu yap* der; iki yarısı da listeden seçilir, sayılardan başka hiçbir şey yazılmaz. **Kurallar > Kurallar ve Sayılar** her kuralı bir cümle olarak gösterir; birine tıklayınca parçalarına ayrılır.
+
+- *Önce adlar.* Kural bir nesneyi Özellikler'deki adıyla tanır. Elmaya "Elma", sepete "Sepet" adını verin. Aynı adı taşıyan nesneler kurallarını paylaşır: "Elma" hakkındaki bir kural bütün elmalar için geçerlidir.
+- *Yeni Kural* olayları listeler:
+
+| Olay | Ne zaman olur |
+|---|---|
+| Film başlayınca | Bir kez, başta ve "baştan başla"dan sonra |
+| Bir tuşa basılınca | Boşluk, oklar, Enter, bir harf ya da rakam |
+| Bir nesneye tıklanınca | İzleyen o addaki bir nesneye tıklayınca |
+| Bir nesne ötekine değince | İkisinin kutuları üst üste gelince |
+| Bir nesne sahnenin kenarına değince | Herhangi bir kenar ya da alt, üst, sol, sağ kenar |
+| Her şu kadar saniyede bir | Tekrar tekrar |
+| Şu kadar saniye sonra | Bir kez |
+| Bir sayı bir değere gelince | O değer olunca, onu geçince ya da altına inince |
+
+- *Eylem Ekle* yapılacakları listeler: sayıyı değiştir ya da ayarla; nesneyi gizle, göster, taşı, bir konuma, rastgele bir yere ya da üstte rastgele bir yere koy; nesneyi zıplat; ses çal; sonraki sahneye, bir sahneye ya da bir kareye git; filmi durdur ya da oynat; her şeyi durdur; baştan başla. Bir kuralın birkaç eylemi olabilir; sırayla yapılır.
+- *Hangi nesne?* "Elma nesnesi Sepet nesnesine değince: Elma nesnesini gizle" kuralında gizlenen, sepete değen elmadır; bütün elmalar değil.
+- *Sayılar.* **Yeni Sayı** adı ve başlangıç değeri olan bir sayı oluşturur: puan, can, süre. İçinde süslü ayraçla adı geçen bir yazı onu filmde gösterir: Metin aracıyla `Puan: {Puan}` yazın.
+- *Bir şey bir kez olur.* Kural bir şey olduğu anda izlenir, sürdüğü sürece değil: yerde duran elma yere bir kez değmiştir.
+- Kurallar yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter). Oyuncuyu bekleyecek sahnenin kare eylemi **Durdur** olmalıdır; yoksa film sonraki sahneye geçer.
+
+**Ders: elma yakala** (**Oyun: elma yakala** örneği).
+
+1. Sahnenin altına bir sepet çizin, adını "Sepet" yapın. Ona **Ok Tuşlarıyla Yürü** ve zıplama hızı 0 olan **Düş ve Zıpla** verin: düşmek onu yerde tutar.
+2. Üste bir elma çizin, adını "Elma" yapın. Ona çekimi küçük (70), zıplama hızı 0 olan **Düş ve Zıpla** verin. İkinci elma için kopyalayıp daha yukarı koyun.
+3. **Kurallar ve Sayılar**'da iki sayı oluşturun: başlangıcı 0 olan Puan ve başlangıcı 5 olan Can. Sahneye `Puan: {Puan}` ve `Can: {Can}` yazın.
+4. Kural: *Bir nesne ötekine değince*, Elma, Sepet. Eylemler: *Sayıyı değiştir*, Puan, 1; *Nesneyi üstte rastgele bir yere koy*, Elma.
+5. Kural: *Bir nesne sahnenin kenarına değince*, Elma, alt kenarına. Eylemler: *Sayıyı değiştir*, Can, −1; *Nesneyi üstte rastgele bir yere koy*, Elma.
+6. "Oyun bitti" yazan ikinci bir sahne ekleyin; içine "Yeniden" adlı bir kutu koyun. İki sahnenin de kare eylemini **Durdur** yapın.
+7. Kural: *Bir sayı bir değere gelince*, Can, altına inince, 1. Eylem: *Sahneye git*, 2.
+8. Kural: *Bir nesneye tıklanınca*, Yeniden. Eylem: *Baştan başla*.
+9. Ctrl+Enter.
+
+**Ders: hedef vurma.** "Hedef" adlı üç daire; her birinin kendi davranışı var (Git Gel, İn Çık, Sürekli Git). Sayılar: Puan 0 ve Süre 20. Kurallar: *Hedef nesnesine tıklanınca: Puan sayısını 1 değiştir; Hedef nesnesini rastgele bir yere koy*. *Her 1 saniyede bir: Süre sayısını −1 değiştir*. *Süre sayısı 1 değerinin altına inince: 2. sahneye git*.
+
+**Ders: bilgi yarışması.** Her soru için bir sahne; her birinin kare eylemi Durdur. Yanıtlar üzerinde yazı olan kutulardır; doğru olanın adını "Doğru", ötekilerin adını "Yanlış" yapın. Kaç soru olursa olsun üç kural yeter: *Doğru nesnesine tıklanınca: Puan sayısını 1 değiştir; sonraki sahneye git*. *Yanlış nesnesine tıklanınca: sonraki sahneye git*. *Yeniden nesnesine tıklanınca: baştan başla*. Son sahne `Puan: {Puan}` gösterir.
+
+Kuralların henüz yapmadıkları: nesneler birbirinin üstünde durmaz, duvara takılmaz (değdiği bilinir ama hiçbir şey katı değildir); sayılar tam ya da ondalıklıdır, sözcük saklanmaz; bir kuralın içinde "eğer" yoktur. Bunlar bir sonraki basamağın, yazılı dilin işidir.
+
 **Eklem yerinden döndürmek.** Hareket ara doldurması, nesneyi Flash'taki gibi *dönüştürme noktasının* çevresinde döndürür. Bu nokta başlangıçta nesnenin ortasındadır. Taşımak için nesneyi seçin, **Ölçekle** aracını (Q) alın ve kutunun ortasındaki küçük kareyi nesnenin döneceği yere sürükleyin: bir kolun omuz ucuna, bir tekerleğin göbeğine, bir kapının menteşesine. Enter'a basın. Nokta bundan sonra nesneyle birlikte kalır; taşımada, döndürmede ve yeni anahtar karelerde de. Ara doldurma noktayı anahtar kareden anahtar kareye düz götürür, nesne onun çevresinde döner. Noktayı ilk anahtar karede, ötekileri eklemeden önce yerine koyun. Bir grup ya da resim için önce sembole dönüştürün (F8); Flash da her hareket ara doldurması için bunu ister.
 
 **Ders: çöp adam dövüşü.** **Örnekler > Çöp adam dövüşü**'nü açıp oynatın (Enter), sonra parçalarına bakın. Böyle bir film şöyle yapılır:
@@ -297,4 +337,4 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde dokuz hazır animasyon vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on iki hazır film vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış üç oyun, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.

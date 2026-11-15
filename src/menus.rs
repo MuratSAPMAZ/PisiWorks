@@ -229,6 +229,8 @@ pub enum Cmd {
     SahneExample(u8),
     /// Hands the document to the other of the two programs and opens it there.
     OpenInOther,
+    /// Opens Rules and Numbers.
+    Rules,
     /// Gives the selection a ready-made motion, takes it away, or opens the motions' settings.
     Behavior(BehaviorCmd),
     ManageCommands,
@@ -377,10 +379,14 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
             cmd("One after another", "", Cmd::SahneExample(5)),
             cmd("Stick fight", "", Cmd::SahneExample(6)),
             cmd("Behaviors", "", Cmd::SahneExample(7)),
-            cmd("Two scenes with buttons", "", Cmd::SahneExample(8)),
+            cmd("Game: catch the apples", "", Cmd::SahneExample(8)),
+            cmd("Game: hit the targets", "", Cmd::SahneExample(9)),
+            cmd("Game: quiz", "", Cmd::SahneExample(10)),
+            cmd("Two scenes with buttons", "", Cmd::SahneExample(11)),
         ],
     ),
     ("Behaviors", BEHAVIOR_MENU),
+    ("Rules", &[cmd("Rules and Numbers...", "", Cmd::Rules), Sep, cmd("Test Movie", "Ctrl+Enter", Cmd::Frame(FrameCmd::TestMovie))]),
     ("PisiWorks", &[cmd("Open Frame in PisiWorks", "", Cmd::OpenInOther)]),
 ];
 

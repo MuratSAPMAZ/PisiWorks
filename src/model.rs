@@ -3788,6 +3788,12 @@ pub struct Document {
     /// The sounds of an animation.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sounds: Vec<Sound>,
+    /// What makes an animation a game: see [`crate::rules`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<crate::rules::Rule>,
+    /// The numbers the rules keep, such as a score.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<crate::rules::Variable>,
     /// While a movie clip is edited, the page to go back to. Never written to a file.
     #[serde(skip)]
     pub clip_return: Option<usize>,
@@ -3867,8 +3873,25 @@ impl Document {
             symbols: Vec::new(),
             urls: Vec::new(),
             sounds: Vec::new(),
+            rules: Vec::new(),
+            variables: Vec::new(),
             clip_return: None,
         }
+    }
+
+    /// The names objects have been given, anywhere in the document: what a rule can be about.
+    pub fn object_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .pages
+            .iter()
+            .flat_map(|page| {
+                let kept = page.timeline.iter().flat_map(|timeline| timeline.layers.iter().flatten().flat_map(|span| span.objects.iter()));
+                page.objects().chain(kept).filter(|o| !o.is_web() && !o.name.trim().is_empty()).map(|o| o.name.clone())
+            })
+            .collect();
+        names.sort();
+        names.dedup();
+        names
     }
 
     /// The pages that are scenes of the animation, in order: every page that is not the timeline of a movie clip.

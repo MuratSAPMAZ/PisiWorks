@@ -8,7 +8,8 @@
 //! and a button can answer the mouse. A short script plays the scenes one after
 //! another, runs the actions of frames and buttons, and starts the sounds. An object
 //! with behaviors is a picture of its own as well, which the script moves by the rules
-//! of [`crate::behavior`].
+//! of [`crate::behavior`]. So is an object that a rule is about; the rules and the
+//! numbers of [`crate::rules`] go into the page as they are, and the script follows them.
 
 use std::collections::HashMap;
 
@@ -208,6 +209,8 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
         Ok(format!("[\"i\",{}]", pictures.add(crate::export::render_page(&page)?.encode_png()?)))
     };
 
+    // The objects the rules are about, by name: each is a picture of its own, so that a rule can move or hide it.
+    let ruled: std::collections::HashSet<&str> = doc.rules.iter().flat_map(|rule| rule.objects()).collect();
     let mut total = 0;
     let mut scene_texts = Vec::new();
     for index in &scenes {
@@ -227,13 +230,50 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
                     _ => None,
                 };
                 // What the script needs to move an object by its behaviors: the point it turns around, its box, and the list.
-                let behaving = (!object.behaviors.is_empty()).then(|| {
+                let behaving = (!object.behaviors.is_empty() || ruled.contains(object.name.as_str())).then(|| {
                     let (p, b) = (object.pivot_point().unwrap_or(object.bounds.center()), object.bounds);
                     let list: Vec<String> = object.behaviors.iter().map(|behavior| behavior.text()).collect();
-                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}]}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","))
+                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}],\"n\":{}}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","), serde_json::to_string(&object.name).unwrap_or_default())
                 });
-                if kind.is_none() && behaving.is_none() {
+                // A text that shows a number is written by the script, so that it can change.
+                let counting = match &object.shape {
+                    Shape::Text { content, size, style } if !crate::rules::shown_in(content, &doc.variables).is_empty() => Some((content, *size, style)),
+                    _ => None,
+                };
+                if kind.is_none() && behaving.is_none() && counting.is_none() {
                     run.push(object.clone());
+                    continue;
+                }
+                if let Some((content, size, style)) = counting {
+                    if !run.is_empty() {
+                        ops.push(still(&run, &mut pictures)?);
+                        run.clear();
+                    }
+                    let color = object.fill.unwrap_or(crate::model::Color::BLACK);
+                    let align = match style.align {
+                        crate::model::TextAlign::Center => "center",
+                        crate::model::TextAlign::Right => "right",
+                        _ => "left",
+                    };
+                    let b = object.bounds;
+                    ops.push(format!(
+                        "[\"t\",{},{{\"text\":{},\"font\":{},\"size\":{},\"color\":\"rgba({},{},{},{})\",\"bold\":{},\"italic\":{},\"align\":\"{align}\",\"x\":{},\"y\":{},\"w\":{},\"lh\":{}}},{}]",
+                        object.id,
+                        serde_json::to_string(content)?,
+                        serde_json::to_string(&style.font)?,
+                        size,
+                        color.r,
+                        color.g,
+                        color.b,
+                        color.a as f32 / 255.0 * object.opacity,
+                        style.bold,
+                        style.italic,
+                        b.x,
+                        b.y,
+                        b.w,
+                        size * crate::export::LINE_HEIGHT,
+                        behaving.unwrap_or_else(|| "null".to_string())
+                    ));
                     continue;
                 }
                 if !run.is_empty() {
@@ -275,6 +315,9 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
     }
     let background = first.canvas.map_or_else(|| "null".to_string(), |c| format!("\"rgba({},{},{},{})\"", c.r, c.g, c.b, c.a as f32 / 255.0));
     let sounds: Vec<String> = doc.sounds.iter().map(|sound| format!("\"data:{};base64,{}\"", sound.mime, sound.data)).collect();
+    let sound_names: Vec<String> = doc.sounds.iter().map(|sound| sound.name.clone()).collect();
+    let rules: Vec<String> = doc.rules.iter().map(|rule| rule.text(&sound_names)).collect();
+    let numbers: Vec<String> = doc.variables.iter().map(|v| format!("{}:{}", serde_json::to_string(&v.name).unwrap_or_default(), v.start)).collect();
     Ok(PAGE
         .replace("{title}", &escape(title))
         .replace("{width}", &width.to_string())
@@ -284,6 +327,8 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
         .replace("{pictures}", &pictures.sources.join(","))
         .replace("{sets}", &sets.join(","))
         .replace("{sounds}", &sounds.join(","))
+        .replace("{rules}", &rules.join(","))
+        .replace("{numbers}", &numbers.join(","))
         .replace("{scenes}", &scene_texts.join(",")))
 }
 
@@ -310,12 +355,17 @@ const PAGE: &str = r#"<!doctype html>
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).
 // What is drawn is a picture of the stage ("i"), a movie clip ("c"), a button ("b") or an object
 // with behaviors ("m"); the last three may carry behaviors: the point to turn around (p), the
-// object's box (box) and the list (l) of [kind, first number, second number].
+// object's box (box), the list (l) of [kind, first number, second number] and the object's name (n).
+// A text that shows a number ("t") is written here, with the number in place of its {name}.
+// rules: what makes the film a game. Each has an event (e): [kind, first name, second name, number]
+// and steps (s): [kind, name, first number, second number]. numbers: the numbers by name, as they start.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
   sets: [{sets}],
   sounds: [{sounds}],
+  rules: [{rules}],
+  numbers: {{numbers}},
   scenes: [{scenes}]
 };
 var canvas = document.getElementById("stage"), stage = canvas.getContext("2d");
@@ -324,6 +374,9 @@ var clipFrames = {}, buttons = [], hover = null, pressed = false, loaded = 0;
 // For each object with behaviors: how long it has been there (n, in frames), how far the viewer
 // has moved it (x, y), how fast it is falling (vy) and whether it stands on the ground.
 var actors = {}, keys = {}, mouse = null, grips = [], dragging = null;
+// For the rules: the numbers as they stand, whether everything has been stopped, how long the film
+// has run, and what each rule last saw, so that it is followed when a thing happens and not while it lasts.
+var numbers = {}, frozen = false, ticks = 0, seen = {};
 var sounds = movie.sounds.map(function (source) { return new Audio(source); });
 var images = movie.pictures.map(function (source) {
   var image = new Image();
@@ -360,8 +413,8 @@ function enter() {
   if (depth < 8) act(now.a);
 }
 // The behaviors an op carries, and the number its object is known by.
-function behaviorsOf(op) { return op[0] === "m" ? op[3] : op[0] === "c" ? op[5] : op[0] === "b" ? op[7] : null; }
-function keyOf(op) { return op[0] === "m" ? op[2] : op[4]; }
+function behaviorsOf(op) { return op[0] === "m" || op[0] === "t" ? op[3] : op[0] === "c" ? op[5] : op[0] === "b" ? op[7] : null; }
+function keyOf(op) { return op[0] === "m" ? op[2] : op[0] === "t" ? op[1] : op[4]; }
 function actor(key) { return actors[key] || (actors[key] = { n: 0, x: 0, y: 0, vy: 0, ground: false }); }
 function span(seconds) { return Math.abs(seconds) < 0.01 ? 0.01 : seconds; }
 function wrapped(at, size, room) { var m = room + size; return (((at + size) % m) + m) % m - size; }
@@ -424,6 +477,112 @@ function place(m, b) {
   var cos = Math.cos(m.angle) * m.scale, sin = Math.sin(m.angle) * m.scale, px = b.p[0], py = b.p[1];
   stage.setTransform(cos, sin, -sin, cos, px + m.dx - (cos * px - sin * py), py + m.dy - (sin * px + cos * py));
 }
+// The named objects of the frame on show that are not hidden, each with its box as it stands now.
+function cast() {
+  var list = [];
+  movie.scenes[scene][frame].o.forEach(function (op) {
+    var b = behaviorsOf(op);
+    if (!b || !b.n || actor(keyOf(op)).hidden) return;
+    var m = moved(keyOf(op), b);
+    list.push({ key: keyOf(op), name: b.n, b: b, box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+  });
+  return list;
+}
+function startNumbers() {
+  numbers = {};
+  Object.keys(movie.numbers).forEach(function (name) { numbers[name] = movie.numbers[name]; });
+}
+// Does one step of a rule. `who` says which objects the event was about, by name, so that
+// "hide Apple" after "Apple touches Basket" hides that apple and not every apple.
+function take(step, who, players) {
+  var k = step[0], name = step[1], x = step[2], y = step[3];
+  var them = players.filter(function (p) { return p.name === name && (who[name] === undefined || who[name] === p.key); });
+  if (k === "show") {
+    // What is hidden is not among the players: it is looked for on the frame itself.
+    movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (b && b.n === name) actor(keyOf(op)).hidden = false; });
+  }
+  them.forEach(function (p) {
+    var a = actor(p.key), box = p.b.box;
+    if (k === "move") { a.x += x; a.y += y; }
+    else if (k === "goto") { a.x = x - box[0]; a.y = y - box[1]; a.vy = 0; }
+    else if (k === "random") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = Math.random() * (movie.height - box[3]) - box[1]; a.vy = 0; }
+    else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
+    else if (k === "hide") a.hidden = true;
+    else if (k === "jump") { a.vy = -x; a.ground = false; }
+  });
+  if (k === "add") numbers[name] = (numbers[name] || 0) + x;
+  else if (k === "set") numbers[name] = x;
+  else if (k === "stop") playing = false;
+  else if (k === "play") playing = true;
+  else if (k === "frame") go(scene, x - 1, true);
+  else if (k === "frame-stop") go(scene, x - 1, false);
+  else if (k === "scene") go(x - 1, 0, true);
+  else if (k === "next") go((scene + 1) % movie.scenes.length, 0, true);
+  else if (k === "sound") { if (sounds[x]) { try { sounds[x].currentTime = 0; sounds[x].play(); } catch (error) {} } }
+  else if (k === "halt") { frozen = true; playing = false; }
+  else if (k === "restart") restart();
+}
+function follow(rule, who) {
+  var players = cast();
+  rule.s.forEach(function (step) { take(step, who || {}, players); });
+}
+// Follows every rule of a kind that `fits` says is meant.
+function happen(kind, fits, who) {
+  movie.rules.forEach(function (rule) { if (rule.e[0] === kind && fits(rule.e)) follow(rule, who); });
+}
+function holds(value, how, against) { return how === ">" ? value > against : how === "<" ? value < against : value === against; }
+function atEdge(box, edge) {
+  var top = box[1] <= 0, bottom = box[1] + box[3] >= movie.height, left = box[0] <= 0, right = box[0] + box[2] >= movie.width;
+  return edge === "top" ? top : edge === "bottom" ? bottom : edge === "left" ? left : edge === "right" ? right : top || bottom || left || right;
+}
+// Looks at what has come to be since the last frame, and follows the rules that wait for it.
+// A thing that was already so when first looked at is not taken to have happened.
+function judge() {
+  var t = ticks / movie.fps, players = cast();
+  function came(id, now) { var before = seen[id]; seen[id] = now; return now && before === false; }
+  movie.rules.forEach(function (rule, index) {
+    var e = rule.e, k = e[0];
+    if (k === "every") {
+      var times = Math.floor(t / Math.max(e[3], 0.05));
+      if (times > (seen["n" + index] || 0)) { seen["n" + index] = times; follow(rule); }
+    } else if (k === "after") {
+      if (!seen["a" + index] && t >= e[3]) { seen["a" + index] = true; follow(rule); }
+    } else if (k === "number") {
+      if (came("v" + index, holds(numbers[e[1]] || 0, e[2], e[3]))) follow(rule);
+    } else if (k === "edge") {
+      players.forEach(function (p) {
+        if (p.name === e[1] && came("e" + index + ":" + p.key, atEdge(p.box, e[2]))) { var who = {}; who[p.name] = p.key; follow(rule, who); }
+      });
+    } else if (k === "touch") {
+      players.forEach(function (p) {
+        if (p.name !== e[1]) return;
+        players.forEach(function (q) {
+          if (q.name !== e[2] || q.key === p.key) return;
+          var meet = p.box[0] < q.box[0] + q.box[2] && q.box[0] < p.box[0] + p.box[2] && p.box[1] < q.box[1] + q.box[3] && q.box[1] < p.box[1] + p.box[3];
+          if (came("t" + index + ":" + p.key + ":" + q.key, meet)) { var who = {}; who[q.name] = q.key; who[p.name] = p.key; follow(rule, who); }
+        });
+      });
+    }
+  });
+}
+// Starts the film again from the beginning, with every number as it started.
+function restart() {
+  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null;
+  startNumbers();
+  go(0, 0, true);
+  happen("start", function () { return true; });
+}
+// Writes a text that shows numbers, each in place of its {name}.
+function write(spec) {
+  var text = spec.text.replace(/\{([^{}]+)\}/g, function (all, name) { return name in numbers ? String(Math.round(numbers[name] * 100) / 100) : all; });
+  var family = spec.font ? "'" + spec.font + "'," : "";
+  stage.font = (spec.italic ? "italic " : "") + (spec.bold ? "bold " : "") + spec.size + "px " + family + "'Noto Sans','Liberation Sans','DejaVu Sans',Arial,sans-serif";
+  stage.fillStyle = spec.color;
+  stage.textAlign = spec.align;
+  stage.textBaseline = "middle";
+  var x = spec.align === "center" ? spec.x + spec.w / 2 : spec.align === "right" ? spec.x + spec.w : spec.x;
+  text.split("\n").forEach(function (line, row) { stage.fillText(line, x, spec.y + row * spec.lh + spec.lh / 2); });
+}
 function draw() {
   stage.setTransform(1, 0, 0, 1, 0, 0);
   stage.globalAlpha = 1;
@@ -439,7 +598,14 @@ function draw() {
       return;
     }
     var b = behaviorsOf(op), m = b ? moved(keyOf(op), b) : null;
+    if (b && actor(keyOf(op)).hidden) return;
     if (b && has(b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+    if (op[0] === "t") {
+      if (m) place(m, b); else stage.setTransform(1, 0, 0, 1, 0, 0);
+      stage.globalAlpha = m ? m.alpha : 1;
+      write(op[2]);
+      return;
+    }
     if (op[0] === "m") {
       place(m, b);
       stage.globalAlpha = m.alpha;
@@ -463,6 +629,9 @@ function draw() {
   });
 }
 function tick() {
+  // "Stop everything" holds the film as it is until it is started again.
+  if (frozen) { draw(); return; }
+  ticks += 1;
   // Every movie clip on the stage goes on by a frame of its own, whether or not the scene is playing.
   movie.scenes[scene][frame].o.forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
   // So does every object with behaviors.
@@ -473,11 +642,14 @@ function tick() {
     depth = 0;
     enter();
   }
+  judge();
   draw();
 }
 function start() {
+  startNumbers();
   depth = 0;
   enter();
+  happen("start", function () { return true; });
   draw();
   setInterval(tick, 1000 / movie.fps);
 }
@@ -511,6 +683,9 @@ canvas.addEventListener("mousedown", function (event) {
   pressed = true;
   mouse = pointOf(event);
   dragging = topmost(buttons, mouse) ? null : topmost(grips, mouse);
+  // A click on a named object: the topmost one under the mouse, and the rules that wait for it.
+  var hit = frozen ? null : topmost(cast(), mouse);
+  if (hit) { var who = {}; who[hit.name] = hit.key; happen("click", function (e) { return e[1] === hit.name; }, who); }
   draw();
 });
 canvas.addEventListener("mouseup", function (event) {
@@ -521,8 +696,12 @@ canvas.addEventListener("mouseup", function (event) {
   draw();
 });
 // The keys held down. In a film that listens to them the arrows and Space do not scroll the page.
-var listens = JSON.stringify(movie.scenes).search(/\["(keys|gravity)",/) >= 0;
+var listens = JSON.stringify(movie.scenes).search(/\["(keys|gravity)",/) >= 0 || movie.rules.some(function (rule) { return rule.e[0] === "key"; });
 function keyed(event, down) {
+  if (down && !event.repeat && !frozen) {
+    var pressedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    happen("key", function (e) { return e[1] === pressedKey; });
+  }
   keys[event.key] = down;
   if (listens && (event.key.indexOf("Arrow") === 0 || event.key === " ")) event.preventDefault();
 }

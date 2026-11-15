@@ -481,6 +481,50 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::RuleNew => crate::rules::EVENTS.into_iter().map(|kind| item(t(kind.name()).into(), false, cx, Box::new(move |this, _, _| this.add_rule(kind)))).collect(),
+            Combo::RuleEvent => {
+                let now = self.ed.doc.rules.get(self.rule_picked).map(|rule| rule.event.kind);
+                crate::rules::EVENTS.into_iter().map(|kind| item(t(kind.name()).into(), now == Some(kind), cx, Box::new(move |this, _, _| this.set_rule_event(kind)))).collect()
+            }
+            Combo::RuleEventPick(second) => {
+                let event = self.ed.doc.rules.get(self.rule_picked).map(|rule| rule.event.clone());
+                let pick = event.as_ref().and_then(|event| if second { event.kind.needs().1 } else { event.kind.needs().0 });
+                let now = event.map(|event| if second { event.b } else { event.a });
+                pick.map_or_else(Vec::new, |pick| self.rule_choices(pick))
+                    .into_iter()
+                    .map(|(value, name)| {
+                        let chosen = now.as_deref() == Some(value.as_str());
+                        item(name.into(), chosen, cx, Box::new(move |this, _, _| {
+                            let value = value.clone();
+                            this.edit_rule(|rule| if second { rule.event.b = value } else { rule.event.a = value });
+                        }))
+                    })
+                    .collect()
+            }
+            Combo::RuleStepAdd => crate::rules::STEPS.into_iter().map(|kind| item(t(kind.name()).into(), false, cx, Box::new(move |this, _, _| this.add_rule_step(kind)))).collect(),
+            Combo::RuleStep(index) => {
+                let now = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(index)).map(|step| step.kind);
+                crate::rules::STEPS.into_iter().map(|kind| item(t(kind.name()).into(), now == Some(kind), cx, Box::new(move |this, _, _| this.set_rule_step(index, kind)))).collect()
+            }
+            Combo::RuleStepPick(index) => {
+                let step = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(index)).cloned();
+                step.as_ref()
+                    .and_then(|step| step.kind.needs().0)
+                    .map_or_else(Vec::new, |pick| self.rule_choices(pick))
+                    .into_iter()
+                    .map(|(value, name)| {
+                        let chosen = step.as_ref().is_some_and(|step| step.a == value);
+                        item(name.into(), chosen, cx, Box::new(move |this, _, _| {
+                            let value = value.clone();
+                            this.edit_rule(|rule| {
+                                if let Some(step) = rule.steps.get_mut(index) {
+                                    step.a = value;
+                                }
+                            });
+                        }))
+                    })
+                    .collect()
+            }
             Combo::GifWizardLoop => crate::model::GIF_LOOPS
                 .into_iter()
                 .map(|loops| {
@@ -667,7 +711,8 @@ impl Workspace {
                     div()
                         .id("combo-popup")
                         .occlude()
-                        .w(px(170.))
+                        // The lists of Rules and Numbers hold whole phrases.
+                        .w(px(if matches!(combo, Combo::RuleNew | Combo::RuleEvent | Combo::RuleStepAdd | Combo::RuleStep(_)) { 310. } else { 170. }))
                         .max_h(px(COMBO_MAX_HEIGHT))
                         .overflow_y_scroll()
                         .py_1()
@@ -2121,6 +2166,134 @@ impl Workspace {
             .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_mask_dialog(true)))
             .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_mask_dialog(false)));
         Some(self.dialog_frame(290., t("Auto Vector Mask"), rows, buttons))
+    }
+
+    /// Rules > Rules and Numbers: the rules as sentences, the rule on show taken apart into lists, and the numbers.
+    pub(crate) fn rules_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use crate::rules::{choice_name, Pick};
+        if !self.rules_dialog {
+            return None;
+        }
+        let doc = &self.ed.doc;
+        let raised = |combo: Div| combo.bg(rgb(PANEL_RAISED));
+        // A name that is no longer there to be chosen is shown as it is, so that it can be seen to be wrong.
+        let shown = |pick: Pick, value: &str| if value.is_empty() { t("(choose)").to_string() } else { choice_name(pick, value) };
+        let mut rows: Vec<AnyElement> = Vec::new();
+        let sentences: Vec<AnyElement> = doc
+            .rules
+            .iter()
+            .enumerate()
+            .map(|(index, rule)| {
+                div()
+                    .px_1()
+                    .h(px(20.))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .overflow_hidden()
+                    .when(index == self.rule_picked, |d| d.bg(rgb(ACCENT)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.commit_field();
+                            this.rule_picked = index;
+                            cx.notify();
+                        }),
+                    )
+                    .child(label(format!("{}. {}", index + 1, rule.sentence())))
+                    .into_any_element()
+            })
+            .collect();
+        rows.push(if sentences.is_empty() {
+            div().text_color(rgb(TEXT_DIM)).child(label(t("No rules yet. A rule says what happens when: pick an event from New Rule."))).into_any_element()
+        } else {
+            div().id("rule-list").max_h(px(150.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(sentences).into_any_element()
+        });
+        rows.push(
+            div()
+                .flex()
+                .items_center()
+                .gap_1()
+                .child(raised(self.combo(Combo::RuleNew, t("New Rule"), 150., cx)))
+                .when(self.rule_picked < doc.rules.len(), |d| d.child(self.text_button(t("Delete Rule"), true, cx, |this, _, _| this.remove_rule())))
+                .into_any_element(),
+        );
+        if let Some(rule) = doc.rules.get(self.rule_picked) {
+            let (a, b, n) = rule.event.kind.needs();
+            rows.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .pt_1()
+                    .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(t("When:"))))
+                    .child(raised(self.combo(Combo::RuleEvent, t(rule.event.kind.name()), 270., cx)))
+                    .when_some(a, |d, pick| d.child(raised(self.combo(Combo::RuleEventPick(false), shown(pick, &rule.event.a), 120., cx))))
+                    .when_some(b, |d, pick| d.child(raised(self.combo(Combo::RuleEventPick(true), shown(pick, &rule.event.b), 120., cx))))
+                    .when_some(n, |d, unit| d.child(self.field(FieldId::RuleNumber, 50., cx)).child(label(t(unit))))
+                    .into_any_element(),
+            );
+            for (index, step) in rule.steps.iter().enumerate() {
+                let (a, x, y) = step.kind.needs();
+                rows.push(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(if index == 0 { t("Do:") } else { "" })))
+                        .child(raised(self.combo(Combo::RuleStep(index), t(step.kind.name()), 230., cx)))
+                        .when_some(a, |d, pick| d.child(raised(self.combo(Combo::RuleStepPick(index), shown(pick, &step.a), 120., cx))))
+                        .when_some(x, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, false), 50., cx)))
+                        .when_some(y, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, true), 50., cx)))
+                        .child(div().flex_1())
+                        .child(self.text_button(t("Remove"), true, cx, move |this, _, _| this.remove_rule_step(index)))
+                        .into_any_element(),
+                );
+            }
+            rows.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(if rule.steps.is_empty() { t("Do:") } else { "" })))
+                    .child(raised(self.combo(Combo::RuleStepAdd, t("Add a Step"), 230., cx)))
+                    .into_any_element(),
+            );
+        }
+        rows.push(div().pt_2().font_weight(FontWeight::BOLD).child(label(t("Numbers"))).into_any_element());
+        for (index, variable) in doc.variables.iter().enumerate() {
+            rows.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(self.field(FieldId::VariableName(index), 120., cx))
+                    .child(label(t("starts as")))
+                    .child(self.field(FieldId::VariableStart(index), 50., cx))
+                    .child(div().text_color(rgb(TEXT_DIM)).child(label(tf("A text with {} in it shows it", &[&format!("{{{}}}", variable.name)]))))
+                    .child(div().flex_1())
+                    .child(self.text_button(t("Remove"), true, cx, move |this, _, _| this.remove_variable(index)))
+                    .into_any_element(),
+            );
+        }
+        rows.push(div().flex().child(self.text_button(t("New Number"), true, cx, |this, _, _| this.add_variable())).into_any_element());
+        if doc.object_names().is_empty() {
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Rules are about objects by name: give your objects names in Properties first."))).into_any_element());
+        }
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Rules work in the published film (Test Movie)"))).into_any_element());
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Test Movie"), true, cx, |this, window, cx| {
+                this.commit_field();
+                this.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx)
+            }))
+            .child(self.text_button(t("Close"), true, cx, |this, _, _| {
+                this.commit_field();
+                this.rules_dialog = false;
+            }));
+        Some(self.dialog_frame(700., t("Rules and Numbers"), rows, buttons))
     }
 
     /// Behaviors > Behavior Settings: the behaviors of the selected object, each with its numbers and a button that takes it away.

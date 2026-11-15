@@ -23,6 +23,7 @@ pub mod model;
 pub mod optimize;
 pub mod panels;
 pub mod print;
+pub mod rules;
 pub mod sahne_examples;
 pub mod publish;
 pub mod pseffects;

@@ -107,6 +107,14 @@ pub enum Combo {
     TextOrientation,
     GifLoop,
     GifWizardLoop,
+    /// Rules and Numbers: the kinds of event, to add a rule; the kind of the rule on show; its first or second name.
+    RuleNew,
+    RuleEvent,
+    RuleEventPick(bool),
+    /// The kinds of step, to add one; the kind of a step of the rule on show; a step's name.
+    RuleStepAdd,
+    RuleStep(usize),
+    RuleStepPick(usize),
     /// The action of the frame on show, or, with `true`, of the selected button.
     Action(bool),
     FrameSound,
@@ -424,6 +432,12 @@ pub enum FieldId {
     TweenTurns,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
     Twist(usize),
+    /// Rules and Numbers: the number of the event on show; the first or the second number of one of its steps.
+    RuleNumber,
+    RuleStep(usize, bool),
+    /// The name of a number the rules keep, or what it starts as.
+    VariableName(usize),
+    VariableStart(usize),
     /// A number of a behavior in Behavior Settings: which behavior of the list, and whether its second number.
     Behavior(usize, bool),
     /// Reverse State Range: the first state, or the last.
@@ -753,6 +767,9 @@ pub struct Workspace {
     pub behavior_tick: usize,
     /// Whether the picture of the page now on the canvas was made with the behaviors at work.
     raster_behaved: bool,
+    /// Whether Rules and Numbers is open, and which rule it shows.
+    pub rules_dialog: bool,
+    pub rule_picked: usize,
     /// Whether Behavior Settings is open.
     pub behavior_dialog: bool,
     /// Whether playing in the program starts over at the end. Off, as in Flash, it plays once and stops on the last frame.
@@ -1157,6 +1174,8 @@ impl Workspace {
             behavior_tick: 0,
             raster_behaved: false,
             behavior_dialog: false,
+            rules_dialog: false,
+            rule_picked: 0,
             loop_playback: false,
             timeline_scroll: gpui::ScrollHandle::new(),
             context_menu: None,
@@ -3563,6 +3582,114 @@ impl Workspace {
         }
     }
 
+    /// What a name in a rule can be chosen from: the value kept, and how the list shows it.
+    pub fn rule_choices(&self, pick: crate::rules::Pick) -> Vec<(String, String)> {
+        use crate::rules::{choice_name, Pick, COMPARES, EDGES, KEYS};
+        let listed = |list: &[(&str, &str)]| list.iter().map(|(key, _)| (key.to_string(), choice_name(pick, key))).collect();
+        let own = |names: Vec<String>| names.into_iter().map(|name| (name.clone(), name)).collect();
+        match pick {
+            Pick::Object => own(self.ed.doc.object_names()),
+            Pick::Variable => own(self.ed.doc.variables.iter().map(|v| v.name.clone()).collect()),
+            Pick::Sound => own(self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect()),
+            Pick::Key => listed(&KEYS),
+            Pick::Edge => listed(&EDGES),
+            Pick::Compare => listed(&COMPARES),
+        }
+    }
+
+    /// The `place`th of a pick's choices, or the last, or nothing if there are none: what a new rule starts with.
+    fn first_choice(&self, pick: Option<crate::rules::Pick>, place: usize) -> String {
+        let choices = pick.map_or_else(Vec::new, |pick| self.rule_choices(pick));
+        choices.get(place).or(choices.last()).map_or_else(String::new, |(value, _)| value.clone())
+    }
+
+    /// An event of a kind, about the first things there are to be about.
+    fn fresh_event(&self, kind: crate::rules::EventKind) -> crate::rules::Event {
+        let (a, b, _) = kind.needs();
+        let mut event = crate::rules::Event::new(kind);
+        (event.a, event.b) = (self.first_choice(a, 0), self.first_choice(b, if a == b { 1 } else { 0 }));
+        event
+    }
+
+    fn fresh_step(&self, kind: crate::rules::StepKind) -> crate::rules::Step {
+        let mut step = crate::rules::Step::new(kind);
+        step.a = self.first_choice(kind.needs().0, 0);
+        step
+    }
+
+    /// Changes the rule on show in Rules and Numbers.
+    pub fn edit_rule(&mut self, change: impl FnOnce(&mut crate::rules::Rule)) {
+        if let Some(rule) = self.ed.doc.rules.get_mut(self.rule_picked) {
+            change(rule);
+            self.ed.commit(t("Rules"));
+        }
+    }
+
+    pub fn add_rule(&mut self, kind: crate::rules::EventKind) {
+        self.commit_field();
+        let event = self.fresh_event(kind);
+        self.ed.doc.rules.push(crate::rules::Rule { event, steps: Vec::new() });
+        self.rule_picked = self.ed.doc.rules.len() - 1;
+        self.ed.commit(t("New Rule"));
+    }
+
+    pub fn remove_rule(&mut self) {
+        self.commit_field();
+        if self.rule_picked < self.ed.doc.rules.len() {
+            self.ed.doc.rules.remove(self.rule_picked);
+            self.rule_picked = self.rule_picked.min(self.ed.doc.rules.len().saturating_sub(1));
+            self.ed.commit(t("Delete Rule"));
+        }
+    }
+
+    pub fn set_rule_event(&mut self, kind: crate::rules::EventKind) {
+        let event = self.fresh_event(kind);
+        self.edit_rule(|rule| rule.event = event);
+    }
+
+    pub fn add_rule_step(&mut self, kind: crate::rules::StepKind) {
+        self.commit_field();
+        let step = self.fresh_step(kind);
+        self.edit_rule(|rule| rule.steps.push(step));
+    }
+
+    pub fn set_rule_step(&mut self, index: usize, kind: crate::rules::StepKind) {
+        let step = self.fresh_step(kind);
+        self.edit_rule(|rule| {
+            if let Some(old) = rule.steps.get_mut(index) {
+                *old = step;
+            }
+        });
+    }
+
+    pub fn remove_rule_step(&mut self, index: usize) {
+        self.commit_field();
+        self.edit_rule(|rule| {
+            if index < rule.steps.len() {
+                rule.steps.remove(index);
+            }
+        });
+    }
+
+    /// A new number, with a name no other has.
+    pub fn add_variable(&mut self) {
+        self.commit_field();
+        let taken = |name: &str| self.ed.doc.variables.iter().any(|v| v.name == name);
+        let name = [t("Score"), t("Lives"), t("Time")].into_iter().map(str::to_string).find(|name| !taken(name)).unwrap_or_else(|| {
+            (1..).map(|n| tf("Number {}", &[&n])).find(|name| !taken(name)).unwrap_or_default()
+        });
+        self.ed.doc.variables.push(crate::rules::Variable { name, start: 0.0 });
+        self.ed.commit(t("New Number"));
+    }
+
+    pub fn remove_variable(&mut self, index: usize) {
+        self.commit_field();
+        if index < self.ed.doc.variables.len() {
+            self.ed.doc.variables.remove(index);
+            self.ed.commit(t("Delete Number"));
+        }
+    }
+
     /// What the first selected object has been given, which is what Behavior Settings lists.
     pub fn shown_behaviors(&self) -> Vec<crate::behavior::Behavior> {
         self.ed.selected().first().map_or_else(Vec::new, |o| o.behaviors.clone())
@@ -3675,6 +3802,7 @@ impl Workspace {
             Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate | Cmd::Example(_) | Cmd::SahneExample(_) => self.confirm_discard(cmd, window, cx),
             Cmd::OpenInOther => self.open_in_other(),
             Cmd::Behavior(behavior) => self.run_behavior(behavior),
+            Cmd::Rules => self.rules_dialog = true,
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
                 self.commands_dialog = Some(None);
@@ -6745,6 +6873,10 @@ impl Workspace {
             self.close_tween_dialog(key == "enter");
         } else if self.mask_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_mask_dialog(key == "enter");
+        } else if self.rules_dialog && matches!(key, "enter" | "escape") {
+            // Enter only takes what was typed; Esc closes.
+            self.commit_field();
+            self.rules_dialog = key != "escape";
         } else if self.behavior_dialog && matches!(key, "enter" | "escape") {
             self.close_behavior_dialog();
         } else if self.twist_dialog.is_some() && matches!(key, "enter" | "escape") {
@@ -7050,6 +7182,10 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::RuleNumber => self.ed.doc.rules.get(self.rule_picked).map_or_else(String::new, |rule| number(rule.event.n)),
+            FieldId::RuleStep(which, second) => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(which)).map_or_else(String::new, |step| number(if second { step.y } else { step.x })),
+            FieldId::VariableName(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| v.name.clone()),
+            FieldId::VariableStart(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| number(v.start)),
             FieldId::Behavior(which, second) => self.shown_behaviors().get(which).map_or_else(String::new, |b| number(if second { b.b } else { b.a })),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
             FieldId::ActionParam(button) => {
@@ -7293,6 +7429,46 @@ impl Workspace {
                     (4, _) => dialog.suffix = text.to_string(),
                     _ => {}
                 }
+            }
+            FieldId::RuleNumber => {
+                let Some(v) = number else { return };
+                self.edit_rule(|rule| rule.event.n = v);
+            }
+            FieldId::RuleStep(which, second) => {
+                let Some(v) = number else { return };
+                self.edit_rule(|rule| {
+                    if let Some(step) = rule.steps.get_mut(which) {
+                        if second {
+                            step.y = v;
+                        } else {
+                            step.x = v;
+                        }
+                    }
+                });
+            }
+            FieldId::VariableName(which) => {
+                // A name is one word with no braces, and no other number's name. The rules that are about the number follow it.
+                let name: String = text.chars().filter(|c| !c.is_whitespace() && !matches!(c, '{' | '}')).collect();
+                let Some(old) = self.ed.doc.variables.get(which).map(|v| v.name.clone()) else { return };
+                if name.is_empty() || name == old || self.ed.doc.variables.iter().any(|v| v.name == name) {
+                    return;
+                }
+                use crate::rules::Pick;
+                for rule in &mut self.ed.doc.rules {
+                    if rule.event.kind.needs().0 == Some(Pick::Variable) && rule.event.a == old {
+                        rule.event.a = name.clone();
+                    }
+                    for step in rule.steps.iter_mut().filter(|step| step.kind.needs().0 == Some(Pick::Variable) && step.a == old) {
+                        step.a = name.clone();
+                    }
+                }
+                self.ed.doc.variables[which].name = name;
+                self.ed.commit(t("Rename Number"));
+            }
+            FieldId::VariableStart(which) => {
+                let (Some(v), Some(variable)) = (number, self.ed.doc.variables.get_mut(which)) else { return };
+                variable.start = v;
+                self.ed.commit(t("Rules"));
             }
             FieldId::Behavior(which, second) => {
                 let (Some(v), Some(shown)) = (number, self.shown_behaviors().get(which).copied()) else { return };

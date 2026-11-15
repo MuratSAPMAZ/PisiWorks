@@ -262,6 +262,46 @@ The first nine show when you play inside the program (Enter): the film then play
 
 *A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
 
+**Rules: from a film to a game.** Also PisiSahne's own. A rule says *when this happens, do that*, and both halves are picked from lists: nothing is typed but numbers. **Rules > Rules and Numbers** shows every rule as a sentence; click one to take it apart.
+
+- *Names first.* A rule knows an object by the name it has in Properties. Name the apple "Apple" and the basket "Basket". Objects with the same name share their rules: one rule about "Apple" holds for every apple.
+- *New Rule* lists the events:
+
+| Event | Happens |
+|---|---|
+| When the film starts | Once, at the beginning and after "start again" |
+| When a key is pressed | Space, the arrows, Enter, a letter or a digit goes down |
+| When an object is clicked | The viewer clicks an object of that name |
+| When an object touches another | The boxes of the two come to overlap |
+| When an object touches the edge of the stage | Any edge, or the bottom, top, left or right one |
+| Every so many seconds | Again and again |
+| After so many seconds | Once |
+| When a number reaches a value | It becomes, goes above or goes below the value |
+
+- *Add a Step* lists what to do: change or set a number; hide, show or move an object, put it at a place, somewhere at random, or at the top at random; make it jump; play a sound; go to the next scene, to a scene or to a frame; stop or play the film; stop everything; start again. A rule can have several steps; they are done in order.
+- *Which object?* When a rule says "When Apple touches Basket: hide Apple", it is the apple that touched that is hidden, not every apple.
+- *Numbers.* **New Number** makes a number with a name and a starting value: a score, lives, a clock. A text with the name in braces shows it in the film: type `Score: {Score}` with the Text tool.
+- *A thing happens once.* A rule is followed when something comes to be, not for as long as it lasts: an apple lying on the ground has touched it once.
+- Rules work in the published film: **Test Movie** (Ctrl+Enter). A scene that is to wait for the player needs the frame action **Stop**, or the film goes on to the next scene.
+
+**Lesson: catch the apples** (the example **Game: catch the apples**).
+
+1. Draw a basket at the bottom of the stage and name it "Basket". Give it **Walk with the Arrow Keys** and **Fall and Jump** with a jump speed of 0: falling keeps it on the ground.
+2. Draw an apple at the top and name it "Apple". Give it **Fall and Jump** with a small pull (70) and a jump speed of 0. Copy it for a second apple, higher up.
+3. In **Rules and Numbers** make two numbers: Score, starting as 0, and Lives, starting as 5. Type `Score: {Score}` and `Lives: {Lives}` on the stage.
+4. Rule: *When an object touches another*, Apple, Basket. Steps: *Change a number*, Score, by 1; *Put an object at the top, at random*, Apple.
+5. Rule: *When an object touches the edge of the stage*, Apple, the bottom edge. Steps: *Change a number*, Lives, by −1; *Put an object at the top, at random*, Apple.
+6. Add a second scene saying "Game over", with a box named "Again". Give both scenes the frame action **Stop**.
+7. Rule: *When a number reaches a value*, Lives, goes below, 1. Step: *Go to a scene*, 2.
+8. Rule: *When an object is clicked*, Again. Step: *Start again*.
+9. Ctrl+Enter.
+
+**Lesson: hit the targets.** Three circles named "Target", each with a behavior of its own (Go Back and Forth, Go Up and Down, Keep Going). Numbers: Score 0 and Time 20. Rules: *When Target is clicked: change Score by 1; put Target somewhere at random*. *Every 1 seconds: change Time by −1*. *When Time goes below 1: go to scene 2*.
+
+**Lesson: quiz.** One scene for each question, each with the frame action Stop. The answers are boxes with words on them; name the right one "Right answer" and the others "Wrong answer". Three rules do for any number of questions: *When Right answer is clicked: change Score by 1; go to the next scene*. *When Wrong answer is clicked: go to the next scene*. *When Again is clicked: start again*. The last scene shows `Score: {Score}`.
+
+What rules do not do yet: objects do not stand on one another or stop at walls (touching is known, but nothing is solid); a number is whole or decimal, there are no words to keep; and there is no "if" inside a rule. These are for the written language, the next step.
+
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 
 **Lesson: a stick-figure fight.** Open **Examples > Stick fight** and play it (Enter), then take it apart. This is how such a film is made:
@@ -295,4 +335,4 @@ The first nine show when you play inside the program (Enter): the film then play
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has nine ready animations, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has twelve ready films, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, three games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
