@@ -147,6 +147,7 @@ Written for PisiWorks:
 | **Commands** | Saving the steps of the History panel as commands and playing them again, command files, and ready-made commands (Add Arrowheads, Add Picture Frame, Add Shadow, Auto Vector Mask, Twist and Fade, Grayscale, Sepia, Distribute to Layers and others) |
 | **Printing** | Page Setup, page ranges, tiling large pages over sheets, sending to a printer or saving a PDF |
 | **Settings** | Preferences, and keyboard shortcuts that can be reassigned for every menu command |
+| **Animated GIF** | Opening an animated GIF as states, the number of times it plays, Tween Instances for the frames in between, and Make a GIF in the right-hand menu, which turns picture files into a GIF in one step |
 | **Examples** | An Examples menu at the right end of the menu bar, apart from the Fireworks menus: seven ready documents to open, look into and change (web banner, navigation buttons, animation, school poster, gradients, filters, web page mockup) |
 
 The figures are from November 2026 and will drift as work goes on.

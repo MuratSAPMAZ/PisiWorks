@@ -151,6 +151,11 @@ impl Warp {
         Self { m: [1.0, -lean, lean * foot, 0.0, squash, foot * (1.0 - squash), 0.0, 0.0, 1.0] }
     }
 
+    /// How far the map turns what it is given, in radians clockwise: the angle of a rotation, or of the turn in a freer transform.
+    pub fn turn(&self) -> f32 {
+        self.m[3].atan2(self.m[0])
+    }
+
     /// This map followed by `next`.
     pub fn then(&self, next: &Warp) -> Self {
         let (a, b) = (&next.m, &self.m);
@@ -2912,7 +2917,7 @@ impl Document {
 
     /// A document sized to an image, with the image as its only object.
     /// A document from the pictures of an animation: each becomes a state with the
-    /// time it stays on show. All are placed at the top left of a canvas the size of the largest.
+    /// time it stays on show, in the middle of a canvas the size of the largest.
     pub fn from_frames(name: &str, frames: Vec<(Bitmap, u32)>, loops: u16) -> Option<Self> {
         let width = frames.iter().map(|(bitmap, _)| bitmap.width()).max()?;
         let height = frames.iter().map(|(bitmap, _)| bitmap.height()).max()?;
@@ -2922,7 +2927,9 @@ impl Document {
         page.layers[0].name = t("Background").into();
         let mut id = 1;
         for (index, (bitmap, delay)) in frames.into_iter().enumerate() {
-            let object = Object::new_bitmap(id, name, bitmap, 0.0, 0.0);
+            // A smaller picture is put in the middle of the canvas.
+            let (x, y) = (((width - bitmap.width()) / 2) as f32, ((height - bitmap.height()) / 2) as f32);
+            let object = Object::new_bitmap(id, name, bitmap, x, y);
             id += 1;
             let mut state = State::new(tf("State {}", &[&(index + 1)]));
             state.delay_ms = delay.clamp(10, 600_000);
@@ -3062,6 +3069,14 @@ impl Editor {
             clipboard: Vec::new(),
             doc,
         }
+    }
+
+    /// A second editor on a copy of the document, with the same selection, for trying a thing two ways.
+    #[cfg(test)]
+    fn clone_for_test(&self) -> Editor {
+        let mut copy = Editor::new(self.doc.clone());
+        copy.selection = self.selection.clone();
+        copy
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -4369,6 +4384,87 @@ impl Editor {
         }
     }
 
+    /// Whether Tween Instances has what it needs: two or more selected copies of one symbol.
+    pub fn can_tween(&self) -> bool {
+        let symbols: Vec<u64> = self.selected().iter().filter_map(|o| match o.shape {
+            Shape::Instance { symbol, .. } => Some(symbol),
+            _ => None,
+        }).collect();
+        symbols.len() >= 2 && symbols.len() == self.selection.len() && symbols.iter().all(|s| *s == symbols[0])
+    }
+
+    /// Fireworks' Tween Instances: between each selected copy of a symbol and the next
+    /// one above it, `steps` further copies are made that go from the one to the other in
+    /// place, size, turn and opacity. With `distribute`, the whole run is then dealt out
+    /// to the states, one copy to each, from the state on show; states are added as needed.
+    pub fn tween_instances(&mut self, steps: u32, distribute: bool) -> usize {
+        if !self.can_tween() {
+            return 0;
+        }
+        let steps = steps.clamp(1, 500) as usize;
+        let ends = self.selected_in_order();
+        let pose = |object: &Object| {
+            let frame = object.placement.map_or(object.bounds, |p| p.frame);
+            (object.bounds.center(), frame.w, frame.h, object.placement.map_or(0.0, |p| p.warp.turn()), object.opacity)
+        };
+        let mut run: Vec<Object> = Vec::new();
+        let mut made = 0;
+        for pair in ends.windows(2) {
+            let (from, to) = (pose(&pair[0]), pose(&pair[1]));
+            // The turn goes the short way round.
+            let mut sweep = to.3 - from.3;
+            if sweep > std::f32::consts::PI {
+                sweep -= std::f32::consts::TAU;
+            } else if sweep < -std::f32::consts::PI {
+                sweep += std::f32::consts::TAU;
+            }
+            run.push(pair[0].clone());
+            for step in 1..=steps {
+                let part = step as f32 / (steps + 1) as f32;
+                let mix = |a: f32, b: f32| a + (b - a) * part;
+                let center = v2(mix(from.0.x, to.0.x), mix(from.0.y, to.0.y));
+                let (w, h) = (mix(from.1, to.1), mix(from.2, to.2));
+                let mut copy = pair[0].clone();
+                copy.id = self.alloc_id();
+                copy.placement = None;
+                copy.set_bounds(Rect { x: center.x - w / 2.0, y: center.y - h / 2.0, w, h });
+                let angle = from.3 + sweep * part;
+                if angle.abs() > 0.0001 {
+                    copy.warp(&Warp::rotation(center, angle));
+                }
+                copy.opacity = mix(from.4, to.4);
+                run.push(copy);
+                made += 1;
+            }
+        }
+        run.extend(ends.last().cloned());
+        let ids: Vec<u64> = ends.iter().map(|o| o.id).collect();
+        let page = self.doc.page_mut();
+        let Some((layer, at)) = page.layers.iter().enumerate().find_map(|(l, layer)| layer.objects.iter().position(|o| ids.contains(&o.id)).map(|i| (l, i))) else { return 0 };
+        for each in &mut page.layers {
+            each.objects.retain(|o| !ids.contains(&o.id));
+        }
+        if !distribute {
+            self.selection = run.iter().map(|o| o.id).collect();
+            let at = at.min(page.layers[layer].objects.len());
+            page.layers[layer].objects.splice(at..at, run);
+            return made;
+        }
+        let first = page.active_state;
+        while page.states.len() < first + run.len() {
+            let mut state = State::new(tf("State {}", &[&(page.states.len() + 1)]));
+            state.objects = vec![Vec::new(); page.layers.len()];
+            page.states.push(state);
+        }
+        self.selection = run.first().map(|o| o.id).into_iter().collect();
+        for (index, object) in run.into_iter().enumerate() {
+            if let Some(objects) = self.doc.page_mut().state_layer_mut(first + index, layer) {
+                objects.push(object);
+            }
+        }
+        made
+    }
+
     /// The animation a selected object belongs to.
     pub fn selected_animation(&self) -> Option<usize> {
         self.doc.page().animations.iter().position(|a| a.objects.iter().any(|id| self.selection.contains(id)))
@@ -5469,6 +5565,51 @@ mod tests {
         assert_eq!((whole.filters.len(), whole.instance_parts().len()), (1, 2));
         // The page itself is left as it was.
         assert_eq!((e.doc.page().objects().count(), e.doc.page().open_groups.len()), (3, 1));
+    }
+
+    #[test]
+    fn tween_instances_fills_in_between_two_copies_of_a_symbol() {
+        let mut e = editor();
+        e.selection = vec![100];
+        let symbol = e.make_symbol().unwrap();
+        let first = e.selection[0];
+        assert!(!e.can_tween());
+        assert!(e.place_symbol_at(symbol, v2(220.0, 130.0)));
+        let second = e.selection[0];
+        e.object_mut(second).unwrap().set_bounds(Rect { x: 180.0, y: 90.0, w: 80.0, h: 80.0 });
+        e.object_mut(second).unwrap().opacity = 0.0;
+        e.selection = vec![first, second];
+        assert!(e.can_tween());
+        // Three copies in between: the middle one is halfway in place, size and opacity.
+        let mut on_page = e.clone_for_test();
+        assert_eq!(on_page.tween_instances(3, false), 3);
+        let run: Vec<Object> = on_page.selected_in_order();
+        assert_eq!(run.len(), 5);
+        assert_eq!((run[0].id, run[4].id), (first, second));
+        assert_eq!(run[2].bounds, Rect { x: 90.0, y: 50.0, w: 60.0, h: 60.0 });
+        assert!((run[2].opacity - 0.5).abs() < 0.001 && (run[1].opacity - 0.75).abs() < 0.001);
+        assert_eq!(on_page.doc.page().states.len(), 1);
+        // Distributed, each of the five has a state to itself.
+        assert_eq!(e.tween_instances(3, true), 3);
+        let page = e.doc.page();
+        assert_eq!(page.states.len(), 5);
+        let copies = |state: usize| page.at_state(state).objects().filter(|o| matches!(o.shape, Shape::Instance { .. })).count();
+        assert!((0..5).all(|state| copies(state) == 1));
+        assert_eq!(page.at_state(4).objects().find(|o| o.id == second).unwrap().bounds.w, 80.0);
+        assert_eq!(e.selection, vec![first]);
+        // A turned copy is reached by turning step by step.
+        let mut turned = editor();
+        turned.selection = vec![100];
+        let symbol = turned.make_symbol().unwrap();
+        let a = turned.selection[0];
+        turned.place_symbol_at(symbol, v2(300.0, 30.0));
+        let b = turned.selection[0];
+        let center = turned.object(b).unwrap().bounds.center();
+        turned.object_mut(b).unwrap().warp(&Warp::rotation(center, std::f32::consts::FRAC_PI_2));
+        turned.selection = vec![a, b];
+        assert_eq!(turned.tween_instances(1, false), 1);
+        let middle = &turned.selected_in_order()[1];
+        assert!((middle.placement.unwrap().warp.turn() - std::f32::consts::FRAC_PI_4).abs() < 0.001);
     }
 
     #[test]

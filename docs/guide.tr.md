@@ -205,3 +205,10 @@ Menü çubuğunun sağ ucundaki **Örnekler** menüsü, Fireworks'te bulunmayan 
 | Dolgular ve degradeler | On iki degrade türü yan yana |
 | Canlı filtreler | Aynı şekil sekiz filtreyle |
 | Web sayfası taslağı | 12 sütunlu kılavuz ızgarası, katmanlar, dilimler ve sıcak noktalar |
+
+## Animasyonlu GIF
+
+- **Açma.** Animasyonlu bir GIF **Dosya > Aç** ile açılınca her karesi bir durum olur; kare süreleri Durumlar panelinde görünür. Açılan belge yenidir, GIF dosyasının üzerine yazılmaz.
+- **Dışa aktarma ve döngü.** En İyileştir panelinde **Animasyonlu GIF** seçin. Aynı satırdaki **Döngü** listesi animasyonun kaç kez oynayacağını belirler: Sonsuz, Döngü Yok (bir kez) ya da belirli bir sayı.
+- **Ara kareler.** Aynı sembolün iki ya da daha çok kopyasını seçip **Değiştir > Sembol > Örneklerin Arasını Doldur** (Ctrl+Alt+Shift+T) deyin. Adım sayısı kadar ara kopya üretilir; konum, boyut, dönüş ve opaklık adım adım değişir. **Durumlara dağıt** işaretliyse her kopya kendi durumuna yerleşir ve animasyon hazır olur.
+- **GIF Oluştur.** Menü çubuğunun sağındaki **GIF > GIF Oluştur** resim dosyalarından animasyon yapar: dosyaları ekleyin (ada göre sıralanır), kare süresini ve döngüyü seçin. **GIF Kaydet** doğrudan dosyaya yazar; **Belge Olarak Aç** kareleri durumlara dağıtır ve üzerinde çalışmaya devam edersiniz. Farklı boyuttaki resimler en büyüğünün boyutundaki tuvalin ortasına yerleşir.

@@ -455,6 +455,16 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::GifWizardLoop => crate::model::GIF_LOOPS
+                .into_iter()
+                .map(|loops| {
+                    item(crate::model::gif_loop_name(loops).into(), self.gif_dialog.as_ref().is_some_and(|d| d.loops == loops), cx, Box::new(move |this, _, _| {
+                        if let Some(dialog) = this.gif_dialog.as_mut() {
+                            dialog.loops = loops;
+                        }
+                    }))
+                })
+                .collect(),
             Combo::GifLoop => crate::model::GIF_LOOPS
                 .into_iter()
                 .map(|loops| {
@@ -1720,6 +1730,56 @@ impl Workspace {
             .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_arrow_dialog(true)))
             .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_arrow_dialog(false)));
         Some(self.dialog_frame(230., t("Add Arrowheads"), rows, buttons))
+    }
+
+    /// GIF > Make a GIF: picture files, in the order they are to show, turned into an animation.
+    pub(crate) fn gif_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let dialog = self.gif_dialog.as_ref()?;
+        let names = [t("Frame delay:"), t("Looping:")];
+        let name_width = label_width(&names, 80.);
+        let files: Vec<AnyElement> = dialog
+            .files
+            .iter()
+            .enumerate()
+            .map(|(index, path)| div().h(px(18.)).px_1().flex().flex_none().items_center().child(format!("{}. {}", index + 1, path.file_name().unwrap_or_default().to_string_lossy())).into_any_element())
+            .collect();
+        let ready = dialog.files.len() >= 2 || dialog.files.iter().any(|path| path.extension().is_some_and(|e| e.eq_ignore_ascii_case("gif")));
+        let rows = vec![
+            div().text_color(rgb(TEXT_DIM)).child(t("Each picture becomes one frame, in this order.")).into_any_element(),
+            div().id("gif-files").h(px(130.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(files).into_any_element(),
+            div()
+                .flex()
+                .gap_1()
+                .child(self.text_button(t("Add Files..."), true, cx, |this, window, cx| this.add_gif_files(window, cx)))
+                .child(self.text_button(t("Remove All"), !dialog.files.is_empty(), cx, |this, _, _| this.gif_dialog.iter_mut().for_each(|d| d.files.clear())))
+                .into_any_element(),
+            labelled_row(names[0], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::GifDelay, 60., cx)).child(label("ms"))).into_any_element(),
+            labelled_row(names[1], name_width, self.combo(Combo::GifWizardLoop, crate::model::gif_loop_name(dialog.loops), 110., cx).bg(rgb(PANEL_RAISED))).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Open as Document"), ready, cx, |this, _, _| this.open_gif_document()))
+            .child(self.text_button(t("Save GIF..."), ready, cx, |this, window, cx| this.save_gif(window, cx)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.gif_dialog = None));
+        Some(self.dialog_frame(380., t("Make a GIF"), rows, buttons))
+    }
+
+    /// Modify > Symbol > Tween Instances: how many copies go in between, and whether they are dealt out to the states.
+    pub(crate) fn tween_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (_, distribute) = self.tween_dialog?;
+        let rows = vec![
+            labelled_row(t("Steps:"), 60., self.field(FieldId::TweenSteps, 50., cx)).into_any_element(),
+            self.check_box(t("Distribute to states"), distribute, cx, |this| this.tween_dialog.iter_mut().for_each(|d| d.1 = !d.1)).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_tween_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_tween_dialog(false)));
+        Some(self.dialog_frame(230., t("Tween Instances"), rows, buttons))
     }
 
     /// Commands > Creative > Auto Vector Mask: which way the object fades.

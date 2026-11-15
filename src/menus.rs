@@ -219,6 +219,8 @@ pub enum Cmd {
     ConvertToSymbol,
     NewSymbol,
     NewFromTemplate,
+    /// Opens Make a GIF, which turns picture files into an animation.
+    GifWizard,
     /// Opens the example with this place in the list.
     Example(u8),
     ManageCommands,
@@ -236,6 +238,7 @@ pub enum Cmd {
     Animate,
     AnimateSettings,
     RemoveAnimation,
+    TweenInstances,
     BreakApart,
     PathOp(PathOp),
     Group,
@@ -336,7 +339,9 @@ pub fn font_entries() -> &'static [Entry] {
 /// The menus of PisiWorks' own, which Fireworks does not have. They stand apart from
 /// the others, at the right end of the menu bar, so that the menus on the left stay
 /// the ones a Fireworks user knows. What is added to the program later goes here.
-pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[(
+pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[
+    ("GIF", &[cmd("Make a GIF...", "", Cmd::GifWizard)]),
+    (
     "Examples",
     &[
         cmd("Web banner", "", Cmd::Example(0)),
@@ -347,7 +352,8 @@ pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[(
         cmd("Live filters", "", Cmd::Example(5)),
         cmd("Web page mockup", "", Cmd::Example(6)),
     ],
-)];
+    ),
+];
 
 /// The commands that come ready in the Commands menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -756,7 +762,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             ),
             Sub(
                 "Symbol",
-                &[cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol), cmd("Edit Symbol", "", Cmd::EditSymbol), cmd("Break Apart", "Ctrl+B", Cmd::BreakApart)],
+                &[cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol), cmd("Edit Symbol", "", Cmd::EditSymbol), cmd("Tween Instances...", "Ctrl+Alt+Shift+T", Cmd::TweenInstances), cmd("Break Apart", "Ctrl+B", Cmd::BreakApart)],
             ),
             Sub(
                 "Mask",

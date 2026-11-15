@@ -106,6 +106,7 @@ pub enum Combo {
     BatchScale,
     TextOrientation,
     GifLoop,
+    GifWizardLoop,
     ArrowStyle,
     AutoMask,
     Printer,
@@ -285,6 +286,14 @@ pub struct BatchDialog {
 
 pub const BATCH_SCALES: [&str; 4] = ["No Scaling", "Scale to Size", "Scale to Fit Area", "Scale to Percentage"];
 
+/// Make a GIF: the picture files, how long each stays on show, and how many times the animation plays.
+#[derive(Clone, Debug)]
+pub struct GifDialog {
+    pub files: Vec<PathBuf>,
+    pub delay_ms: u32,
+    pub loops: u16,
+}
+
 /// The Print dialog: where the page is to go, and how many times.
 #[derive(Clone, Debug)]
 pub struct PrintDialog {
@@ -399,6 +408,8 @@ pub enum FieldId {
     CommandName,
     ArrowSize,
     FrameSize,
+    TweenSteps,
+    GifDelay,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
     Twist(usize),
     /// Reverse State Range: the first state, or the last.
@@ -717,6 +728,9 @@ pub struct Workspace {
     /// Auto Vector Mask: which of the masks is picked.
     pub mask_dialog: Option<usize>,
     pub twist_dialog: Option<crate::model::TwistSettings>,
+    /// Tween Instances: how many copies in between, and whether the run is dealt out to the states.
+    pub tween_dialog: Option<(u32, bool)>,
+    pub gif_dialog: Option<GifDialog>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -922,6 +936,24 @@ pub fn about_text() -> String {
     .join("\n")
 }
 
+/// An animation made of picture files, one state for each picture, in the order
+/// given. An animated GIF among them gives all its pictures. Says what went wrong otherwise.
+pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Result<Document, String> {
+    let mut frames = Vec::new();
+    for path in files {
+        let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+        let bytes = std::fs::read(path).map_err(|error| format!("{name}: {error}"))?;
+        match crate::optimize::gif_frames(&bytes) {
+            Some((pictures, _)) => frames.extend(pictures.into_iter().map(|(picture, _)| (picture, delay_ms))),
+            None => frames.push((Bitmap::decode(&bytes).map_err(|error| format!("{name}: {error}"))?, delay_ms)),
+        }
+    }
+    if frames.len() < 2 {
+        return Err(t("An animation needs at least two pictures").to_string());
+    }
+    Document::from_frames(t("Bitmap"), frames, loops).ok_or_else(|| t("An animation needs at least two pictures").to_string())
+}
+
 /// The names of the heads Add Arrowheads offers.
 pub const ARROW_STYLES: [&str; 5] = ["Triangle", "Lines", "Diamond", "Circle", "Square"];
 
@@ -1072,6 +1104,8 @@ impl Workspace {
             frame_dialog: None,
             mask_dialog: None,
             twist_dialog: None,
+            tween_dialog: None,
+            gif_dialog: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2660,6 +2694,7 @@ impl Workspace {
                 crate::menus::ReadyCmd::ReverseStates | crate::menus::ReadyCmd::ReverseStateRange => self.ed.doc.page().states.len() >= 2,
             },
             Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some(),
+            Cmd::TweenInstances => self.ed.can_tween(),
             Cmd::AnimateSettings | Cmd::RemoveAnimation => self.ed.selected_animation().is_some(),
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
             Cmd::Group => self.ed.selection.len() >= 2,
@@ -2866,6 +2901,83 @@ impl Workspace {
         }
         self.ed.selection = before;
         self.ed.commit(t("Add Arrowheads"));
+    }
+
+    /// Asks for picture files to add to Make a GIF.
+    pub fn add_gif_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: true, prompt: None });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut paths))) = picked.await else { return };
+            // The pictures follow one another by name, as numbered files should.
+            paths.sort();
+            this.update(cx, |this, cx| {
+                if let Some(dialog) = this.gif_dialog.as_mut() {
+                    dialog.files.extend(paths);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// The animation Make a GIF has been asked for, as a document with a state for each picture.
+    fn gif_document(&mut self) -> Option<Document> {
+        self.commit_field();
+        let dialog = self.gif_dialog.clone()?;
+        match animation_from_files(&dialog.files, dialog.delay_ms, dialog.loops) {
+            Ok(document) => Some(document),
+            Err(error) => {
+                self.status = error;
+                None
+            }
+        }
+    }
+
+    /// Make a GIF, opened as a document to go on working with.
+    pub fn open_gif_document(&mut self) {
+        if let Some(document) = self.gif_document() {
+            let states = document.pages[0].states.len();
+            self.gif_dialog = None;
+            self.load_document(document, None);
+            self.fit_if_larger_than_view();
+            self.status = tf("New animation of {} states. Export saves it as an animated GIF.", &[&states]);
+        }
+    }
+
+    /// Make a GIF, saved straight to a file.
+    pub fn save_gif(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(document) = self.gif_document() else { return };
+        let page = Editor::new(document).export_page();
+        let picked = cx.prompt_for_new_path(&Self::default_dir(), Some("animasyon.gif"));
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut path))) = picked.await else { return };
+            if path.extension().is_none() {
+                path.set_extension("gif");
+            }
+            this.update(cx, |this, cx| {
+                let written = crate::optimize::encode(&page, &page.export).and_then(|bytes| std::fs::write(&path, bytes).map_err(anyhow::Error::from));
+                this.status = match written {
+                    Ok(()) => {
+                        this.gif_dialog = None;
+                        tf("Exported {}", &[&path.display()])
+                    }
+                    Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
+                };
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Closes Tween Instances; kept, the copies in between are made.
+    pub fn close_tween_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some((steps, distribute)) = self.tween_dialog.take() else { return };
+        if keep && self.ed.tween_instances(steps, distribute) > 0 {
+            self.ed.commit(t("Tween Instances"));
+        }
     }
 
     /// Closes Auto Vector Mask; kept, the selection gets the mask picked.
@@ -3151,6 +3263,8 @@ impl Workspace {
             Cmd::NewSymbol => self.symbol_dialog = Some((tf("Symbol {}", &[&(self.ed.doc.symbols.len() + 1)]), SymbolKind::Graphic)),
             Cmd::NewButton => self.new_symbol(t("Button"), SymbolKind::Button),
             Cmd::EditSymbol => self.toggle_symbol_edit(),
+            Cmd::GifWizard => self.gif_dialog = Some(GifDialog { files: Vec::new(), delay_ms: 500, loops: 0 }),
+            Cmd::TweenInstances => self.tween_dialog = Some((10, true)),
             Cmd::Animate | Cmd::AnimateSettings => {
                 let settings = self.ed.selected_animation().map(|index| self.ed.doc.page().animations[index].settings);
                 self.animate_dialog = Some(settings.unwrap_or_default());
@@ -5938,6 +6052,8 @@ impl Workspace {
             }
         } else if self.command_name.is_some() && matches!(key, "enter" | "escape") {
             self.close_command_name(key == "enter");
+        } else if self.tween_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_tween_dialog(key == "enter");
         } else if self.mask_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_mask_dialog(key == "enter");
         } else if self.twist_dialog.is_some() && matches!(key, "enter" | "escape") {
@@ -6059,6 +6175,7 @@ impl Workspace {
             ("d", true, false) => Cmd::Clone,
             ("g", true, true) => Cmd::SnapToGrid,
             ("y", true, false) => Cmd::AttachToPath,
+            ("t", true, true) => Cmd::TweenInstances,
             ("p", false, false) => Cmd::Print,
             (";", false, false) => Cmd::Guides(GuideCmd::Show),
             (";", false, true) => Cmd::Guides(GuideCmd::Lock),
@@ -6240,6 +6357,8 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
+            FieldId::GifDelay => self.gif_dialog.as_ref().map_or_else(String::new, |d| d.delay_ms.to_string()),
+            FieldId::TweenSteps => self.tween_dialog.map_or_else(String::new, |d| d.0.to_string()),
             FieldId::ArrowSize => self.arrow_dialog.map_or_else(String::new, |d| number(d.2)),
             FieldId::FrameSize => self.frame_dialog.map_or_else(String::new, number),
             FieldId::CommandName => self.command_name.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
@@ -6476,6 +6595,16 @@ impl Workspace {
                     3 => s.rotation = v.clamp(-360.0, 360.0),
                     4 => s.scale = v.clamp(1.0, 1000.0),
                     _ => s.fade_to = v.clamp(0.0, 100.0),
+                }
+            }
+            FieldId::GifDelay => {
+                if let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 10.0), self.gif_dialog.as_mut()) {
+                    dialog.delay_ms = v.round().min(600_000.0) as u32;
+                }
+            }
+            FieldId::TweenSteps => {
+                if let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.tween_dialog.as_mut()) {
+                    dialog.0 = v.round().min(500.0) as u32;
                 }
             }
             FieldId::ArrowSize => {
@@ -7089,6 +7218,21 @@ mod tests {
         let about = about_text();
         assert!(about.contains("Murat SAPMAZ") && about.contains("github.com/MuratSAPMAZ/PisiWorks"));
         assert!(about.contains("Med Amine Belbachir") && about.contains("github.com/gregstein/emberframe"));
+        // Make a GIF: two pictures of different sizes become two states on a canvas that holds the larger, played three times.
+        let dir = std::env::temp_dir().join(format!("pisiworks-gif-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let (small, large) = (dir.join("1.png"), dir.join("2.png"));
+        std::fs::write(&small, Bitmap::from_rgba(2, 2, vec![255; 16]).unwrap().encode_png().unwrap()).unwrap();
+        std::fs::write(&large, Bitmap::from_rgba(6, 4, vec![9; 96]).unwrap().encode_png().unwrap()).unwrap();
+        let animation = animation_from_files(&[small.clone(), large], 200, 3).unwrap();
+        let page = &animation.pages[0];
+        assert_eq!((page.width, page.height, page.states.len(), page.gif_loops, page.states[1].delay_ms), (6, 4, 2, 3, 200));
+        assert_eq!(page.objects().next().unwrap().bounds, Rect { x: 2.0, y: 1.0, w: 2.0, h: 2.0 }, "the smaller picture is in the middle");
+        let page = Editor::new(animation).export_page();
+        let (frames, loops) = crate::optimize::gif_frames(&crate::optimize::encode(&page, &page.export).unwrap()).unwrap();
+        assert_eq!((frames.len(), loops), (2, 3));
+        assert!(animation_from_files(&[small.clone()], 200, 0).is_err() && animation_from_files(&[small, dir.join("none.png")], 200, 0).is_err());
+        std::fs::remove_dir_all(&dir).ok();
         // Arrowheads point where the path ends, whichever way it runs.
         let (closed, triangle) = arrow_head(0, v2(10.0, 0.0), v2(0.0, 0.0), 10.0);
         assert!(closed);

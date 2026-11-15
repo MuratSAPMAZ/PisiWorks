@@ -203,3 +203,10 @@ The **Examples** menu at the right end of the menu bar is for what PisiWorks has
 | Fills and gradients | The twelve kinds of gradient side by side |
 | Live filters | One shape under eight filters |
 | Web page mockup | A 12-column grid of guides, layers, slices and hotspots |
+
+## Animated GIF
+
+- **Opening.** An animated GIF opened with **File > Open** becomes a state for each of its pictures; the time each stays on show is in the States panel. What opens is a new document, and the GIF file is never written over.
+- **Export and looping.** Pick **Animated GIF** in the Optimize panel. The **Looping** list on the same row sets how many times the animation plays: Forever, No Looping (once through) or a number of times.
+- **Frames in between.** Select two or more copies of one symbol and choose **Modify > Symbol > Tween Instances** (Ctrl+Alt+Shift+T). As many copies as there are steps are made in between, going from one to the other in place, size, turn and opacity. With **Distribute to states** each copy goes to a state of its own, and the animation is ready.
+- **Make a GIF.** **GIF > Make a GIF** at the right end of the menu bar makes an animation from picture files: add the files (they are put in order of name), pick the frame delay and the looping. **Save GIF** writes the file straight away; **Open as Document** lays the pictures out as states to go on working with. Pictures of different sizes are put in the middle of a canvas the size of the largest.

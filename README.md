@@ -148,6 +148,7 @@ PisiWorks için yazılanlar:
 | **Komutlar** | Geçmiş'teki adımları komut olarak kaydetme ve yeniden çalıştırma, komut dosyaları, hazır komutlar (Ok Başları, Resim Çerçevesi, Gölge, Otomatik Vektör Maskesi, Bük ve Soldur, Gri Tonlama, Sepya, Katmanlara Dağıt ve diğerleri) |
 | **Yazdırma** | Sayfa Yapısı, sayfa aralığı, büyük sayfaları kâğıtlara döşeme, yazıcıya gönderme ya da PDF |
 | **Ayarlar** | Tercihler ve her menü komutuna yeniden atanabilen klavye kısayolları |
+| **Animasyonlu GIF** | Animasyonlu GIF'i durumlar olarak açma, döngü sayısı, Örneklerin Arasını Doldur ile ara kareler, sağ menüde resim dosyalarından tek adımda GIF yapan GIF Oluştur |
 | **Örnekler** | Menü çubuğunun sağında, Fireworks menülerinden ayrı duran Örnekler menüsü: açılıp incelenecek ve değiştirilecek yedi hazır belge (web afişi, gezinme düğmeleri, animasyon, okul afişi, degradeler, filtreler, web sayfası taslağı) |
 
 Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
