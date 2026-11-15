@@ -943,4 +943,12 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Edge:", "Kenar:"),
     ("Texture:", "Doku:"),
     ("Based on Emberframe by Med Amine Belbachir, under the MIT license.", "Med Amine Belbachir'in Emberframe projesi temel alınmıştır; MIT lisansı altındadır."),
+    ("Detach from Path", "Metni Yoldan Ayır"),
+    ("Orientation", "Metin Yönlendirmesi"),
+    ("Rotate Around Path", "Yolun Etrafında Döndür"),
+    ("Vertical", "Dikey"),
+    ("Skew Vertical", "Dikey Eğrilt"),
+    ("Skew Horizontal", "Yatay Eğrilt"),
+    ("Reverse Direction", "Yönü Ters Çevir"),
+    ("Text offset:", "Metin kaydırma:"),
 ];

@@ -390,6 +390,12 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::PathOrientation => crate::model::PathOrientation::ALL
+                .into_iter()
+                .map(|orientation| {
+                    item(orientation.label().into(), self.shown_text_style().on_path == orientation, cx, Box::new(move |this, window, cx| this.run(Cmd::PathOrientation(orientation), window, cx)))
+                })
+                .collect(),
             Combo::FillEdge => crate::model::FillEdge::ALL
                 .into_iter()
                 .map(|edge| item(edge.label().into(), self.current_fill_look().edge == edge, cx, Box::new(move |this, _, _| this.change_fill_look(|look| look.edge = edge))))

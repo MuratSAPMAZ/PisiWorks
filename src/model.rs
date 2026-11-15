@@ -609,7 +609,7 @@ pub enum TextAlign {
 }
 
 /// How a text is set: its font and what is done to it. The default is plain text in the program's own font.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct TextStyle {
     /// The font family; empty for the program's own font.
     #[serde(default)]
@@ -622,6 +622,38 @@ pub struct TextStyle {
     pub underline: bool,
     #[serde(default)]
     pub align: TextAlign,
+    /// For text attached to a path: how its letters stand on the path, and how far along the path it starts.
+    #[serde(default)]
+    pub on_path: PathOrientation,
+    #[serde(default)]
+    pub path_offset: f32,
+}
+
+/// How the letters of text on a path stand.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PathOrientation {
+    /// Each letter is turned to stand on the path.
+    #[default]
+    Rotate,
+    /// Each letter stays upright.
+    Vertical,
+    /// Each letter leans up and down with the path, its strokes staying upright.
+    SkewVertical,
+    /// Each letter leans sideways with the path, its baseline staying level.
+    SkewHorizontal,
+}
+
+impl PathOrientation {
+    pub const ALL: [PathOrientation; 4] = [PathOrientation::Rotate, PathOrientation::Vertical, PathOrientation::SkewVertical, PathOrientation::SkewHorizontal];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            PathOrientation::Rotate => t("Rotate Around Path"),
+            PathOrientation::Vertical => t("Vertical"),
+            PathOrientation::SkewVertical => t("Skew Vertical"),
+            PathOrientation::SkewHorizontal => t("Skew Horizontal"),
+        }
+    }
 }
 
 impl TextStyle {
@@ -1194,7 +1226,11 @@ impl Object {
     pub fn text_to_paths(&mut self) -> bool {
         let Shape::Text { content, size, style } = &self.shape else { return false };
         let frame = self.placement.map_or(self.bounds, |p| p.frame);
-        let glyphs = crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y), style);
+        // Text attached to a path is laid out along it; its points are that path.
+        let glyphs = match self.points.len() {
+            0 | 1 => crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y), style),
+            _ => crate::export::glyph_outlines_on_path(content, *size, style, &self.points),
+        };
         let heavy = crate::export::made_up_bold(style);
         let parts: Vec<Object> = glyphs
             .into_iter()
@@ -1242,7 +1278,7 @@ impl Object {
     pub fn placed_text_paths(&self) -> Option<Object> {
         let Shape::Text { style, .. } = &self.shape else { return None };
         // Text that is turned, or set in a way a plain line of type cannot show, is drawn from its outlines.
-        if self.placement.is_none() && !crate::export::needs_outlines(style) {
+        if self.placement.is_none() && !crate::export::needs_outlines(style) && self.points.len() < 2 {
             return None;
         }
         let mut paths = self.clone();
@@ -1252,6 +1288,13 @@ impl Object {
     /// Sizes a text object to its content, after the text or its size has changed.
     pub fn refit_text(&mut self) {
         let Shape::Text { content, size, style } = &self.shape else { return };
+        // On a path, the box is the one around the letters where the path puts them.
+        if self.points.len() >= 2 {
+            let letters = crate::export::glyph_outlines_on_path(content, *size, style, &self.points);
+            let all: Vec<Vec2> = letters.into_iter().flatten().flatten().collect();
+            self.bounds = if all.is_empty() { Rect::of_points(&self.points) } else { Rect::of_points(&all) };
+            return;
+        }
         let (w, h) = crate::export::measure_styled(content, *size, style);
         match &mut self.placement {
             Some(placement) => {
@@ -3246,6 +3289,82 @@ impl Editor {
         }
     }
 
+    /// Fireworks' Attach to Path: with a text and a path selected, the text is set
+    /// along the path, which then belongs to the text.
+    pub fn attach_text_to_path(&mut self) -> bool {
+        let selected = self.selected();
+        let (Some(text), Some(path)) = (
+            selected.iter().find(|o| matches!(o.shape, Shape::Text { .. })).map(|o| o.id),
+            selected.iter().find(|o| o.reshapable() && !matches!(o.shape, Shape::Text { .. })).map(|o| (o.id, o.outline(), o.is_closed())),
+        ) else {
+            return false;
+        };
+        let (path_id, mut line, closed) = path;
+        // A closed shape is gone round once, clockwise from its leftmost point, so the text
+        // starts at the left and runs over the top, standing on the outside.
+        if closed && line.len() >= 3 {
+            let turn: f32 = (0..line.len()).map(|i| (line[i].x * line[(i + 1) % line.len()].y) - (line[(i + 1) % line.len()].x * line[i].y)).sum();
+            if turn < 0.0 {
+                line.reverse();
+            }
+            let leftmost = (0..line.len()).min_by(|a, b| line[*a].x.total_cmp(&line[*b].x).then(line[*b].y.total_cmp(&line[*a].y))).unwrap_or(0);
+            line.rotate_left(leftmost);
+            line.extend(line.first().copied());
+        }
+        let page = self.doc.page_mut();
+        for layer in &mut page.layers {
+            layer.objects.retain(|o| o.id != path_id);
+        }
+        if let Some(object) = self.object_mut(text) {
+            object.placement = None;
+            object.points = line;
+            object.refit_text();
+        }
+        self.selection = vec![text];
+        true
+    }
+
+    /// Whether a selected text is attached to a path.
+    pub fn has_text_on_path(&self) -> bool {
+        self.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. }) && o.points.len() >= 2)
+    }
+
+    /// Fireworks' Detach from Path: the text stands on its own again, and its path is a path again.
+    pub fn detach_text_from_path(&mut self) -> bool {
+        let ids: Vec<u64> = self.selected().iter().filter(|o| matches!(o.shape, Shape::Text { .. }) && o.points.len() >= 2).map(|o| o.id).collect();
+        for id in &ids {
+            let Some(object) = self.object_mut(*id) else { continue };
+            let line = std::mem::take(&mut object.points);
+            let corner = v2(object.bounds.x, object.bounds.y);
+            object.refit_text();
+            (object.bounds.x, object.bounds.y) = (corner.x, corner.y);
+            let mut path = object.clone();
+            path.id = self.alloc_id();
+            path.name = t("Path").into();
+            path.shape = Shape::Path { closed: false };
+            path.bounds = Rect::of_points(&line);
+            path.points = line;
+            (path.fill, path.fill_style, path.filters, path.mask) = (None, None, Vec::new(), None);
+            path.stroke = Some(Stroke { color: Color::BLACK, width: 1.0 });
+            self.add_object(path);
+        }
+        self.selection = ids.clone();
+        !ids.is_empty()
+    }
+
+    /// Fireworks' Reverse Direction: text on a path runs the other way along it.
+    pub fn reverse_text_path(&mut self) -> bool {
+        let mut any = false;
+        self.for_selected(|o| {
+            if matches!(o.shape, Shape::Text { .. }) && o.points.len() >= 2 {
+                o.points.reverse();
+                o.refit_text();
+                any = true;
+            }
+        });
+        any
+    }
+
     /// Fireworks' Subselect: the members of each selected group become the
     /// selection, to be worked on one by one. The group is whole again as soon as
     /// none of its members is selected. Returns false if no group was selected.
@@ -4134,6 +4253,38 @@ mod tests {
         let back: Object = serde_json::from_str(&serde_json::to_string(&triangle).unwrap()).unwrap();
         assert_eq!(back.shape, triangle.shape);
         assert!(!serde_json::to_string(&Object::new_web(3, WebKind::Hotspot, Rect::default())).unwrap().contains("form"));
+    }
+
+    #[test]
+    fn text_is_attached_to_a_path_and_detached_again() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        let text_id = e.alloc_id();
+        let mut text = rect(text_id, 5.0, 5.0, 10.0, 10.0);
+        text.shape = Shape::Text { content: "HH".into(), size: 12.0, style: TextStyle::default() };
+        text.refit_text();
+        e.add_object(text);
+        // Without a path in the selection there is nothing to attach to.
+        assert!(!e.attach_text_to_path());
+        e.selection = vec![text_id, all[2]];
+        assert!(e.attach_text_to_path());
+        // The blue box is gone into the text, which now carries its outline, closed back on its start.
+        assert_eq!(ids(&e), vec![all[0], all[1], text_id]);
+        let attached = e.object(text_id).unwrap().clone();
+        // It starts at the lower left corner, the leftmost, and goes up and over the top.
+        assert_eq!((attached.points.len(), attached.points[0], attached.points[1], attached.points[4]), (5, v2(60.0, 30.0), v2(60.0, 10.0), v2(60.0, 30.0)));
+        assert!(e.has_text_on_path());
+        // It moves with the text, and reversing it turns the order round.
+        e.for_selected(|o| o.translate(10.0, 0.0));
+        assert_eq!(e.object(text_id).unwrap().points[0], v2(70.0, 30.0));
+        assert!(e.reverse_text_path());
+        assert_eq!(e.object(text_id).unwrap().points[1], v2(90.0, 30.0));
+        // Detached, the path is a path again and the text has none.
+        assert!(e.detach_text_from_path());
+        assert!(!e.has_text_on_path() && e.object(text_id).unwrap().points.is_empty());
+        let path = e.doc.page().objects().last().unwrap();
+        assert!(matches!(path.shape, Shape::Path { closed: false }) && path.points.len() == 5 && path.stroke.is_some());
+        assert!(!e.detach_text_from_path() && !e.reverse_text_path());
     }
 
     #[test]

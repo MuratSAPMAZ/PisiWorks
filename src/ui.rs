@@ -1052,6 +1052,18 @@ impl Workspace {
                             .child(toggle(self, icon("align-justify", 13., TEXT).into_any_element(), style.align == TextAlign::Justify, Cmd::TextAlign(TextAlign::Justify), cx))
                             .child(toggle(self, icon("align-stretch", 13., TEXT).into_any_element(), style.align == TextAlign::Stretch, Cmd::TextAlign(TextAlign::Stretch), cx)),
                     );
+                // Text on a path: how its letters stand, and how far along the path it starts.
+                if first.points.len() >= 2 {
+                    extra = extra.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(self.combo(Combo::PathOrientation, style.on_path.label(), 156., cx).bg(rgb(PANEL_RAISED)))
+                            .child(label(t("Text offset:")))
+                            .child(self.field(FieldId::PathOffset, 34., cx)),
+                    );
+                }
             }
             crate::model::Shape::Web { kind: crate::model::WebKind::Hotspot, .. } => {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));

@@ -108,6 +108,7 @@ pub enum Combo {
     PolygonShape,
     FillEdge,
     FillTexture,
+    PathOrientation,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -342,6 +343,8 @@ pub enum FieldId {
     BucketTolerance,
     FillFeather,
     TextureAmount,
+    /// How far along its path text on a path starts.
+    PathOffset,
     GuidePosition,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
@@ -1710,6 +1713,7 @@ impl Workspace {
                 }
             }
             Cmd::TextAlign(align) => self.shown_text_style().align == align,
+            Cmd::PathOrientation(orientation) => self.ed.has_text_on_path() && self.shown_text_style().on_path == orientation,
             Cmd::Guides(GuideCmd::Show) => self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
             Cmd::Guides(GuideCmd::Snap) => self.snap_guides,
@@ -2301,6 +2305,11 @@ impl Workspace {
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
             Cmd::Guides(GuideCmd::Clear) => !self.ed.doc.page().guides.is_empty(),
+            Cmd::AttachToPath => {
+                let selected = self.ed.selected();
+                selected.iter().any(|o| matches!(o.shape, Shape::Text { .. })) && selected.iter().any(|o| o.reshapable() && !matches!(o.shape, Shape::Text { .. }))
+            }
+            Cmd::DetachFromPath | Cmd::ReversePathText | Cmd::PathOrientation(_) => self.ed.has_text_on_path(),
             Cmd::Subselect => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Group { .. })),
             Cmd::Superselect => self.ed.can_superselect(),
             Cmd::Revert => (self.path.is_some() || self.source_image.is_some()) && self.ed.is_dirty(),
@@ -2539,6 +2548,22 @@ impl Workspace {
                 }
             }
             Cmd::ImagePreview => self.open_image_preview(None),
+            Cmd::AttachToPath => {
+                if self.ed.attach_text_to_path() {
+                    self.ed.commit(t("Attach to Path"));
+                }
+            }
+            Cmd::DetachFromPath => {
+                if self.ed.detach_text_from_path() {
+                    self.ed.commit(t("Detach from Path"));
+                }
+            }
+            Cmd::ReversePathText => {
+                if self.ed.reverse_text_path() {
+                    self.ed.commit(t("Reverse Direction"));
+                }
+            }
+            Cmd::PathOrientation(orientation) => self.change_text_style(|style| style.on_path = orientation),
             Cmd::PageSetup => self.page_setup_dialog = Some(self.print_setup),
             Cmd::Print => {
                 let (printers, default) = crate::print::printers();
@@ -5023,6 +5048,7 @@ impl Workspace {
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,
             ("d", true, false) => Cmd::Clone,
+            ("y", true, false) => Cmd::AttachToPath,
             ("p", false, false) => Cmd::Print,
             (";", false, false) => Cmd::Guides(GuideCmd::Show),
             (";", false, true) => Cmd::Guides(GuideCmd::Lock),
@@ -5199,6 +5225,7 @@ impl Workspace {
             FieldId::ScrubRate => number(self.tool_options.rate),
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
             FieldId::FillFeather => number(self.current_fill_look().feather),
+            FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TextureAmount => number(self.current_fill_look().texture_amount),
             FieldId::GuidePosition => self.guide_dialog.map_or_else(String::new, |(_, _, place)| number(place)),
             FieldId::BucketTolerance => number(self.tool_options.bucket_tolerance),
@@ -5392,6 +5419,10 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::PathOffset => {
+                let Some(v) = number else { return };
+                self.change_text_style(|style| style.path_offset = v);
             }
             FieldId::FillFeather => {
                 let Some(v) = number.filter(|v| *v >= 0.0) else { return };

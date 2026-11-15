@@ -281,6 +281,10 @@ pub enum Cmd {
     PageSetup,
     Print,
     ImagePreview,
+    AttachToPath,
+    DetachFromPath,
+    ReversePathText,
+    PathOrientation(crate::model::PathOrientation),
 }
 
 /// The commands of the Text > Style menu.
@@ -787,7 +791,18 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                 ],
             ),
             Sep,
-            na("Attach to Path"),
+            cmd("Attach to Path", "Ctrl+Shift+Y", Cmd::AttachToPath),
+            cmd("Detach from Path", "", Cmd::DetachFromPath),
+            Sub(
+                "Orientation",
+                &[
+                    cmd("Rotate Around Path", "", Cmd::PathOrientation(crate::model::PathOrientation::Rotate)),
+                    cmd("Vertical", "", Cmd::PathOrientation(crate::model::PathOrientation::Vertical)),
+                    cmd("Skew Vertical", "", Cmd::PathOrientation(crate::model::PathOrientation::SkewVertical)),
+                    cmd("Skew Horizontal", "", Cmd::PathOrientation(crate::model::PathOrientation::SkewHorizontal)),
+                ],
+            ),
+            cmd("Reverse Direction", "", Cmd::ReversePathText),
             cmd("Convert to Paths", "", Cmd::TextToPaths),
             Sep,
             na("Check Spelling..."),

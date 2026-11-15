@@ -45,6 +45,70 @@ pub fn line_start(box_width: f32, line_width: f32, align: TextAlign) -> f32 {
     }
 }
 
+/// The outlines of text set along a path. The lines of the text follow one another,
+/// and each letter is placed by its middle and stood on the path as the style says.
+pub fn glyph_outlines_on_path(content: &str, size: f32, style: &TextStyle, path: &[Vec2]) -> Vec<Vec<Vec<Vec2>>> {
+    use crate::model::PathOrientation;
+    let line = content.replace('\n', " ");
+    // Laid out straight first, from the left, with its baseline through 0.
+    let straight = TextStyle { align: TextAlign::Left, ..style.clone() };
+    let Some(font) = styled_font(style) else { return Vec::new() };
+    let scaled = font.as_scaled(em_scale(font, size));
+    let baseline = (size * LINE_HEIGHT - (scaled.ascent() - scaled.descent())) / 2.0 + scaled.ascent();
+    let glyphs = glyph_outlines(&line, size, Vec2 { x: 0.0, y: -baseline }, &straight);
+    // How long the path is up to each of its points.
+    let mut lengths = vec![0.0f32];
+    for pair in path.windows(2) {
+        lengths.push(lengths[lengths.len() - 1] + (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y));
+    }
+    let total = *lengths.last().unwrap_or(&0.0);
+    if path.len() < 2 || total <= 0.0 {
+        return glyphs;
+    }
+    // Where a distance along the path falls, and which way the path runs there. Past its ends it goes on straight.
+    let along = |distance: f32| -> (Vec2, f32, f32) {
+        let piece = lengths.windows(2).position(|pair| distance <= pair[1]).unwrap_or(path.len() - 2);
+        let piece = if distance < 0.0 { 0 } else { piece };
+        let (a, b) = (path[piece], path[piece + 1]);
+        let length = (lengths[piece + 1] - lengths[piece]).max(0.001);
+        let (dx, dy) = ((b.x - a.x) / length, (b.y - a.y) / length);
+        let part = distance - lengths[piece];
+        (Vec2 { x: a.x + dx * part, y: a.y + dy * part }, dx, dy)
+    };
+    let width = line_width(&line, size, style);
+    let start = style.path_offset
+        + match style.align {
+            TextAlign::Center => (total - width) / 2.0,
+            TextAlign::Right => total - width,
+            _ => 0.0,
+        };
+    glyphs
+        .into_iter()
+        .map(|rings| {
+            let (low, high) = rings.iter().flatten().fold((f32::MAX, f32::MIN), |(low, high), p| (low.min(p.x), high.max(p.x)));
+            let middle = (low + high) / 2.0;
+            let (at, dx, dy) = along(start + middle);
+            rings
+                .into_iter()
+                .map(|ring| {
+                    ring.into_iter()
+                        .map(|p| {
+                            // The letter's own place: across from its middle, and up from the baseline (down is positive).
+                            let (u, v) = (p.x - middle, p.y);
+                            match style.on_path {
+                                PathOrientation::Rotate => Vec2 { x: at.x + u * dx - v * dy, y: at.y + u * dy + v * dx },
+                                PathOrientation::Vertical => Vec2 { x: at.x + u, y: at.y + v },
+                                PathOrientation::SkewVertical => Vec2 { x: at.x + u * dx, y: at.y + u * dy + v },
+                                PathOrientation::SkewHorizontal => Vec2 { x: at.x + u - v * dy, y: at.y + v * dx },
+                            }
+                        })
+                        .collect()
+                })
+                .collect()
+        })
+        .collect()
+}
+
 /// Whether text in this style has to be drawn from the outlines of its letters:
 /// spread or stretched lines, and bold or italic made up for a font that has none.
 pub fn needs_outlines(style: &TextStyle) -> bool {
@@ -608,7 +672,11 @@ fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, path: &tiny_skia::Path
 fn text_path(object: &Object, content: &str, size: f32, style: &TextStyle) -> Option<tiny_skia::Path> {
     let frame = object.placement.map_or(object.bounds, |p| p.frame);
     let mut builder = PathBuilder::new();
-    for ring in glyph_outlines(content, size, Vec2 { x: frame.x, y: frame.y }, style).into_iter().flatten() {
+    let letters = match object.points.len() {
+        0 | 1 => glyph_outlines(content, size, Vec2 { x: frame.x, y: frame.y }, style),
+        _ => glyph_outlines_on_path(content, size, style, &object.points),
+    };
+    for ring in letters.into_iter().flatten() {
         let Some((first, rest)) = ring.split_first() else { continue };
         builder.move_to(first.x, first.y);
         for p in rest {
@@ -1026,6 +1094,26 @@ mod tests {
         let stretched = TextStyle { align: TextAlign::Stretch, ..TextStyle::default() };
         assert!(widest(two_lines, &stretched, 2.0 * 20.0 * LINE_HEIGHT) > full * 0.9);
         assert!(needs_outlines(&justified) && needs_outlines(&stretched) && !needs_outlines(&plain));
+        // Along a path that runs straight down, the letters follow one another downward, each turned to stand on it.
+        let down = [Vec2 { x: 50.0, y: 0.0 }, Vec2 { x: 50.0, y: 200.0 }];
+        let on_path = glyph_outlines_on_path("HHH", 20.0, &plain, &down);
+        let middle = |rings: &Vec<Vec<Vec2>>| {
+            let all: Vec<&Vec2> = rings.iter().flatten().collect();
+            (all.iter().map(|p| p.x).sum::<f32>() / all.len() as f32, all.iter().map(|p| p.y).sum::<f32>() / all.len() as f32)
+        };
+        let (first, last) = (middle(&on_path[0]), middle(&on_path[2]));
+        assert!(last.1 > first.1 + 20.0 && (first.0 - last.0).abs() < 1.0, "{first:?} {last:?}");
+        // The letters stand to the right of a path going down: their tops point that way.
+        assert!(first.0 > 50.0);
+        // Upright instead, each letter keeps its own shape and only its place follows the path.
+        let upright = glyph_outlines_on_path("HHH", 20.0, &TextStyle { on_path: crate::model::PathOrientation::Vertical, ..TextStyle::default() }, &down);
+        let tall = |rings: &Vec<Vec<Vec2>>| rings.iter().flatten().map(|p| p.y).fold(f32::MIN, f32::max) - rings.iter().flatten().map(|p| p.y).fold(f32::MAX, f32::min);
+        let flat_h = tall(&glyph_outlines("H", 20.0, Vec2 { x: 0.0, y: 0.0 }, &plain)[0]);
+        assert!((tall(&upright[0]) - flat_h).abs() < 0.5 && (tall(&on_path[0]) - flat_h).abs() > 0.5);
+        // An offset starts the text further along, and on a path of one point the text is left straight.
+        let later = glyph_outlines_on_path("HHH", 20.0, &TextStyle { path_offset: 40.0, ..TextStyle::default() }, &down);
+        assert!((middle(&later[0]).1 - first.1 - 40.0).abs() < 0.5);
+        assert_eq!(glyph_outlines_on_path("H", 20.0, &plain, &down[..1]).len(), 1);
         // A style that is not plain is kept in the file; plain text is written as before.
         let styled = Shape::Text { content: "a".into(), size: 12.0, style: TextStyle { font: "Some Font".into(), bold: true, ..TextStyle::default() } };
         let back: Shape = serde_json::from_str(&serde_json::to_string(&styled).unwrap()).unwrap();
