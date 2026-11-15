@@ -105,6 +105,8 @@ pub enum Combo {
     ButtonLook,
     BatchScale,
     TextOrientation,
+    ArrowStyle,
+    AutoMask,
     Printer,
     PrintRange,
     /// What an object is filled with: a color, a gradient or a pattern.
@@ -393,6 +395,8 @@ pub enum FieldId {
     CommandName,
     ArrowSize,
     FrameSize,
+    /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
+    Twist(usize),
     /// Reverse State Range: the first state, or the last.
     ReverseState(bool),
     /// A text of Batch Process: 0 width, 1 height, 2 percentage, 3 prefix, 4 suffix.
@@ -546,6 +550,8 @@ pub enum Drag {
     FillHandle { end: bool, width: bool },
     /// The end of an animation's path is being dragged.
     MotionEnd,
+    /// The start of an animation's path is being dragged: where its end is, and where the start was last.
+    MotionStart { end: Vec2, last: Vec2 },
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
     Guide { horizontal: bool, index: Option<usize>, at: f32 },
     Resize { handle: usize, origin: Rect },
@@ -701,9 +707,12 @@ pub struct Workspace {
     /// Reverse State Range: the first and the last state, counted from 1.
     pub reverse_dialog: Option<(u32, u32)>,
     /// Add Arrowheads: whether the start and the end get one, and how long the heads are.
-    pub arrow_dialog: Option<(bool, bool, f32)>,
+    pub arrow_dialog: Option<(bool, bool, f32, usize)>,
     /// Add Picture Frame: how wide the frame is.
     pub frame_dialog: Option<f32>,
+    /// Auto Vector Mask: which of the masks is picked.
+    pub mask_dialog: Option<usize>,
+    pub twist_dialog: Option<crate::model::TwistSettings>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -887,6 +896,31 @@ fn selection_mode(modifiers: gpui::Modifiers) -> MaskMode {
     }
 }
 
+/// The names of the heads Add Arrowheads offers.
+pub const ARROW_STYLES: [&str; 5] = ["Triangle", "Lines", "Diamond", "Circle", "Square"];
+
+/// The outline of an arrowhead whose point is at `tip`, on a path that arrives from
+/// `from`: whether it is a closed shape, and its corners. `size` is its length.
+pub fn arrow_head(style: usize, tip: Vec2, from: Vec2, size: f32) -> (bool, Vec<Vec2>) {
+    let (dx, dy) = (tip.x - from.x, tip.y - from.y);
+    let length = dx.hypot(dy).max(0.001);
+    let (ux, uy) = (dx / length, dy / length);
+    // A place given by how far back from the point it is and how far to the side.
+    let at = |back: f32, side: f32| v2(tip.x - ux * back - uy * side, tip.y - uy * back + ux * side);
+    let half = size * 0.4;
+    match style {
+        1 => (false, vec![at(size, half), tip, at(size, -half)]),
+        2 => (true, vec![tip, at(size / 2.0, half), at(size, 0.0), at(size / 2.0, -half)]),
+        3 => (true, (0..24).map(|step| {
+            let angle = step as f32 / 24.0 * std::f32::consts::TAU;
+            at(size / 2.0 - angle.cos() * size / 2.0, angle.sin() * size / 2.0)
+        }).collect()),
+        4 => (true, vec![at(0.0, half), at(size * 0.8, half), at(size * 0.8, -half), at(0.0, -half)]),
+        // The point of the head is the end of the path; its back is four fifths as wide as it is long.
+        _ => (true, vec![tip, at(size, half), at(size, -half)]),
+    }
+}
+
 enum Opened {
     Document(Document),
     Image(Bitmap),
@@ -1002,6 +1036,8 @@ impl Workspace {
             reverse_dialog: None,
             arrow_dialog: None,
             frame_dialog: None,
+            mask_dialog: None,
+            twist_dialog: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2580,7 +2616,7 @@ impl Workspace {
             Cmd::TextAlignDown(_) => self.shown_text_style().orientation.is_vertical(),
             Cmd::SaveSteps => !self.steps_to_save().is_empty(),
             Cmd::Ready(ready) => match ready {
-                crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia | crate::menus::ReadyCmd::AddShadow => has_selection,
+                crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia | crate::menus::ReadyCmd::AddShadow | crate::menus::ReadyCmd::AutoVectorMask | crate::menus::ReadyCmd::TwistAndFade => has_selection,
                 crate::menus::ReadyCmd::AddArrowheads => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Line | Shape::Path { closed: false })),
                 crate::menus::ReadyCmd::AddPictureFrame => true,
                 crate::menus::ReadyCmd::DistributeToLayers => self.ed.selection.len() >= 2,
@@ -2745,8 +2781,10 @@ impl Workspace {
                     self.ed.commit(t("Reverse All States"));
                 }
             }
-            ReadyCmd::AddArrowheads => self.arrow_dialog = Some((false, true, 12.0)),
+            ReadyCmd::AddArrowheads => self.arrow_dialog = Some((false, true, 12.0, 0)),
             ReadyCmd::AddPictureFrame => self.frame_dialog = Some(10.0),
+            ReadyCmd::AutoVectorMask => self.mask_dialog = Some(0),
+            ReadyCmd::TwistAndFade => self.twist_dialog = Some(Default::default()),
             ReadyCmd::AddShadow => {
                 if self.ed.add_shadows() > 0 {
                     self.ed.commit(t("Add Shadow"));
@@ -2759,32 +2797,27 @@ impl Workspace {
     /// Closes Add Arrowheads; kept, each selected open path gets a head at the ends asked for, in the color of its stroke.
     pub fn close_arrow_dialog(&mut self, keep: bool) {
         self.commit_field();
-        let Some((at_start, at_end, size)) = self.arrow_dialog.take() else { return };
+        let Some((at_start, at_end, size, style)) = self.arrow_dialog.take() else { return };
         if !keep || !(at_start || at_end) {
             return;
         }
-        let paths: Vec<(Vec<Vec2>, Color)> = self
+        let paths: Vec<(Vec<Vec2>, Stroke)> = self
             .ed
             .selected()
             .into_iter()
             .filter(|o| matches!(o.shape, Shape::Line | Shape::Path { closed: false }) && o.points.len() >= 2)
-            .map(|o| (o.points.clone(), o.stroke.map_or(Color::BLACK, |s| s.color)))
+            .map(|o| (o.points.clone(), o.stroke.unwrap_or(Stroke { color: Color::BLACK, width: 1.0 })))
             .collect();
         let before = self.ed.selection.clone();
         let mut heads = Vec::new();
-        for (points, color) in paths {
+        for (points, stroke) in paths {
             let last = points.len() - 1;
             let ends = [(at_start, points[0], points[1]), (at_end, points[last], points[last - 1])];
             for (_, tip, from) in ends.into_iter().filter(|(wanted, _, _)| *wanted) {
-                let (dx, dy) = (tip.x - from.x, tip.y - from.y);
-                let length = dx.hypot(dy).max(0.001);
-                let (ux, uy) = (dx / length, dy / length);
-                // The point of the head is the end of the path; its back is as wide as four fifths of its length.
-                let back = v2(tip.x - ux * size, tip.y - uy * size);
-                let half = size * 0.4;
-                let corners = vec![tip, v2(back.x - uy * half, back.y + ux * half), v2(back.x + uy * half, back.y - ux * half)];
-                let mut head = self.new_object(t("Arrowhead"), Shape::Path { closed: true }, Rect::of_points(&corners), corners);
-                (head.fill, head.stroke) = (Some(color), None);
+                let (closed, corners) = arrow_head(style, tip, from, size);
+                let mut head = self.new_object(t("Arrowhead"), Shape::Path { closed }, Rect::of_points(&corners), corners);
+                // A head of two lines is drawn as the path is; the others are filled with its color.
+                (head.fill, head.stroke) = if closed { (Some(stroke.color), None) } else { (None, Some(stroke)) };
                 heads.push(head);
             }
         }
@@ -2797,6 +2830,23 @@ impl Workspace {
         }
         self.ed.selection = before;
         self.ed.commit(t("Add Arrowheads"));
+    }
+
+    /// Closes Auto Vector Mask; kept, the selection gets the mask picked.
+    pub fn close_mask_dialog(&mut self, keep: bool) {
+        let Some(which) = self.mask_dialog.take() else { return };
+        if keep && self.ed.auto_vector_mask(which) {
+            self.ed.commit(t("Auto Vector Mask"));
+        }
+    }
+
+    /// Closes Twist and Fade; kept, the copies are made.
+    pub fn close_twist_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(settings) = self.twist_dialog.take() else { return };
+        if keep && self.ed.twist_and_fade(settings) > 0 {
+            self.ed.commit(t("Twist and Fade"));
+        }
     }
 
     /// Closes Add Picture Frame; kept, a frame of the width asked for is laid round the canvas on a locked layer of its own.
@@ -4193,6 +4243,11 @@ impl Workspace {
                 self.drag = Some(Drag::MotionEnd);
                 return;
             }
+            // And the green start moves the place it sets out from, leaving the end where it is.
+            if let Some(start) = self.motion_path().first().copied().filter(|start| (start.x - p.x).abs() <= reach && (start.y - p.y).abs() <= reach) {
+                self.drag = Some(Drag::MotionStart { end, last: start });
+                return;
+            }
         }
         // Inside a pixel selection the Pointer moves the pixels, and Alt leaves a copy behind.
         if self.tool == Tool::Pointer && self.pixel_drag_down(p, true, ev.modifiers.alt) {
@@ -5031,6 +5086,18 @@ impl Workspace {
                     self.nine_guides[index] = part.clamp(0.0, 1.0);
                 }
             }
+            Drag::MotionStart { end, last } => {
+                let (end, from) = (*end, *last);
+                *last = on_guides;
+                if let Some(index) = self.ed.selected_animation() {
+                    self.ed.shift_animation(index, on_guides.x - from.x, on_guides.y - from.y, false);
+                    let mut settings = self.ed.doc.page().animations[index].settings;
+                    let (dx, dy) = (end.x - on_guides.x, end.y - on_guides.y);
+                    settings.distance = (dx * dx + dy * dy).sqrt().round();
+                    settings.direction = (-dy).atan2(dx).to_degrees().rem_euclid(360.0).round();
+                    self.ed.set_animation(settings);
+                }
+            }
             Drag::MotionEnd => {
                 if let (Some(index), Some(start)) = (self.ed.selected_animation(), self.motion_path().first().copied()) {
                     let mut settings = self.ed.doc.page().animations[index].settings;
@@ -5263,12 +5330,16 @@ impl Workspace {
         }
         let Some(drag) = self.drag.take() else { return };
         match drag {
-            Drag::Move { .. } => {
+            Drag::Move { moved, .. } => {
                 self.smart_lines.clear();
+                // A copy of an animation takes the whole animation with it, as in Fireworks.
+                if let Some(index) = self.ed.selected_animation().filter(|_| moved.x != 0.0 || moved.y != 0.0) {
+                    self.ed.shift_animation(index, moved.x, moved.y, true);
+                }
                 self.ed.commit(t("Move"));
             }
             Drag::FillHandle { .. } => self.ed.commit(t("Fill")),
-            Drag::MotionEnd => self.ed.commit(t("Animate Selection")),
+            Drag::MotionEnd | Drag::MotionStart { .. } => self.ed.commit(t("Animate Selection")),
             Drag::Reshape { ids, .. } => {
                 // Pushing works on many short pieces, and the result is a curved path again.
                 for id in ids {
@@ -5816,6 +5887,10 @@ impl Workspace {
             }
         } else if self.command_name.is_some() && matches!(key, "enter" | "escape") {
             self.close_command_name(key == "enter");
+        } else if self.mask_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_mask_dialog(key == "enter");
+        } else if self.twist_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_twist_dialog(key == "enter");
         } else if self.arrow_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_arrow_dialog(key == "enter");
         } else if self.frame_dialog.is_some() && matches!(key, "enter" | "escape") {
@@ -6113,6 +6188,7 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
             FieldId::ArrowSize => self.arrow_dialog.map_or_else(String::new, |d| number(d.2)),
             FieldId::FrameSize => self.frame_dialog.map_or_else(String::new, number),
             FieldId::CommandName => self.command_name.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
@@ -6338,6 +6414,17 @@ impl Workspace {
                     (3, _) => dialog.prefix = text.to_string(),
                     (4, _) => dialog.suffix = text.to_string(),
                     _ => {}
+                }
+            }
+            FieldId::Twist(which) => {
+                let (Some(v), Some(s)) = (number, self.twist_dialog.as_mut()) else { return };
+                match which {
+                    0 => s.steps = v.round().clamp(1.0, 200.0) as u32,
+                    1 => s.spacing = v.clamp(-2000.0, 2000.0),
+                    2 => s.direction = v.rem_euclid(360.0),
+                    3 => s.rotation = v.clamp(-360.0, 360.0),
+                    4 => s.scale = v.clamp(1.0, 1000.0),
+                    _ => s.fade_to = v.clamp(0.0, 100.0),
                 }
             }
             FieldId::ArrowSize => {
@@ -6947,6 +7034,14 @@ mod tests {
         let bitmap = Bitmap::from_rgba(2, 2, vec![200; 16]).unwrap();
         let png = bitmap.encode_png().unwrap();
         assert!(matches!(parse_file(&png), Ok(Opened::Image(b)) if b == bitmap));
+        // Arrowheads point where the path ends, whichever way it runs.
+        let (closed, triangle) = arrow_head(0, v2(10.0, 0.0), v2(0.0, 0.0), 10.0);
+        assert!(closed);
+        assert_eq!(triangle, [v2(10.0, 0.0), v2(0.0, 4.0), v2(0.0, -4.0)]);
+        let (closed, lines) = arrow_head(1, v2(0.0, 10.0), v2(0.0, 0.0), 10.0);
+        assert!(!closed && lines[1] == v2(0.0, 10.0) && (lines[0].y - 0.0).abs() < 0.001 && (lines[0].x + 4.0).abs() < 0.001);
+        let (_, circle) = arrow_head(3, v2(10.0, 0.0), v2(0.0, 0.0), 10.0);
+        assert!(circle.iter().all(|p| ((p.x - 5.0).hypot(p.y) - 5.0).abs() < 0.001));
 
         let json = document_to_json(&Document::new(10, 10)).unwrap();
         assert!(matches!(parse_file(json.as_bytes()), Ok(Opened::Document(_))));

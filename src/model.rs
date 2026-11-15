@@ -2650,6 +2650,39 @@ pub struct SymbolEdit {
     pub looks: [Vec<Object>; 4],
 }
 
+/// The masks Auto Vector Mask offers: a name, the gradient, and where on the object it
+/// starts and ends. The object shows where the gradient starts and fades toward where it ends.
+pub const AUTO_MASKS: [(&str, FillKind, (f32, f32), (f32, f32)); 7] = [
+    ("Linear, fading downward", FillKind::Linear, (0.5, 0.0), (0.5, 1.0)),
+    ("Linear, fading upward", FillKind::Linear, (0.5, 1.0), (0.5, 0.0)),
+    ("Linear, fading to the right", FillKind::Linear, (0.0, 0.5), (1.0, 0.5)),
+    ("Linear, fading to the left", FillKind::Linear, (1.0, 0.5), (0.0, 0.5)),
+    ("Ellipse", FillKind::Ellipse, (0.5, 0.5), (1.0, 0.5)),
+    ("Rectangle", FillKind::Rectangle, (0.5, 0.5), (1.0, 0.5)),
+    ("Starburst", FillKind::Starburst, (0.5, 0.5), (1.0, 0.5)),
+];
+
+/// What Twist and Fade asks: how many copies, and how each differs from the one before it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TwistSettings {
+    pub steps: u32,
+    /// How far each copy is from the one before, in pixels, and which way, in degrees: 0 is to the right, 90 is up.
+    pub spacing: f32,
+    pub direction: f32,
+    /// How far each copy is turned from the one before, in degrees clockwise.
+    pub rotation: f32,
+    /// The size of each copy, in percent of the one before.
+    pub scale: f32,
+    /// The opacity the last copy ends at, in percent; the copies fade evenly toward it.
+    pub fade_to: f32,
+}
+
+impl Default for TwistSettings {
+    fn default() -> Self {
+        Self { steps: 8, spacing: 15.0, direction: 0.0, rotation: 15.0, scale: 95.0, fade_to: 10.0 }
+    }
+}
+
 /// What Fireworks' Animate dialog asks.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AnimationSettings {
@@ -3538,6 +3571,64 @@ impl Editor {
         added
     }
 
+    /// Fireworks' Auto Vector Mask: each selected object gets a mask of its own size
+    /// filled with a gradient from white to black, so that it fades as the gradient darkens.
+    pub fn auto_vector_mask(&mut self, which: usize) -> bool {
+        let Some((_, kind, start, end)) = AUTO_MASKS.get(which).copied() else { return false };
+        let ids: Vec<u64> = self.selected().iter().filter(|o| !o.is_web()).map(|o| o.id).collect();
+        for id in &ids {
+            let Some(bounds) = self.object(*id).map(|o| o.bounds) else { continue };
+            let mut mask = Object::new_web(self.alloc_id(), WebKind::Slice, bounds);
+            mask.name = t("Mask").into();
+            (mask.shape, mask.fill, mask.stroke, mask.opacity) = (Shape::Rect { radius: 0.0 }, Some(Color::WHITE), None, 1.0);
+            let mut style = FillStyle::new(kind, Color::WHITE, Color::BLACK);
+            (style.start, style.end) = (v2(start.0, start.1), v2(end.0, end.1));
+            mask.fill_style = Some(Arc::new(style));
+            if let Some(object) = self.object_mut(*id) {
+                object.mask = Some(Arc::new(ObjectMask::new(mask, true)));
+            }
+        }
+        !ids.is_empty()
+    }
+
+    /// Fireworks' Twist and Fade: copies of the selection, each a step further on,
+    /// turned, resized and fainter than the one before it, laid under the original.
+    pub fn twist_and_fade(&mut self, settings: TwistSettings) -> usize {
+        let ids = self.selection.clone();
+        let steps = settings.steps.clamp(1, 200);
+        let angle = settings.direction.to_radians();
+        let mut made = 0;
+        for id in ids {
+            let Some(original) = self.object(id).filter(|o| !o.is_web()).cloned() else { continue };
+            let center = original.bounds.center();
+            let mut copies = Vec::new();
+            for step in 1..=steps {
+                let n = step as f32;
+                let mut copy = original.clone();
+                copy.id = self.alloc_id();
+                let size = (settings.scale / 100.0).max(0.01).powf(n);
+                let middle = v2(center.x + angle.cos() * settings.spacing * n, center.y - angle.sin() * settings.spacing * n);
+                let (w, h) = (original.bounds.w * size, original.bounds.h * size);
+                copy.set_bounds(Rect { x: middle.x - w / 2.0, y: middle.y - h / 2.0, w, h });
+                if settings.rotation != 0.0 {
+                    copy.warp(&Warp::rotation(middle, (settings.rotation * n).to_radians()));
+                }
+                let faded = 1.0 + (settings.fade_to / 100.0 - 1.0) * n / steps as f32;
+                copy.opacity = (original.opacity * faded).clamp(0.0, 1.0);
+                // The furthest copy lies lowest.
+                copies.insert(0, copy);
+            }
+            made += copies.len();
+            for layer in &mut self.doc.page_mut().layers {
+                if let Some(at) = layer.objects.iter().position(|o| o.id == id) {
+                    layer.objects.splice(at..at, copies);
+                    break;
+                }
+            }
+        }
+        made
+    }
+
     /// Fireworks' Distribute to Layers: each selected object goes to a new layer of its own, named after it.
     pub fn distribute_to_layers(&mut self) -> usize {
         let objects = self.selected_in_order();
@@ -4274,6 +4365,16 @@ impl Editor {
         }
         self.doc.page_mut().animations[index].objects = ids.clone();
         self.selection = ids.into_iter().filter(|id| self.doc.page().objects().any(|o| o.id == *id)).collect();
+    }
+
+    /// Moves the copies of an animation in every state. With `others`, only the copies
+    /// that are not selected: the selected one has been moved by hand already.
+    pub fn shift_animation(&mut self, index: usize, dx: f32, dy: f32, others: bool) {
+        let Some(animation) = self.doc.page().animations.get(index) else { return };
+        let ids: Vec<u64> = animation.objects.iter().copied().filter(|id| !others || !self.selection.contains(id)).collect();
+        for object in self.doc.page_mut().all_objects_mut().filter(|o| ids.contains(&o.id)) {
+            object.translate(dx, dy);
+        }
     }
 
     /// Fireworks' Remove Animation: the copy in the first state stays, as an ordinary copy of the symbol.
@@ -5272,6 +5373,30 @@ mod tests {
     }
 
     #[test]
+    fn auto_vector_mask_and_twist_and_fade() {
+        let mut e = editor();
+        e.selection = vec![100];
+        assert!(e.auto_vector_mask(0) && !e.auto_vector_mask(99));
+        let mask = e.object(100).unwrap().mask.clone().unwrap();
+        assert_eq!((mask.kind, mask.object.bounds), (MaskKind::Grayscale, Rect { x: 0.0, y: 10.0, w: 40.0, h: 40.0 }));
+        let style = mask.object.fill_style.clone().unwrap();
+        assert_eq!((style.kind, style.start, style.end), (FillKind::Linear, v2(0.5, 0.0), v2(0.5, 1.0)));
+        assert_eq!((style.stops[0].1, style.stops[1].1), (Color::WHITE, Color::BLACK));
+        // Three copies of the second box, each 10 further right, half the size of the one before, fading to nothing.
+        e.selection = vec![101];
+        let twist = TwistSettings { steps: 3, spacing: 10.0, direction: 0.0, rotation: 0.0, scale: 50.0, fade_to: 0.0 };
+        assert_eq!(e.twist_and_fade(twist), 3);
+        let objects: Vec<&Object> = e.doc.page().objects().collect();
+        assert_eq!(objects.len(), 6);
+        // They lie under the original, the furthest lowest.
+        assert_eq!(objects[4].id, 101);
+        let (furthest, nearest) = (objects[1], objects[3]);
+        assert_eq!(nearest.bounds, Rect { x: 70.0, y: 20.0, w: 20.0, h: 20.0 });
+        assert_eq!((furthest.bounds.center(), furthest.bounds.w, furthest.opacity), (v2(100.0, 30.0), 5.0, 0.0));
+        assert!((nearest.opacity - 2.0 / 3.0).abs() < 0.001);
+    }
+
+    #[test]
     fn add_shadow_lays_a_dark_copy_under_the_object() {
         let mut e = editor();
         e.selection = vec![100];
@@ -5340,6 +5465,14 @@ mod tests {
         assert_eq!(page.states.len(), 5);
         assert_eq!(page.at_state(4).objects().count(), 0);
         assert_eq!(page.at_state(2).objects().count(), 1);
+        // Moved as a whole, every copy goes along.
+        e.shift_animation(0, 5.0, 7.0, false);
+        assert_eq!(e.animation_path(0)[0], v2(25.0, 37.0));
+        assert_eq!(e.doc.page().at_state(2).objects().next().unwrap().bounds.center(), v2(25.0, 27.0));
+        // With one copy moved by hand, only the others follow.
+        e.shift_animation(0, 1.0, 0.0, true);
+        assert_eq!(e.selected()[0].bounds.center(), v2(25.0, 37.0));
+        assert_eq!(e.doc.page().at_state(2).objects().next().unwrap().bounds.center(), v2(26.0, 27.0));
         assert!(e.remove_animation() && !e.remove_animation());
         let page = e.doc.page();
         assert!(page.animations.is_empty() && page.at_state(1).objects().count() == 0 && page.objects().count() == 3);

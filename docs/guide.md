@@ -172,7 +172,7 @@ Preview shows the page as it will export. 2-Up puts the original next to it, and
 
 In **Preview** the button shows its Over state under the mouse and its Down state when pressed. On export each button gets a picture for every state and an HTML page (`name.html`) that swaps them.
 
-**Modify > Animation > Animate Selection** (Alt+Shift+F8) turns the selection into an animation symbol: it asks for the number of states, the distance and direction of the move (0° right, 90° up), scaling, opacity and rotation, and adds states if needed. While selected its path shows (green start, red end); dragging the red end changes distance and direction. **Settings** opens the same dialog again and **Remove Animation** leaves only the copy in the first state.
+**Modify > Animation > Animate Selection** (Alt+Shift+F8) turns the selection into an animation symbol: it asks for the number of states, the distance and direction of the move (0° right, 90° up), scaling, opacity and rotation, and adds states if needed. While selected its path shows (green start, red end); dragging the red end changes distance and direction, dragging the green one moves where it starts, and moving one of the copies moves the whole animation. **Settings** opens the same dialog again and **Remove Animation** leaves only the copy in the first state.
 
 ## Templates, batch processing and commands
 
@@ -180,7 +180,7 @@ In **Preview** the button shows its Over state under the mouse and its Down stat
 
 **File > Batch Process** scales, converts and renames many files at once: add the files, pick the scaling (to a size, to fit an area, to a percentage), optionally use this document's Optimize settings, give a prefix or suffix and pick the output folder. If a result would replace an existing file, the old one is first copied to an `Original Files` folder.
 
-The **Commands** menu has ready-made commands: Creative (Add Arrowheads, Add Picture Frame, Add Shadow, Convert to Grayscale, Convert to Sepia Tone) and Document (Distribute to Layers, Hide Other Layers, Lock Other Layers, Reverse All States, Reverse State Range). **Save Steps as Command** in the **History** panel keeps the menu commands that changed the document under a name; saved commands show at the foot of the menu and are renamed or deleted with **Manage Saved Commands**. Steps made with the mouse (drawing, dragging) are not recorded. **Run Script** plays such a file (one `Menu > Command` per line); it does not run Fireworks' JSF files.
+The **Commands** menu has ready-made commands: Creative (Add Arrowheads, Add Picture Frame, Add Shadow, Auto Vector Mask, Convert to Grayscale, Convert to Sepia Tone, Twist and Fade) and Document (Distribute to Layers, Hide Other Layers, Lock Other Layers, Reverse All States, Reverse State Range). **Save Steps as Command** in the **History** panel keeps the menu commands that changed the document under a name; saved commands show at the foot of the menu and are renamed or deleted with **Manage Saved Commands**. Steps made with the mouse (drawing, dragging) are not recorded. **Run Script** plays such a file (one `Menu > Command` per line); it does not run Fireworks' JSF files.
 
 ## Text orientation
 

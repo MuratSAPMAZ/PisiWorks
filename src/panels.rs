@@ -455,6 +455,18 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::AutoMask => (0..crate::model::AUTO_MASKS.len())
+                .map(|which| item(t(crate::model::AUTO_MASKS[which].0).into(), self.mask_dialog == Some(which), cx, Box::new(move |this, _, _| this.mask_dialog = Some(which))))
+                .collect(),
+            Combo::ArrowStyle => (0..crate::workspace::ARROW_STYLES.len())
+                .map(|style| {
+                    item(t(crate::workspace::ARROW_STYLES[style]).into(), self.arrow_dialog.is_some_and(|d| d.3 == style), cx, Box::new(move |this, _, _| {
+                        if let Some(dialog) = this.arrow_dialog.as_mut() {
+                            dialog.3 = style;
+                        }
+                    }))
+                })
+                .collect(),
             Combo::BatchScale => (0..4)
                 .map(|scale| {
                     item(t(crate::workspace::BATCH_SCALES[scale]).into(), self.batch_dialog.as_ref().is_some_and(|d| d.scale == scale), cx, Box::new(move |this, _, _| {
@@ -1678,8 +1690,9 @@ impl Workspace {
 
     /// Commands > Creative > Add Arrowheads: which ends, and how large.
     pub(crate) fn arrow_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (at_start, at_end, _) = self.arrow_dialog?;
+        let (at_start, at_end, _, style) = self.arrow_dialog?;
         let rows = vec![
+            labelled_row(t("Type:"), 60., self.combo(Combo::ArrowStyle, t(crate::workspace::ARROW_STYLES[style.min(4)]), 110., cx).bg(rgb(PANEL_RAISED))).into_any_element(),
             self.check_box(t("Add to Start"), at_start, cx, |this| this.arrow_dialog.iter_mut().for_each(|d| d.0 = !d.0)).into_any_element(),
             self.check_box(t("Add to End"), at_end, cx, |this| this.arrow_dialog.iter_mut().for_each(|d| d.1 = !d.1)).into_any_element(),
             labelled_row(t("Size:"), 60., div().flex().items_center().gap_1().child(self.field(FieldId::ArrowSize, 50., cx)).child(label(t("pixels")))).into_any_element(),
@@ -1691,6 +1704,37 @@ impl Workspace {
             .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_arrow_dialog(true)))
             .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_arrow_dialog(false)));
         Some(self.dialog_frame(230., t("Add Arrowheads"), rows, buttons))
+    }
+
+    /// Commands > Creative > Auto Vector Mask: which way the object fades.
+    pub(crate) fn mask_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let which = self.mask_dialog?;
+        let rows = vec![labelled_row(t("Type:"), 50., self.combo(Combo::AutoMask, t(crate::model::AUTO_MASKS[which.min(6)].0), 200., cx).bg(rgb(PANEL_RAISED))).into_any_element()];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_mask_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_mask_dialog(false)));
+        Some(self.dialog_frame(290., t("Auto Vector Mask"), rows, buttons))
+    }
+
+    /// Commands > Creative > Twist and Fade: how many copies, and how each differs from the one before.
+    pub(crate) fn twist_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.twist_dialog?;
+        let names = [t("Steps:"), t("Spacing:"), t("Direction:"), t("Rotation:"), t("Scale:"), t("Fade to:")];
+        let name_width = label_width(&names, 70.);
+        let units = ["", t("pixels"), "°", "°", "%", "%"];
+        let rows = (0..6)
+            .map(|which| labelled_row(names[which], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::Twist(which), 50., cx)).child(label(units[which]))).into_any_element())
+            .collect();
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_twist_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_twist_dialog(false)));
+        Some(self.dialog_frame(240., t("Twist and Fade"), rows, buttons))
     }
 
     /// Commands > Creative > Add Picture Frame: how wide the frame is.

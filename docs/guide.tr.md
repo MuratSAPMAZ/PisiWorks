@@ -174,7 +174,7 @@ Bir sembol kopyasına **çift tıklayınca** sembol olduğu yerde açılır: par
 
 **Önizleme** görünümünde fareyi düğmenin üzerine getirince Üzerinde, basınca Aşağıda durumu görünür. Dışa aktarırken her düğme için durum görüntüleri ve bunları fareyle değiştiren bir HTML sayfası (`ad.html`) yazılır.
 
-**Değiştir > Animasyon > Seçimi Canlandır** (Alt+Shift+F8) seçimi bir animasyon sembolüne çevirir: durum sayısı, taşıma mesafesi ve yönü (0° sağ, 90° yukarı), ölçek, opaklık ve dönüş sorulur; gerekirse yeni durumlar eklenir. Seçiliyken yolu görünür (yeşil başlangıç, kırmızı bitiş); kırmızı ucu sürüklemek mesafeyi ve yönü değiştirir. **Ayarlar** aynı pencereyi yeniden açar, **Animasyonu Kaldır** yalnızca ilk durumdaki kopyayı bırakır.
+**Değiştir > Animasyon > Seçimi Canlandır** (Alt+Shift+F8) seçimi bir animasyon sembolüne çevirir: durum sayısı, taşıma mesafesi ve yönü (0° sağ, 90° yukarı), ölçek, opaklık ve dönüş sorulur; gerekirse yeni durumlar eklenir. Seçiliyken yolu görünür (yeşil başlangıç, kırmızı bitiş); kırmızı ucu sürüklemek mesafeyi ve yönü, yeşil ucu sürüklemek başlangıç yerini değiştirir; kopyalardan birini taşımak bütün animasyonu taşır. **Ayarlar** aynı pencereyi yeniden açar, **Animasyonu Kaldır** yalnızca ilk durumdaki kopyayı bırakır.
 
 ## Şablonlar, toplu işleme ve komutlar
 
@@ -182,7 +182,7 @@ Bir sembol kopyasına **çift tıklayınca** sembol olduğu yerde açılır: par
 
 **Dosya > Toplu İşleme** birçok dosyayı tek seferde ölçekler, dönüştürür ve yeniden adlandırır: dosyaları ekleyin, ölçeği seçin (boyuta, alana sığacak şekilde, yüzdeye), isterseniz bu belgenin En İyileştir ayarlarını kullanın, önek ya da sonek verin ve çıktı klasörünü seçin. Bir sonuç var olan bir dosyanın yerini alacaksa eskisi önce `Original Files` klasörüne kopyalanır.
 
-**Komutlar** menüsünde hazır komutlar vardır: Yaratıcı (Ok Başları Ekle, Resim Çerçevesi Ekle, Gölge Ekle, Gri Tonlamaya Dönüştür, Sepya Tonuna Dönüştür) ve Belge (Katmanlara Dağıt, Diğer Katmanları Gizle, Diğer Katmanları Kilitle, Tüm Durumları Ters Çevir, Durum Aralığını Ters Çevir). **Geçmiş** panelindeki **Adımları Komut Olarak Kaydet**, belgeyi değiştiren menü komutlarını bir ad altında saklar; kaydedilen komutlar menünün altında görünür ve **Kaydedilmiş Komutları Yönet** ile yeniden adlandırılır ya da silinir. Fareyle yapılan adımlar (çizim, sürükleme) kaydedilmez. **Komut Dosyasını Çalıştır** böyle bir dosyayı (her satırda `Menü > Komut`) çalıştırır; Fireworks'ün JSF dosyalarını çalıştırmaz.
+**Komutlar** menüsünde hazır komutlar vardır: Yaratıcı (Ok Başları Ekle, Resim Çerçevesi Ekle, Gölge Ekle, Otomatik Vektör Maskesi, Gri Tonlamaya Dönüştür, Sepya Tonuna Dönüştür, Bük ve Soldur) ve Belge (Katmanlara Dağıt, Diğer Katmanları Gizle, Diğer Katmanları Kilitle, Tüm Durumları Ters Çevir, Durum Aralığını Ters Çevir). **Geçmiş** panelindeki **Adımları Komut Olarak Kaydet**, belgeyi değiştiren menü komutlarını bir ad altında saklar; kaydedilen komutlar menünün altında görünür ve **Kaydedilmiş Komutları Yönet** ile yeniden adlandırılır ya da silinir. Fareyle yapılan adımlar (çizim, sürükleme) kaydedilmez. **Komut Dosyasını Çalıştır** böyle bir dosyayı (her satırda `Menü > Komut`) çalıştırır; Fireworks'ün JSF dosyalarını çalıştırmaz.
 
 ## Metin yönü
 
