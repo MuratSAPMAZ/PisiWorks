@@ -152,6 +152,26 @@ Written for PisiWorks:
 
 The figures are from November 2026 and will drift as work goes on.
 
+## PisiSahne: the animation program (first stage)
+
+A second program is built from the same repository: **PisiSahne**, an animation program in the manner of Adobe Flash, which the same schools still teach. It uses all of PisiWorks' drawing tools, filters and symbols, and adds a timeline under the stage.
+
+```bash
+cargo run --release --bin pisisahne
+```
+
+Working at this stage:
+
+- The timeline: layers, frames, keyframes and blank keyframes (F5, F6, F7; Shift+F5 and Shift+F6 to remove).
+- Motion tweens: between two keyframes, place, size, turn and opacity change step by step. Changing an object on a frame inside a tween makes a keyframe of that frame, as in Flash.
+- Playing, stepping frame by frame, the frame rate and onion skinning.
+- `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
+- **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
+
+Not there yet: shape tweens, guide and mask layers, movie clip symbols, frame and button actions, moving between scenes, sound, a control for easing, and a `.deb` package for PisiSahne. The window is not laid out as Flash's is yet either: the tools are on the left and Properties at the bottom.
+
+The Turkish terms are our own rendering, for want of a Turkish Flash installation to take them from, and may differ from the words in teachers' notes. They are all in one translation table and will be corrected if the right ones are reported.
+
 ## Not in this version
 
 - Fireworks' JavaScript (JSF) scripts and extensions: Run Script plays only PisiWorks' own command files (one menu command on each line). The dialogs of the ready-made commands are not copies of Fireworks' own: Add Arrowheads offers five heads and Auto Vector Mask seven masks. Adobe's templates are not there either; New from Template lists our own and the ones you save.

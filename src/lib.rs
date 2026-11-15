@@ -22,6 +22,7 @@ pub mod model;
 pub mod optimize;
 pub mod panels;
 pub mod print;
+pub mod publish;
 pub mod pseffects;
 pub mod paths;
 pub mod settings;

@@ -35,7 +35,7 @@ use crate::model::{
     document_from_json, document_to_json, flatten_curve, pull_points, subdivide, v2, Color, Document, Editor, Handles,
     Object, PixelStroke, Rect, Shape, Stroke, Vec2, Warp, WebKind,
 };
-use crate::theme::{APP_NAME, FILE_EXTENSION, LEGACY_EXTENSION};
+use crate::theme::{app_name, document_extension, is_sahne, FILE_EXTENSION, LEGACY_EXTENSION, SAHNE_EXTENSION};
 
 /// Screen pixels the pointer must travel before a press counts as pulling a curve handle.
 const HANDLE_DRAG_START: f32 = 3.0;
@@ -410,6 +410,7 @@ pub enum FieldId {
     FrameSize,
     TweenSteps,
     GifDelay,
+    FrameRate,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
     Twist(usize),
     /// Reverse State Range: the first state, or the last.
@@ -731,6 +732,8 @@ pub struct Workspace {
     /// Tween Instances: how many copies in between, and whether the run is dealt out to the states.
     pub tween_dialog: Option<(u32, bool)>,
     pub gif_dialog: Option<GifDialog>,
+    /// Whether the timeline is being played.
+    pub frames_playing: bool,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -954,6 +957,19 @@ pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Res
     Document::from_frames(t("Bitmap"), frames, loops).ok_or_else(|| t("An animation needs at least two pictures").to_string())
 }
 
+/// The frame rate a new animation starts with, as Flash's does.
+pub const DEFAULT_FPS: f32 = 24.0;
+
+/// A document as the running program works on it: in the animation program every page is a scene with a timeline.
+fn staged(mut doc: Document) -> Document {
+    if is_sahne() {
+        for page in &mut doc.pages {
+            page.start_timeline(DEFAULT_FPS);
+        }
+    }
+    doc
+}
+
 /// The names of the heads Add Arrowheads offers.
 pub const ARROW_STYLES: [&str; 5] = ["Triangle", "Lines", "Diamond", "Circle", "Square"];
 
@@ -1018,7 +1034,7 @@ fn file_stem(path: &Path) -> String {
 impl Workspace {
     pub fn new(cx: &mut Context<Self>) -> Self {
         Self {
-            ed: Editor::new(Document::new(DEFAULT_WIDTH, DEFAULT_HEIGHT)),
+            ed: Editor::new(staged(Document::new(DEFAULT_WIDTH, DEFAULT_HEIGHT))),
             tool: Tool::Pointer,
             zoom: 1.0,
             pan: Vec2::default(),
@@ -1106,6 +1122,7 @@ impl Workspace {
             twist_dialog: None,
             tween_dialog: None,
             gif_dialog: None,
+            frames_playing: false,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -1166,7 +1183,7 @@ impl Workspace {
 
     pub fn title(&self) -> String {
         let dirty = if self.ed.is_dirty() { "*" } else { "" };
-        format!("{}{dirty} - {APP_NAME}", self.document_name())
+        format!("{}{dirty} - {}", self.document_name(), app_name())
     }
 
     pub fn document_name(&self) -> String {
@@ -1175,13 +1192,13 @@ impl Workspace {
             .or(self.source_image.as_ref())
             .and_then(|p| p.file_name())
             .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| format!("{}.{FILE_EXTENSION}", t("Untitled")))
+            .unwrap_or_else(|| format!("{}.{}", t("Untitled"), document_extension()))
     }
 
     /// Name offered by Save As; an opened image becomes a document beside it.
     fn save_name(&self) -> String {
         match (&self.path, &self.source_image) {
-            (None, Some(source)) => format!("{}.{FILE_EXTENSION}", file_stem(source)),
+            (None, Some(source)) => format!("{}.{}", file_stem(source), document_extension()),
             _ => self.document_name(),
         }
     }
@@ -2203,6 +2220,20 @@ impl Workspace {
             return Vec::new();
         }
         let page = self.ed.doc.page();
+        // In an animation the neighbours are the frames before and after the one on show.
+        if let Some(timeline) = &page.timeline {
+            let frames = [timeline.current.checked_sub(1), Some(timeline.current + 1).filter(|next| *next < timeline.frame_count())];
+            return frames
+                .into_iter()
+                .flatten()
+                .flat_map(|frame| (0..page.layers.len()).filter(|layer| page.layers[*layer].visible).flat_map(move |layer| timeline.objects_at(layer, frame)))
+                .filter(|o| o.visible && !o.is_web())
+                .map(|mut ghost| {
+                    ghost.opacity *= ONION_OPACITY;
+                    ghost
+                })
+                .collect();
+        }
         [page.active_state.checked_sub(1), Some(page.active_state + 1)]
             .into_iter()
             .flatten()
@@ -2218,6 +2249,119 @@ impl Workspace {
 
     pub fn stop_playing(&mut self) {
         self.playing = false;
+        self.frames_playing = false;
+    }
+
+    /// The frame on show and the number of frames of the scene, if the page has a timeline.
+    pub fn frame_position(&self) -> Option<(usize, usize)> {
+        self.ed.doc.page().timeline.as_ref().map(|timeline| (timeline.current, timeline.frame_count()))
+    }
+
+    /// Shows a frame of the scene, and makes a layer the active one if one is named.
+    pub fn show_frame(&mut self, frame: usize, layer: Option<usize>) {
+        self.finish_pending();
+        self.frames_playing = false;
+        if let Some(layer) = layer {
+            self.ed.set_active_layer(layer);
+        }
+        self.ed.goto_frame(frame);
+    }
+
+    fn run_frame(&mut self, cmd: crate::menus::FrameCmd, window: &mut Window, cx: &mut Context<Self>) {
+        use crate::menus::FrameCmd;
+        let Some((current, count)) = self.frame_position() else { return };
+        let done = |this: &mut Self, label: &str| this.ed.commit(label);
+        match cmd {
+            FrameCmd::InsertFrame => {
+                self.ed.on_timeline(|timeline, layer, frame| timeline.insert_frames(layer, frame, 1));
+                done(self, t("Insert Frame"));
+            }
+            FrameCmd::RemoveFrame => {
+                self.ed.on_timeline(|timeline, layer, frame| timeline.remove_frame(layer, frame));
+                done(self, t("Remove Frames"));
+            }
+            FrameCmd::Keyframe | FrameCmd::BlankKeyframe => {
+                let blank = cmd == FrameCmd::BlankKeyframe;
+                self.ed.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, blank));
+                done(self, if blank { t("Insert Blank Keyframe") } else { t("Insert Keyframe") });
+            }
+            FrameCmd::ClearKeyframe => {
+                self.ed.on_timeline(|timeline, layer, frame| timeline.clear_keyframe(layer, frame));
+                done(self, t("Clear Keyframe"));
+            }
+            FrameCmd::Tween | FrameCmd::RemoveTween => {
+                let tween = (cmd == FrameCmd::Tween).then(crate::model::Tween::default);
+                // A tween needs a keyframe to go to: without one after it, there is nothing to move toward.
+                let has_next = self.ed.on_timeline(|timeline, layer, frame| {
+                    let next = timeline.span_at(layer, frame).is_some_and(|index| index + 1 < timeline.layers[layer].len());
+                    timeline.set_tween(layer, frame, tween);
+                    next
+                });
+                if tween.is_some() && has_next == Some(false) {
+                    self.status = t("The tween will show once a keyframe follows this one: go to a later frame and insert a keyframe (F6)").into();
+                }
+                done(self, if tween.is_some() { t("Create Motion Tween") } else { t("Remove Tween") });
+            }
+            FrameCmd::Play => {
+                if self.frames_playing {
+                    self.frames_playing = false;
+                } else if count < 2 {
+                    self.status = t("The scene has only one frame: insert frames (F5) or a keyframe (F6) to animate").into();
+                } else {
+                    self.frames_playing = true;
+                    self.play_token += 1;
+                    self.schedule_timeline(self.play_token, cx);
+                }
+            }
+            FrameCmd::Rewind => self.show_frame(0, None),
+            FrameCmd::Forward => self.show_frame((current + 1).min(count.saturating_sub(1)), None),
+            FrameCmd::Back => self.show_frame(current.saturating_sub(1), None),
+            FrameCmd::PublishHtml => self.publish_html(window, cx),
+        }
+    }
+
+    fn schedule_timeline(&mut self, token: u64, cx: &mut Context<Self>) {
+        let fps = self.ed.doc.page().timeline.as_ref().map_or(DEFAULT_FPS, |timeline| timeline.fps).clamp(1.0, 120.0);
+        cx.spawn(async move |this, cx| {
+            cx.background_executor().timer(Duration::from_secs_f32(1.0 / fps)).await;
+            this.update(cx, |this, cx| {
+                if this.frames_playing && this.play_token == token {
+                    if let Some((current, count)) = this.frame_position() {
+                        this.ed.goto_frame(if current + 1 >= count { 0 } else { current + 1 });
+                    }
+                    this.schedule_timeline(token, cx);
+                    cx.notify();
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Control > Publish as HTML5: asks for a file and writes the scene as a page that plays in a browser.
+    fn publish_html(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ed.leave_symbol_for_good();
+        self.ed.end_mask_edit();
+        self.ed.close_groups();
+        let page = self.ed.export_page();
+        let stem = self.path.as_ref().map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
+        let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.html")));
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut path))) = picked.await else { return };
+            if path.extension().is_none() {
+                path.set_extension("html");
+            }
+            this.update(cx, |this, cx| {
+                let written = crate::publish::html(&page, &stem).and_then(|html| std::fs::write(&path, html).map_err(anyhow::Error::from));
+                this.status = match written {
+                    Ok(()) => tf("Exported {}", &[&path.display()]),
+                    Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
+                };
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     pub fn toggle_play(&mut self, cx: &mut Context<Self>) {
@@ -3263,6 +3407,7 @@ impl Workspace {
             Cmd::NewSymbol => self.symbol_dialog = Some((tf("Symbol {}", &[&(self.ed.doc.symbols.len() + 1)]), SymbolKind::Graphic)),
             Cmd::NewButton => self.new_symbol(t("Button"), SymbolKind::Button),
             Cmd::EditSymbol => self.toggle_symbol_edit(),
+            Cmd::Frame(frame) => self.run_frame(frame, window, cx),
             Cmd::GifWizard => self.gif_dialog = Some(GifDialog { files: Vec::new(), delay_ms: 500, loops: 0 }),
             Cmd::TweenInstances => self.tween_dialog = Some((10, true)),
             Cmd::Animate | Cmd::AnimateSettings => {
@@ -3419,7 +3564,7 @@ impl Workspace {
             Cmd::About => {
                 let _ = window.prompt(
                     PromptLevel::Info,
-                    APP_NAME,
+                    app_name(),
                     Some(&about_text()),
                     &[t("OK")],
                     cx,
@@ -3872,6 +4017,7 @@ impl Workspace {
         if let Some((_, image)) = self.page_raster.take() {
             self.stale_previews.push(image);
         }
+        let doc = staged(doc);
         self.ed = Editor::new(doc);
         self.path = path;
         self.source_image = None;
@@ -4017,12 +4163,16 @@ impl Workspace {
         self.ed.close_groups();
         // Saving under an image name writes a flattened copy, and the editable
         // document stays unsaved. JSON must never land in a file named .png.
-        if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION) && !e.eq_ignore_ascii_case(LEGACY_EXTENSION)) {
+        // An animation is written with the work on the frame on show in its timeline.
+        for page in &mut self.ed.doc.pages {
+            page.store_frame();
+        }
+        if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION) && !e.eq_ignore_ascii_case(LEGACY_EXTENSION) && !e.eq_ignore_ascii_case(SAHNE_EXTENSION)) {
             self.export_to(&path);
             return;
         }
         if path.extension().is_none() {
-            path.set_extension(FILE_EXTENSION);
+            path.set_extension(document_extension());
         }
         let result = document_to_json(&self.ed.doc)
             .and_then(|json| std::fs::write(&path, json).map_err(anyhow::Error::from));
@@ -6013,6 +6163,25 @@ impl Workspace {
             return;
         }
         let typing = self.field.is_some() || self.text_edit.is_some();
+        // The animation program's own keys, where Flash has them.
+        if is_sahne() && !typing && !m.control && !m.alt {
+            use crate::menus::FrameCmd;
+            let frame = match (key, m.shift) {
+                ("f5", false) => Some(FrameCmd::InsertFrame),
+                ("f5", true) => Some(FrameCmd::RemoveFrame),
+                ("f6", false) => Some(FrameCmd::Keyframe),
+                ("f6", true) => Some(FrameCmd::ClearKeyframe),
+                ("f7", false) => Some(FrameCmd::BlankKeyframe),
+                (".", false) => Some(FrameCmd::Forward),
+                (",", false) => Some(FrameCmd::Back),
+                _ => None,
+            };
+            if let Some(frame) = frame {
+                self.run(Cmd::Frame(frame), window, cx);
+                cx.notify();
+                return;
+            }
+        }
         // The user's own shortcuts come before the built-in ones, except while something is being typed.
         if let Some(action) = self.custom_shortcut(&pressed).filter(|_| !typing || m.control || m.alt) {
             if let Some(cmd) = action {
@@ -6357,6 +6526,7 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
+            FieldId::FrameRate => self.ed.doc.page().timeline.as_ref().map_or_else(String::new, |timeline| number(timeline.fps)),
             FieldId::GifDelay => self.gif_dialog.as_ref().map_or_else(String::new, |d| d.delay_ms.to_string()),
             FieldId::TweenSteps => self.tween_dialog.map_or_else(String::new, |d| d.0.to_string()),
             FieldId::ArrowSize => self.arrow_dialog.map_or_else(String::new, |d| number(d.2)),
@@ -6595,6 +6765,12 @@ impl Workspace {
                     3 => s.rotation = v.clamp(-360.0, 360.0),
                     4 => s.scale = v.clamp(1.0, 1000.0),
                     _ => s.fade_to = v.clamp(0.0, 100.0),
+                }
+            }
+            FieldId::FrameRate => {
+                if let (Some(v), Some(timeline)) = (number.filter(|v| *v >= 1.0), self.ed.doc.page_mut().timeline.as_mut()) {
+                    timeline.fps = v.min(120.0);
+                    self.ed.commit(t("Frame Rate"));
                 }
             }
             FieldId::GifDelay => {

@@ -153,6 +153,26 @@ PisiWorks için yazılanlar:
 
 Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
+## PisiSahne: animasyon programı (ilk aşama)
+
+Aynı depodan ikinci bir program derlenir: **PisiSahne**, okullarda hâlâ anlatılan Adobe Flash'ın çalışma biçimini örnek alan bir animasyon programı. PisiWorks'ün çizim araçlarının, filtrelerinin ve sembollerinin tamamını kullanır; sahnenin altına bir zaman çizelgesi ekler.
+
+```bash
+cargo run --release --bin pisisahne
+```
+
+Bu aşamada çalışanlar:
+
+- Zaman çizelgesi: katmanlar, kareler, anahtar kareler ve boş anahtar kareler (F5, F6, F7; kaldırmak için Shift+F5, Shift+F6).
+- Hareket ara doldurma: iki anahtar kare arasında konum, boyut, dönüş ve opaklık adım adım değişir. Ara doldurmanın içindeki bir karede nesneyi değiştirmek, Flash'ta olduğu gibi o kareyi anahtar kare yapar.
+- Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
+- `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
+- **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
+
+Henüz olmayanlar: şekil ara doldurma, kılavuz ve maske katmanları, film klibi sembolleri, kare ve düğme eylemleri, sahneler arası geçiş, ses, yavaşlama ayarının arayüzü ve PisiSahne'nin `.deb` paketi. Pencere düzeni de henüz Flash'ınki değil: araçlar solda, Özellikler altta durur.
+
+Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") elimizde Türkçe Flash kurulumu olmadığı için bizim çevirimizdir ve ders notlarındaki sözcüklerden farklı olabilir. Hepsi tek bir çeviri tablosundadır; doğrusunu bildirirseniz düzeltilir.
+
 ## Bu sürümde olmayanlar
 
 - Fireworks'ün JavaScript (JSF) komut dosyaları ve uzantıları: Komut Dosyası Çalıştır yalnızca PisiWorks'ün kendi komut dosyalarını (her satırda bir menü komutu) çalıştırır. Komutlar menüsünün hazır komutları Fireworks'ünkilerin iletişim kutularıyla birebir aynı değildir: Ok Başları Ekle beş biçim, Otomatik Vektör Maskesi yedi maske sunar. Adobe'nin şablonları da yoktur; Şablondan Yeni kendi şablonlarımızı ve sizin kaydettiklerinizi listeler.

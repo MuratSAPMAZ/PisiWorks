@@ -5,6 +5,35 @@
 pub const APP_NAME: &str = "PisiWorks";
 pub const APP_MARK: &str = "Pw";
 pub const FILE_EXTENSION: &str = "pisi";
+/// The extension of the animation program's documents. Either program opens the other's.
+pub const SAHNE_EXTENSION: &str = "sahne";
+
+/// Whether this is PisiSahne, the animation program, and not PisiWorks. Set once, as the program starts.
+static SAHNE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Makes the program PisiSahne: the same workspace with a timeline under the stage.
+pub fn set_sahne() {
+    SAHNE.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn is_sahne() -> bool {
+    SAHNE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// The name of the program that is running.
+pub fn app_name() -> &'static str {
+    if is_sahne() { "PisiSahne" } else { APP_NAME }
+}
+
+/// The two letters at the start of the menu bar.
+pub fn app_mark() -> &'static str {
+    if is_sahne() { "Ps" } else { APP_MARK }
+}
+
+/// The extension new documents are saved with.
+pub fn document_extension() -> &'static str {
+    if is_sahne() { SAHNE_EXTENSION } else { FILE_EXTENSION }
+}
 /// The extension documents had before, and Emberframe documents still have. They open and save as before.
 pub const LEGACY_EXTENSION: &str = "ember";
 

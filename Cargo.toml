@@ -9,6 +9,7 @@ authors = ["Murat SAPMAZ <https://github.com/MuratSAPMAZ>", "Med Amine Belbachir
 repository = "https://github.com/MuratSAPMAZ/PisiWorks"
 homepage = "https://github.com/MuratSAPMAZ/PisiWorks"
 readme = "README.md"
+default-run = "pisiworks"
 
 [dependencies]
 gpui = "0.2.2"

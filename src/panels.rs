@@ -1732,6 +1732,169 @@ impl Workspace {
         Some(self.dialog_frame(230., t("Add Arrowheads"), rows, buttons))
     }
 
+    /// The timeline of the animation program: a row of frames for each layer, the
+    /// top layer first, with the frame on show marked, and what plays and counts them under it.
+    pub(crate) fn timeline_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !crate::theme::is_sahne() {
+            return None;
+        }
+        let page = self.ed.doc.page();
+        let timeline = page.timeline.as_ref()?;
+        const CELL: f32 = 11.;
+        const ROW: f32 = 20.;
+        const NAMES: f32 = 150.;
+        let (current, count) = (timeline.current, timeline.frame_count());
+        let shown = (count + 30).max(120).min(crate::model::MAX_FRAMES);
+        // The numbers over the frames count from 1, as Flash's do.
+        let header: Vec<AnyElement> = (0..shown)
+            .map(|frame| {
+                let label = if frame == 0 || (frame + 1) % 5 == 0 { (frame + 1).to_string() } else { String::new() };
+                div()
+                    .w(px(CELL))
+                    .h(px(ROW))
+                    .flex_none()
+                    .text_size(px(9.))
+                    .text_color(rgb(if frame == current { 0xffffff } else { TEXT_DIM }))
+                    .when(frame == current, |d| d.bg(rgb(0xd03030)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.show_frame(frame, None);
+                            cx.notify();
+                        }),
+                    )
+                    .on_mouse_move(cx.listener(move |this, ev: &gpui::MouseMoveEvent, _, cx| {
+                        // Dragging along the numbers scrubs through the frames.
+                        if ev.pressed_button == Some(MouseButton::Left) && this.frame_position().is_some_and(|(at, _)| at != frame) {
+                            this.show_frame(frame, None);
+                            cx.notify();
+                        }
+                    }))
+                    .child(label)
+                    .into_any_element()
+            })
+            .collect();
+        let mut names = vec![div().h(px(ROW)).flex_none().into_any_element()];
+        let mut rows = vec![div().flex().flex_none().children(header).into_any_element()];
+        for index in (0..page.layers.len()).rev() {
+            let layer = &page.layers[index];
+            let active = index == page.active_layer;
+            names.push(
+                div()
+                    .h(px(ROW))
+                    .px_2()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .border_b_1()
+                    .border_color(rgb(BORDER))
+                    .when(active, |d| d.bg(rgb(ACCENT)))
+                    .when(!active, |d| d.hover(|s| s.bg(rgb(HOVER))))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.ed.set_active_layer(index);
+                            cx.notify();
+                        }),
+                    )
+                    .child(layer.name.clone())
+                    .into_any_element(),
+            );
+            let spans = timeline.layers.get(index).map_or(&[][..], Vec::as_slice);
+            // The keyframe the frame on show belongs to holds what the layer has now: that work is written into the timeline only on leaving the frame.
+            let shown_here = !layer.objects.is_empty();
+            let holds = |span: &crate::model::Span| if (span.start..span.start + span.length).contains(&current) && (span.tween.is_none() || span.start == current) { shown_here } else { !span.objects.is_empty() };
+            let cells: Vec<AnyElement> = (0..shown)
+                .map(|frame| {
+                    let span = spans.iter().find(|span| (span.start..span.start + span.length).contains(&frame));
+                    // Grey for frames that show something, a paler blue for a tween, white for empty ones and past the end.
+                    let color = match span {
+                        Some(span) if span.tween.is_some() => 0xc3cdf0,
+                        Some(span) if !holds(span) => 0xf4f4f4,
+                        Some(_) => 0xcfcfcf,
+                        None => 0xffffff,
+                    };
+                    let key = span.filter(|span| span.start == frame);
+                    div()
+                        .w(px(CELL))
+                        .h(px(ROW))
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .bg(rgb(color))
+                        .border_b_1()
+                        .border_color(rgb(BORDER))
+                        .when(key.is_some() || (frame + 1) % 5 == 0, |d| d.border_l_1())
+                        .when(frame == current, |d| d.bg(rgb(if active { 0xe86060 } else { 0xf0a0a0 })))
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.show_frame(frame, Some(index));
+                                cx.notify();
+                            }),
+                        )
+                        // A keyframe is a dot: filled if it holds something, hollow if it is blank.
+                        .children(key.map(|span| {
+                            let dot = div().w(px(6.)).h(px(6.)).rounded_full().border_1().border_color(rgb(0x202020));
+                            if holds(span) { dot.bg(rgb(0x202020)) } else { dot }
+                        }))
+                        .into_any_element()
+                })
+                .collect();
+            rows.push(div().flex().flex_none().children(cells).into_any_element());
+        }
+        let button = |this: &Self, text: &'static str, cmd: crate::menus::FrameCmd, cx: &mut Context<Self>| this.text_button(text, true, cx, move |this, window, cx| this.run(Cmd::Frame(cmd), window, cx));
+        use crate::menus::FrameCmd;
+        let controls = div()
+            .h(px(26.))
+            .px_1()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap_1()
+            .border_t_1()
+            .border_color(rgb(BORDER))
+            .child(self.text_button(t("New Layer"), true, cx, |this, window, cx| this.run(Cmd::AddLayer, window, cx)))
+            .child(self.text_button(t("Delete Layer"), page.layers.len() > 1, cx, |this, _, _| {
+                if this.ed.delete_layer() {
+                    this.ed.commit(t("Delete Layer"));
+                }
+            }))
+            .child(div().w(px(8.)))
+            .child(button(self, t("Rewind"), FrameCmd::Rewind, cx))
+            .child(button(self, if self.frames_playing { t("Stop") } else { t("Play") }, FrameCmd::Play, cx))
+            .child(div().w(px(8.)))
+            .child(label(tf("Frame {} of {}", &[&(current + 1), &count.max(1)])))
+            .child(div().w(px(8.)))
+            .child(self.field(FieldId::FrameRate, 40., cx))
+            .child(label(t("fps")))
+            .child(label(tf("{} s", &[&format!("{:.1}", current as f32 / timeline.fps.max(1.0))])))
+            .child(div().w(px(8.)))
+            .child(self.check_box(t("Onion Skin"), self.onion, cx, |this| this.onion = !this.onion));
+        Some(
+            div()
+                .id("timeline")
+                .flex()
+                .flex_col()
+                .flex_none()
+                .bg(rgb(PANEL))
+                .border_t_1()
+                .border_color(rgb(BORDER))
+                .child(
+                    div()
+                        .id("timeline-rows")
+                        .max_h(px(150.))
+                        .flex()
+                        .overflow_y_scroll()
+                        .child(div().w(px(NAMES)).flex().flex_col().flex_none().border_r_1().border_color(rgb(BORDER)).children(names))
+                        .child(div().id("timeline-frames").flex_1().min_w_0().overflow_x_scroll().child(div().flex().flex_col().children(rows))),
+                )
+                .child(controls)
+                .into_any_element(),
+        )
+    }
+
     /// GIF > Make a GIF: picture files, in the order they are to show, turned into an animation.
     pub(crate) fn gif_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let dialog = self.gif_dialog.as_ref()?;

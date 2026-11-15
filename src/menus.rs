@@ -219,6 +219,8 @@ pub enum Cmd {
     ConvertToSymbol,
     NewSymbol,
     NewFromTemplate,
+    /// A command of the animation program's timeline.
+    Frame(FrameCmd),
     /// Opens Make a GIF, which turns picture files into an animation.
     GifWizard,
     /// Opens the example with this place in the list.
@@ -352,6 +354,52 @@ pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[
         cmd("Live filters", "", Cmd::Example(5)),
         cmd("Web page mockup", "", Cmd::Example(6)),
     ],
+    ),
+];
+
+/// What the animation program does with its timeline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FrameCmd {
+    InsertFrame,
+    RemoveFrame,
+    Keyframe,
+    BlankKeyframe,
+    ClearKeyframe,
+    Tween,
+    RemoveTween,
+    Play,
+    Rewind,
+    Forward,
+    Back,
+    PublishHtml,
+}
+
+/// The menus the animation program has beside PisiWorks' own, where Flash has them: after Modify.
+pub const SAHNE_MENUS: &[(&str, &[Entry])] = &[
+    (
+        "Timeline",
+        &[
+            cmd("Insert Frame", "F5", Cmd::Frame(FrameCmd::InsertFrame)),
+            cmd("Remove Frames", "Shift+F5", Cmd::Frame(FrameCmd::RemoveFrame)),
+            Sep,
+            cmd("Insert Keyframe", "F6", Cmd::Frame(FrameCmd::Keyframe)),
+            cmd("Insert Blank Keyframe", "F7", Cmd::Frame(FrameCmd::BlankKeyframe)),
+            cmd("Clear Keyframe", "Shift+F6", Cmd::Frame(FrameCmd::ClearKeyframe)),
+            Sep,
+            cmd("Create Motion Tween", "", Cmd::Frame(FrameCmd::Tween)),
+            cmd("Remove Tween", "", Cmd::Frame(FrameCmd::RemoveTween)),
+        ],
+    ),
+    (
+        "Control",
+        &[
+            cmd("Play", "Enter", Cmd::Frame(FrameCmd::Play)),
+            cmd("Rewind", "", Cmd::Frame(FrameCmd::Rewind)),
+            cmd("Step Forward One Frame", ".", Cmd::Frame(FrameCmd::Forward)),
+            cmd("Step Backward One Frame", ",", Cmd::Frame(FrameCmd::Back)),
+            Sep,
+            cmd("Publish as HTML5...", "", Cmd::Frame(FrameCmd::PublishHtml)),
+        ],
     ),
 ];
 

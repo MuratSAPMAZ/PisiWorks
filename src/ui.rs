@@ -146,7 +146,15 @@ impl Workspace {
                         ))
                     })
         };
-        let titles: Vec<_> = MENUS.iter().enumerate().map(|(i, menu)| title_of(i, menu, false)).collect();
+        let mut titles: Vec<_> = MENUS.iter().enumerate().map(|(i, menu)| title_of(i, menu, false)).collect();
+        // The animation program has its timeline menus where Flash has them, after Modify.
+        if crate::theme::is_sahne() {
+            let after = MENUS.iter().position(|(title, _)| *title == "Modify").map_or(titles.len(), |at| at + 1);
+            let first = MENUS.len() + crate::menus::EXTRA_MENUS.len();
+            for (i, menu) in crate::menus::SAHNE_MENUS.iter().enumerate() {
+                titles.insert(after + i, title_of(first + i, menu, false));
+            }
+        }
         // PisiWorks' own menus are numbered after the others and stand at the right.
         let extras: Vec<_> = crate::menus::EXTRA_MENUS.iter().enumerate().map(|(i, menu)| title_of(MENUS.len() + i, menu, true)).collect();
         let window_button = |id: &'static str, name: &'static str, area: WindowControlArea, close: bool| {
@@ -229,7 +237,7 @@ impl Workspace {
                         .font_weight(FontWeight::BOLD)
                         .text_color(rgb(APP_MARK_COLOR)),
                 )
-                .child(APP_MARK),
+                .child(crate::theme::app_mark()),
             )
             .child(div().h_full().flex().flex_none().children(titles))
             .child(div().w(px(1.)).h(px(20.)).mx_2().flex_none().bg(rgb(SEPARATOR)))
@@ -1836,6 +1844,7 @@ impl Render for Workspace {
                             .flex()
                             .flex_col()
                             .child(self.document(cx))
+                            .children(self.timeline_view(cx))
                             .when(self.panel_open(Panel::Properties), |d| d.child(self.properties(cx))),
                     )
                     .children(self.dock(cx)),
