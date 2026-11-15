@@ -365,7 +365,6 @@ pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[
         cmd("Web page mockup", "", Cmd::Example(6)),
     ],
     ),
-    ("PisiSahne", &[cmd("Open in PisiSahne", "", Cmd::OpenInOther)]),
 ];
 
 /// The menus at the right end of the animation program's menu bar: its own examples, and the way back to PisiWorks.
@@ -395,7 +394,6 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
     ),
     ("Behaviors", BEHAVIOR_MENU),
     ("Rules", &[cmd("Rules and Numbers...", "", Cmd::Rules), Sep, cmd("Test Movie", "Ctrl+Enter", Cmd::Frame(FrameCmd::TestMovie))]),
-    ("PisiWorks", &[cmd("Open Frame in PisiWorks", "", Cmd::OpenInOther)]),
 ];
 
 /// The menus at the right end of the menu bar, for the program that is running.
@@ -842,6 +840,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Import...", "Ctrl+R", Cmd::Import),
             cmd("Export...", "Ctrl+Shift+R", Cmd::Export),
+            // Hands the work to the other of the two programs. The menu shows the name that fits the program it is in.
+            cmd("Open in PisiSahne", "", Cmd::OpenInOther),
             cmd("Image Preview...", "Ctrl+Shift+X", Cmd::ImagePreview),
             Sep,
             cmd("Batch Process...", "", Cmd::BatchProcess),

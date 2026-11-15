@@ -186,7 +186,7 @@ Bu aşamada çalışanlar:
 <p align="center"><img src="docs/images/pisi-demir-pence.png" alt="Pisi: Demir Pençe" width="720"></p>
 
 - Örnekler menüsünde on dört hazır film daha: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, sırayla, çöp adam dövüşü, davranışlar, çizilmiş karakterleri, hareket eden manzarası, parlamaları ve programda üretilmiş sesleriyle beş oyun (elma yakala, hedef vurma, platform, uzay atışı, bilgi yarışması), düğmeli iki sahne. Kılavuzda her oyun bir ders olarak anlatılır. Kılavuzda dövüş adım adım ders olarak anlatılır.
-- PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
+- PisiWorks ile alışveriş: PisiWorks'teki **Dosya > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **Dosya > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 

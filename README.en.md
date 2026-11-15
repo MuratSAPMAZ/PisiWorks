@@ -185,7 +185,7 @@ Working at this stage:
 <p align="center"><img src="docs/images/pisi-demir-pence.png" alt="Pisi: Iron Claw" width="720"></p>
 
 - Fourteen more ready films in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, one after another, a stick-figure fight, behaviors, five games (catch the apples, hit the targets, a platform game, a space shooter, a quiz) with drawn characters, moving scenery, bursts and sounds made in the program, and two scenes with buttons. The guide has each game as a lesson. The guide has the fight as a lesson, step by step.
-- Exchange with PisiWorks: **PisiSahne > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **PisiWorks > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
+- Exchange with PisiWorks: **File > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **File > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 

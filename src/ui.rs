@@ -283,7 +283,8 @@ impl Workspace {
                         }))
                     })
                     .when(checked, |d| d.child(div().absolute().left(px(1.)).child(icon("check", 10., TEXT))))
-                    .child(t(name))
+                    // The one command that leads to the other program is named after where it leads.
+                    .child(if *cmd == Some(Cmd::OpenInOther) && crate::theme::is_sahne() { t("Open Frame in PisiWorks") } else { t(name) })
                     .child(div().text_color(rgb(TEXT_DIM)).child(self.shortcut_of(name, keys)))
                     .into_any_element()
             }
