@@ -365,9 +365,71 @@ pub struct Stroke {
     pub width: f32,
 }
 
+/// How the edge of a fill is drawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FillEdge {
+    /// Every pixel is filled or not.
+    Hard,
+    #[default]
+    AntiAlias,
+    /// The edge fades out over a number of pixels.
+    Feather,
+}
+
+impl FillEdge {
+    pub const ALL: [FillEdge; 3] = [FillEdge::Hard, FillEdge::AntiAlias, FillEdge::Feather];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FillEdge::Hard => t("Hard"),
+            FillEdge::AntiAlias => t("Anti-Alias"),
+            FillEdge::Feather => t("Feather"),
+        }
+    }
+}
+
+/// The edge of a fill and the texture laid into it. The default is an anti-aliased edge and no texture.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FillLook {
+    #[serde(default)]
+    pub edge: FillEdge,
+    /// How many pixels a feathered edge fades over.
+    #[serde(default = "feather_start")]
+    pub feather: f32,
+    /// Which texture, counted from 1; 0 is none.
+    #[serde(default)]
+    pub texture: u8,
+    /// How strongly the texture shows, in percent.
+    #[serde(default = "texture_start")]
+    pub texture_amount: f32,
+}
+
+fn feather_start() -> f32 {
+    10.0
+}
+
+fn texture_start() -> f32 {
+    50.0
+}
+
+impl Default for FillLook {
+    fn default() -> Self {
+        Self { edge: FillEdge::AntiAlias, feather: feather_start(), texture: 0, texture_amount: texture_start() }
+    }
+}
+
+impl FillLook {
+    /// Whether the fill is drawn the ordinary way: an anti-aliased edge and no texture.
+    pub fn is_plain(&self) -> bool {
+        self.edge == FillEdge::AntiAlias && (self.texture == 0 || self.texture_amount <= 0.0)
+    }
+}
+
 /// What an object can be filled with besides one color: Fireworks' gradients, and a pattern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FillKind {
+    /// Two colors pixel by pixel in a checkerboard, which the eye mixes into one a browser may not have.
+    WebDither,
     Linear,
     Radial,
     Ellipse,
@@ -385,7 +447,8 @@ pub enum FillKind {
 
 impl FillKind {
     /// The gradients in the order of Fireworks' fill list, then the pattern.
-    pub const ALL: [FillKind; 13] = [
+    pub const ALL: [FillKind; 14] = [
+        FillKind::WebDither,
         FillKind::Linear,
         FillKind::Radial,
         FillKind::Ellipse,
@@ -403,6 +466,7 @@ impl FillKind {
 
     pub fn label(self) -> &'static str {
         match self {
+            FillKind::WebDither => t("Web Dither"),
             FillKind::Linear => t("Linear"),
             FillKind::Radial => t("Radial"),
             FillKind::Ellipse => t("Ellipse"),
@@ -444,6 +508,9 @@ pub struct FillStyle {
     pub pattern: u8,
     #[serde(default = "full_scale")]
     pub scale: f32,
+    /// How wide an Ellipse or Rectangle gradient is across the line between its handles, as a part of that line's length; none is the usual width of the kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<f32>,
 }
 
 fn full_scale() -> f32 {
@@ -454,13 +521,36 @@ impl FillStyle {
     /// A fill of a kind running between two colors, with its handles where they start out.
     pub fn new(kind: FillKind, from: Color, to: Color) -> Self {
         let (start, end) = kind.start_handles();
-        Self { kind, stops: vec![(0.0, from), (1.0, to)], start, end, pattern: 0, scale: 100.0 }
+        Self { kind, stops: vec![(0.0, from), (1.0, to)], start, end, pattern: 0, scale: 100.0, width: None }
     }
 
     /// The handles on the page, for an object with this box.
     pub fn handles(&self, bounds: Rect) -> (Vec2, Vec2) {
         let place = |p: Vec2| v2(bounds.x + p.x * bounds.w, bounds.y + p.y * bounds.h);
         (place(self.start), place(self.end))
+    }
+
+    /// How wide the gradient is across its line, as a part of the line's length. Only Ellipse and Rectangle have a width.
+    pub fn across(&self) -> Option<f32> {
+        match self.kind {
+            FillKind::Ellipse => Some(self.width.unwrap_or(0.5).max(0.02)),
+            FillKind::Rectangle => Some(self.width.unwrap_or(1.0).max(0.02)),
+            _ => None,
+        }
+    }
+
+    /// The third handle of an Ellipse or Rectangle gradient on the page: square to its line at the start, as far out as it is wide.
+    pub fn width_handle(&self, bounds: Rect) -> Option<Vec2> {
+        let width = self.across()?;
+        let (start, end) = self.handles(bounds);
+        Some(v2(start.x - (end.y - start.y) * width, start.y + (end.x - start.x) * width))
+    }
+
+    /// Sets the width from where the third handle is dragged to.
+    pub fn set_width_handle(&mut self, at: Vec2, bounds: Rect) {
+        let (start, end) = self.handles(bounds);
+        let length = (end.x - start.x).hypot(end.y - start.y).max(0.001);
+        self.width = Some(((at.x - start.x).hypot(at.y - start.y) / length).clamp(0.02, 20.0));
     }
 
     /// Puts a handle at a place on the page.
@@ -485,11 +575,10 @@ impl FillStyle {
         // Up to 1 and back down to 0, once for each whole number.
         let wave = |v: f32| 1.0 - (v.rem_euclid(1.0) * 2.0 - 1.0).abs();
         match self.kind {
-            FillKind::Linear | FillKind::Pattern => along,
+            FillKind::Linear | FillKind::Pattern | FillKind::WebDither => along,
             FillKind::Radial => far,
-            // An ellipse half as tall as it is long.
-            FillKind::Ellipse => along.hypot(across * 2.0),
-            FillKind::Rectangle => along.abs().max(across.abs()),
+            FillKind::Ellipse => along.hypot(across / self.across().unwrap_or(0.5)),
+            FillKind::Rectangle => along.abs().max(across.abs() / self.across().unwrap_or(1.0)),
             FillKind::Cone => turn,
             FillKind::Contour => 1.0 - depth,
             FillKind::Starburst => wave(turn * 8.0),
@@ -684,6 +773,9 @@ pub struct Object {
     /// is one number for each point and the path has no curve handles.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub stroke_profile: Vec<f32>,
+    /// The edge and the texture of the fill.
+    #[serde(default, skip_serializing_if = "FillLook::is_plain")]
+    pub fill_look: FillLook,
     /// Live filters, applied in this order each time the object is drawn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<crate::effects::LiveFilter>,
@@ -722,6 +814,7 @@ impl Object {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -748,6 +841,7 @@ impl Object {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -1115,6 +1209,7 @@ impl Object {
                     mask_of: None,
                     fill_style: None,
                     stroke_profile: Vec::new(),
+                    fill_look: Default::default(),
                     filters: Vec::new(),
                     fill: self.fill,
                     stroke: None,
@@ -2661,7 +2756,7 @@ impl Editor {
     /// it has to be shown as the exporter renders it.
     pub fn needs_compositing(&self) -> bool {
         fn special(object: &Object) -> bool {
-            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || !object.stroke_profile.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || !object.fill_look.is_plain() || !object.stroke_profile.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
         self.doc.page().objects().any(|o| o.visible && special(o))
     }
@@ -3306,6 +3401,7 @@ impl Editor {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -3619,6 +3715,7 @@ impl Editor {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -4183,6 +4280,7 @@ mod tests {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,

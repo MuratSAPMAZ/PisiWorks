@@ -430,15 +430,24 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
         return;
     }
     if let Shape::Text { content, size, style } = &object.shape {
-        draw_text(pixmap, object, content, *size, style);
+        // Text filled with a gradient, a pattern or a texture is filled through the outlines of its letters.
+        if object.fill_style.is_some() || !object.fill_look.is_plain() {
+            if let Some(path) = text_path(object, content, *size, style) {
+                draw_styled_fill(pixmap, object, &path);
+            }
+        } else {
+            draw_text(pixmap, object, content, *size, style);
+        }
         return;
     }
     if let Shape::Image { bitmap } = &object.shape {
         draw_bitmap(pixmap, object, bitmap);
         return;
     }
-    if let (Some(style), Some(_)) = (&object.fill_style, object.fill) {
-        draw_styled_fill(pixmap, object, style);
+    if object.fill.is_some() && (object.fill_style.is_some() || !object.fill_look.is_plain()) {
+        if let Some(path) = sk_path(&object.outline(), object.is_closed()) {
+            draw_styled_fill(pixmap, object, &path);
+        }
     } else if let Some(fill) = object.fill {
         if let Some(path) = sk_path(&object.outline(), object.is_closed()) {
             pixmap.fill_path(&path, &sk_paint(fill, object.opacity), FillRule::EvenOdd, Transform::identity(), None);
@@ -497,46 +506,82 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
 
 /// Fills an object with its gradient or pattern: its shape is drawn on its own to
 /// find how much of each pixel it covers, and each covered pixel gets the color the fill has there.
-fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, style: &crate::model::FillStyle) {
-    use crate::model::FillKind;
-    let Some(path) = sk_path(&object.outline(), object.is_closed()) else { return };
+fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, path: &tiny_skia::Path) {
+    use crate::model::{FillEdge, FillKind};
+    let (style, look) = (object.fill_style.as_deref(), object.fill_look);
+    let Some(solid) = object.fill else { return };
     let b = object.bounds;
-    // The part of the page the shape can touch.
-    let (left, top) = ((b.x.floor() as i32 - 1).max(0), (b.y.floor() as i32 - 1).max(0));
-    let (right, bottom) = ((b.right().ceil() as i32 + 1).min(pixmap.width() as i32), (b.bottom().ceil() as i32 + 1).min(pixmap.height() as i32));
+    // The part of the page the shape can touch; a feathered edge reaches further out.
+    let room = if look.edge == FillEdge::Feather { (look.feather * 3.0).ceil() as i32 + 1 } else { 1 };
+    let (left, top) = ((b.x.floor() as i32 - room).max(0), (b.y.floor() as i32 - room).max(0));
+    let (right, bottom) = ((b.right().ceil() as i32 + room).min(pixmap.width() as i32), (b.bottom().ceil() as i32 + room).min(pixmap.height() as i32));
     if right <= left || bottom <= top {
         return;
     }
     let (w, h) = ((right - left) as u32, (bottom - top) as u32);
     let Some(mut shape) = Pixmap::new(w, h) else { return };
-    shape.fill_path(&path, &sk_paint(Color::BLACK, 1.0), FillRule::EvenOdd, Transform::from_translate(-left as f32, -top as f32), None);
-    let covered: Vec<f32> = shape.pixels().iter().map(|px| px.alpha() as f32 / 255.0).collect();
+    shape.fill_path(path, &sk_paint(Color::BLACK, 1.0), FillRule::EvenOdd, Transform::from_translate(-left as f32, -top as f32), None);
+    let drawn: Vec<f32> = shape.pixels().iter().map(|px| px.alpha() as f32 / 255.0).collect();
+    let covered: Vec<f32> = match look.edge {
+        FillEdge::AntiAlias => drawn.clone(),
+        FillEdge::Hard => drawn.iter().map(|c| if *c >= 0.5 { 1.0 } else { 0.0 }).collect(),
+        FillEdge::Feather => crate::effects::blur_channel(&drawn, w as usize, h as usize, look.feather.max(0.1)),
+    };
     // A contour follows the outline, so it needs to know how deep inside each pixel lies.
-    let depth: Vec<f32> = if style.kind == FillKind::Contour {
-        let outside: Vec<f32> = covered.iter().map(|c| if *c < 0.5 { 1.0 } else { 0.0 }).collect();
+    let depth: Vec<f32> = if style.is_some_and(|style| style.kind == FillKind::Contour) {
+        let outside: Vec<f32> = drawn.iter().map(|c| if *c < 0.5 { 1.0 } else { 0.0 }).collect();
         let far = crate::pseffects::distances(&outside, w as usize, h as usize);
         // The frame of the box counts as outside too, for a shape that fills it.
         let edge = |at: usize| ((at % w as usize).min(w as usize - 1 - at % w as usize).min(at / w as usize).min(h as usize - 1 - at / w as usize)) as f32 + 1.0;
         let far: Vec<f32> = far.iter().enumerate().map(|(at, d)| d.min(edge(at))).collect();
-        let deepest = far.iter().zip(&covered).filter(|(_, c)| **c >= 0.5).map(|(d, _)| *d).fold(1.0, f32::max);
+        let deepest = far.iter().zip(&drawn).filter(|(_, c)| **c >= 0.5).map(|(d, _)| *d).fold(1.0, f32::max);
         far.iter().map(|d| (d / deepest).clamp(0.0, 1.0)).collect()
     } else {
         Vec::new()
     };
-    let scale = (style.scale / 100.0).max(0.01);
+    let plain = [solid.r as f32 / 255.0, solid.g as f32 / 255.0, solid.b as f32 / 255.0];
+    let texture = (look.texture > 0).then(|| (look.texture as usize - 1, (look.texture_amount / 100.0).clamp(0.0, 1.0)));
     for (at, coverage) in covered.iter().enumerate().filter(|(_, c)| **c > 0.0) {
         let (x, y) = (left + (at as u32 % w) as i32, top + (at as u32 / w) as i32);
         let p = Vec2 { x: x as f32 + 0.5, y: y as f32 + 0.5 };
-        let (color, opacity) = if style.kind == FillKind::Pattern {
+        let (mut color, opacity) = match style {
+            None => (plain, solid.a as f32 / 255.0),
             // A pattern is laid from the corner of the object, so it moves with it.
-            (crate::pseffects::pattern(style.pattern as usize, (p.x - b.x) / scale, (p.y - b.y) / scale), 1.0)
-        } else {
-            crate::pseffects::gradient_color(&style.stops, style.place(p, b, depth.get(at).copied().unwrap_or(0.0)))
+            Some(style) if style.kind == FillKind::Pattern => {
+                let scale = (style.scale / 100.0).max(0.01);
+                (crate::pseffects::pattern(style.pattern as usize, (p.x - b.x) / scale, (p.y - b.y) / scale), 1.0)
+            }
+            // A web dither is its first and its last color, pixel by pixel in turn.
+            Some(style) if style.kind == FillKind::WebDither => {
+                let odd = (x + y).rem_euclid(2) == 1;
+                crate::pseffects::gradient_color(&style.stops, if odd { 1.0 } else { 0.0 })
+            }
+            Some(style) => crate::pseffects::gradient_color(&style.stops, style.place(p, b, depth.get(at).copied().unwrap_or(0.0))),
         };
+        // A texture darkens the fill where the texture is dark, as much as its amount says.
+        if let Some((which, amount)) = texture {
+            let dark = (0.92 - crate::pseffects::pattern(which, p.x - b.x, p.y - b.y)[0]) / 0.57;
+            color = color.map(|c| c * (1.0 - dark * amount));
+        }
         let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
         let tone = Color { r: channel(color[0]), g: channel(color[1]), b: channel(color[2]), a: channel(opacity * object.opacity) };
-        blend_pixel(pixmap, x, y, tone, *coverage);
+        blend_pixel(pixmap, x, y, tone, coverage.clamp(0.0, 1.0));
     }
+}
+
+/// The letters of a text as one path, for filling them with something other than one color.
+fn text_path(object: &Object, content: &str, size: f32, style: &TextStyle) -> Option<tiny_skia::Path> {
+    let frame = object.placement.map_or(object.bounds, |p| p.frame);
+    let mut builder = PathBuilder::new();
+    for ring in glyph_outlines(content, size, Vec2 { x: frame.x, y: frame.y }, style).into_iter().flatten() {
+        let Some((first, rest)) = ring.split_first() else { continue };
+        builder.move_to(first.x, first.y);
+        for p in rest {
+            builder.line_to(p.x, p.y);
+        }
+        builder.close();
+    }
+    builder.finish()
 }
 
 pub fn render_page(page: &Page) -> Result<Pixmap> {
@@ -697,6 +742,7 @@ mod tests {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
@@ -830,6 +876,54 @@ mod tests {
         let large = filled(pattern);
         assert_eq!(rgba(&large, 6, 6), rgba(&large, 14, 6));
         assert_ne!(rgba(&large, 6, 6), rgba(&large, 22, 6));
+        // An Ellipse gradient is half as wide as it is long, until its third handle says otherwise.
+        let mut ellipse = FillStyle::new(FillKind::Ellipse, black, white);
+        let narrow = filled(ellipse.clone());
+        assert!(rgba(&narrow, 20, 12).0 > 235 && rgba(&narrow, 28, 20).0 < 150);
+        let frame = Rect { x: 4.0, y: 4.0, w: 32.0, h: 32.0 };
+        assert_eq!(ellipse.width_handle(frame), Some(Vec2 { x: 20.0, y: 28.0 }));
+        ellipse.set_width_handle(Vec2 { x: 20.0, y: 36.0 }, frame);
+        assert!(rgba(&filled(ellipse), 20, 12).0 < 150, "as wide as long, it is round");
+        assert!(FillStyle::new(FillKind::Linear, black, white).width_handle(frame).is_none());
+        // A web dither is its two colors, pixel by pixel in turn.
+        let dither = filled(FillStyle::new(FillKind::WebDither, black, white));
+        assert_eq!((rgba(&dither, 10, 10).0, rgba(&dither, 11, 10).0, rgba(&dither, 11, 11).0), (0, 255, 0));
+        // The edge: hard has no half-covered pixels, feathered fades out past the shape, and a texture darkens in places.
+        use crate::model::{FillEdge, FillLook};
+        let looked = |look: FillLook| {
+            let mut p = page();
+            p.canvas = None;
+            let mut object = red_box(4.0, 32.0);
+            object.shape = Shape::Ellipse;
+            object.bounds = Rect { x: 4.0, y: 4.0, w: 32.0, h: 32.0 };
+            object.fill_look = look;
+            p.layers[0].objects.push(object);
+            render_page(&p).unwrap()
+        };
+        let hard = looked(FillLook { edge: FillEdge::Hard, ..FillLook::default() });
+        assert!(hard.pixels().iter().all(|px| px.alpha() == 0 || px.alpha() == 255));
+        assert!(looked(FillLook::default()).pixels().iter().any(|px| px.alpha() > 0 && px.alpha() < 255));
+        let soft = looked(FillLook { edge: FillEdge::Feather, feather: 3.0, ..FillLook::default() });
+        assert!(rgba(&soft, 20, 20).3 > 250 && (40..215).contains(&rgba(&soft, 4, 20).3) && rgba(&soft, 1, 20).3 > 0, "{:?}", rgba(&soft, 4, 20));
+        let rough = looked(FillLook { texture: 1, texture_amount: 100.0, ..FillLook::default() });
+        let reds: std::collections::HashSet<u8> = (12..28).map(|x| rgba(&rough, x, 20).0).collect();
+        assert!(reds.len() >= 2 && reds.contains(&255), "{reds:?}");
+        assert!(FillLook::default().is_plain() && !FillLook { texture: 1, ..FillLook::default() }.is_plain());
+        // Text is filled through its letters: red at the left of the word, blue at the right.
+        if font().is_some() {
+            let mut p = page();
+            p.canvas = None;
+            let mut text = red_box(2.0, 36.0);
+            text.shape = Shape::Text { content: "HHHH".into(), size: 12.0, style: Default::default() };
+            text.refit_text();
+            text.fill_style = Some(Arc::new(FillStyle::new(FillKind::Linear, Color::rgb(255, 0, 0), Color::rgb(0, 0, 255))));
+            let (left, right) = (text.bounds.x as u32 + 1, text.bounds.right() as u32 - 2);
+            p.layers[0].objects.push(text);
+            let image = render_page(&p).unwrap();
+            let inked = |x: u32| (0..40).map(|y| rgba(&image, x, y)).find(|px| px.3 > 200);
+            let (first, last) = ((left..left + 6).find_map(inked).unwrap(), (right - 6..right).rev().find_map(inked).unwrap());
+            assert!(first.0 > 180 && last.2 > 180, "{first:?} {last:?}");
+        }
         // Every kind draws something and stays inside the object.
         for kind in FillKind::ALL {
             let drawn = filled(FillStyle::new(kind, black, white));

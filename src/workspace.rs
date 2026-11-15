@@ -106,6 +106,8 @@ pub enum Combo {
     FillPattern,
     ToneRange,
     PolygonShape,
+    FillEdge,
+    FillTexture,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -338,6 +340,8 @@ pub enum FieldId {
     ScrubRate,
     WandTolerance,
     BucketTolerance,
+    FillFeather,
+    TextureAmount,
     GuidePosition,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
@@ -477,7 +481,7 @@ pub enum Drag {
     /// Dragging one of the four cuts of 9-slice scaling: the two upright ones, then the two level ones.
     NineGuide(usize),
     /// Dragging a handle of a gradient fill: its end, or else its start.
-    FillHandle { end: bool },
+    FillHandle { end: bool, width: bool },
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
     Guide { horizontal: bool, index: Option<usize>, at: f32 },
     Resize { handle: usize, origin: Rect },
@@ -1328,13 +1332,30 @@ impl Workspace {
     }
 
     /// The two handles of the gradient of the one selected object, on the page: where it starts and where it ends.
-    pub fn fill_handles(&self) -> Option<(Vec2, Vec2)> {
+    pub fn fill_handles(&self) -> Option<(Vec2, Vec2, Option<Vec2>)> {
         if self.tool != Tool::Pointer || self.ed.selection.len() != 1 {
             return None;
         }
         let object = self.ed.selected().into_iter().next()?;
-        let style = object.fill_style.as_deref().filter(|style| !matches!(style.kind, FillKind::Pattern | FillKind::Contour))?;
-        Some(style.handles(object.bounds))
+        let style = object.fill_style.as_deref().filter(|style| !matches!(style.kind, FillKind::Pattern | FillKind::Contour | FillKind::WebDither))?;
+        let (start, end) = style.handles(object.bounds);
+        // An Ellipse or Rectangle gradient has a third handle, for how wide it is.
+        Some((start, end, style.width_handle(object.bounds)))
+    }
+
+    /// The edge and texture of the first selected vector's fill.
+    pub fn current_fill_look(&self) -> crate::model::FillLook {
+        self.ed.selected().iter().find(|o| o.takes_color()).map_or_else(Default::default, |o| o.fill_look)
+    }
+
+    /// Changes the edge or the texture of the fill of the selected vectors.
+    pub fn change_fill_look(&mut self, change: impl Fn(&mut crate::model::FillLook)) {
+        self.ed.for_selected(|o| {
+            if o.takes_color() {
+                change(&mut o.fill_look);
+            }
+        });
+        self.ed.commit(t("Fill"));
     }
 
     /// The five numbers of the Levels channel on show.
@@ -3312,11 +3333,15 @@ impl Workspace {
 
     fn pointer_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
         // The handles of a gradient come first: they may lie outside the object.
-        if let Some((start, end)) = self.fill_handles() {
+        if let Some((start, end, width)) = self.fill_handles() {
             let reach = 6.0 / self.zoom;
             let near = |handle: Vec2| (handle.x - p.x).abs() <= reach && (handle.y - p.y).abs() <= reach;
+            if width.is_some_and(near) {
+                self.drag = Some(Drag::FillHandle { end: false, width: true });
+                return;
+            }
             if near(end) || near(start) {
-                self.drag = Some(Drag::FillHandle { end: near(end) });
+                self.drag = Some(Drag::FillHandle { end: near(end), width: false });
                 return;
             }
         }
@@ -3978,6 +4003,7 @@ impl Workspace {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
@@ -4145,12 +4171,15 @@ impl Workspace {
                     self.nine_guides[index] = part.clamp(0.0, 1.0);
                 }
             }
-            Drag::FillHandle { end } => {
-                let end = *end;
+            Drag::FillHandle { end, width } => {
+                let (end, width) = (*end, *width);
                 self.ed.for_selected(|o| {
                     let bounds = o.bounds;
                     if let Some(style) = o.fill_style.as_mut() {
-                        Arc::make_mut(style).set_handle(end, on_guides, bounds);
+                        match width {
+                            true => Arc::make_mut(style).set_width_handle(on_guides, bounds),
+                            false => Arc::make_mut(style).set_handle(end, on_guides, bounds),
+                        }
                     }
                 });
             }
@@ -4443,10 +4472,10 @@ impl Workspace {
         let fallback = self.fill.unwrap_or(Color::BLACK);
         let mut any = false;
         self.ed.for_selected(|o| {
-            if !o.takes_color() || matches!(o.shape, Shape::Text { .. } | Shape::Line) {
+            if !o.takes_color() || matches!(o.shape, Shape::Line) {
                 return;
             }
-            let mut style = o.fill_style.as_deref().cloned().filter(|style| style.kind != FillKind::Pattern).unwrap_or_else(|| {
+            let mut style = o.fill_style.as_deref().cloned().filter(|style| !matches!(style.kind, FillKind::Pattern | FillKind::WebDither)).unwrap_or_else(|| {
                 let from = o.fill.unwrap_or(fallback);
                 let light = from.r as u32 + from.g as u32 + from.b as u32 > 600;
                 FillStyle::new(FillKind::Linear, from, if light { Color::BLACK } else { Color::rgb(255, 255, 255) })
@@ -5132,6 +5161,8 @@ impl Workspace {
             FieldId::PathPrecision => number(self.tool_options.precision),
             FieldId::ScrubRate => number(self.tool_options.rate),
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
+            FieldId::FillFeather => number(self.current_fill_look().feather),
+            FieldId::TextureAmount => number(self.current_fill_look().texture_amount),
             FieldId::GuidePosition => self.guide_dialog.map_or_else(String::new, |(_, _, place)| number(place)),
             FieldId::BucketTolerance => number(self.tool_options.bucket_tolerance),
             FieldId::FreeformSize => number(self.freeform_size),
@@ -5324,6 +5355,14 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::FillFeather => {
+                let Some(v) = number.filter(|v| *v >= 0.0) else { return };
+                self.change_fill_look(|look| look.feather = v.min(100.0));
+            }
+            FieldId::TextureAmount => {
+                let Some(v) = number.filter(|v| *v >= 0.0) else { return };
+                self.change_fill_look(|look| look.texture_amount = v.min(100.0));
             }
             FieldId::GuidePosition => {
                 let (Some(v), Some(dialog)) = (number, self.guide_dialog.as_mut()) else { return };

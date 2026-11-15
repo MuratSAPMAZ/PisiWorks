@@ -880,6 +880,7 @@ impl Workspace {
             mask_of: None,
             fill_style: None,
             stroke_profile: Vec::new(),
+            fill_look: Default::default(),
             filters: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
@@ -1056,7 +1057,7 @@ impl Workspace {
             _ => {}
         }
         // What a vector is filled with: one color, a gradient or a pattern, and a button to edit the latter two.
-        if first.takes_color() && !matches!(first.shape, crate::model::Shape::Text { .. } | crate::model::Shape::Line) {
+        if first.takes_color() && !matches!(first.shape, crate::model::Shape::Line) {
             let style = self.current_fill_style();
             let shown = style.as_ref().map_or(t("Solid"), |style| style.kind.label());
             extra = extra.child(
@@ -1067,6 +1068,31 @@ impl Workspace {
                     .child(self.combo(Combo::FillKind, shown, 124., cx).bg(rgb(PANEL_RAISED)))
                     .when(style.is_some(), |d| d.child(self.text_button(t("Edit..."), true, cx, |this, _, _| this.open_fill_dialog()))),
             );
+            // The edge of the fill, with the width of a feathered one, and the texture laid into it, with its strength.
+            let look = self.current_fill_look();
+            let texture = match look.texture {
+                0 => t("None"),
+                n => crate::pseffects::label(crate::pseffects::PATTERNS[(n as usize - 1).min(crate::pseffects::PATTERNS.len() - 1)]),
+            };
+            extra = extra
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(label(t("Edge:")))
+                        .child(self.combo(Combo::FillEdge, look.edge.label(), 110., cx).bg(rgb(PANEL_RAISED)))
+                        .when(look.edge == crate::model::FillEdge::Feather, |d| d.child(self.field(FieldId::FillFeather, 30., cx))),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(label(t("Texture:")))
+                        .child(self.combo(Combo::FillTexture, texture, 100., cx).bg(rgb(PANEL_RAISED)))
+                        .when(look.texture > 0, |d| d.child(self.field(FieldId::TextureAmount, 30., cx)).child(label("%"))),
+                );
         }
         let color_label_width = label_width(&[t("Fill:"), t("Stroke:"), t("Width:")], 34.);
         let color_line = |this: &Self, name: &'static str, target, hex, cx: &mut Context<Self>| {

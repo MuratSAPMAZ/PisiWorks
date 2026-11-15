@@ -176,7 +176,7 @@ pub struct Scene {
     /// The lines drawn across the whole view: whether each runs across, where it is on the page, and its color.
     guide_lines: Vec<(bool, f32, u32)>,
     /// The handles of the selected object's gradient: where it starts and where it ends.
-    fill_handles: Option<(Vec2, Vec2)>,
+    fill_handles: Option<(Vec2, Vec2, Option<Vec2>)>,
     /// The cuts of 9-slice scaling: the box of the selection, and where the two upright and two level cuts are.
     nine_cuts: Option<(Rect, [f32; 4])>,
     stroke: Option<Color>,
@@ -422,8 +422,16 @@ impl Scene {
             window.paint_quad(outline(page_bounds, rgb(theme::BORDER), BorderStyle::Solid));
             if overlays {
                 self.paint_overlays(map, window);
-                if let Some((start, end)) = self.fill_handles {
+                if let Some((start, end, width)) = self.fill_handles {
                     let (from, to) = (map.to_screen(start), map.to_screen(end));
+                    // The handle for the width stands square to the line, on a line of its own.
+                    if let Some(across) = width.map(|p| map.to_screen(p)) {
+                        if let Some(line) = build_path(&[from, across], false, Some(1.0)) {
+                            window.paint_path(line, rgb(0x000000));
+                        }
+                        let knob = Bounds { origin: point(across.x - px(3.), across.y - px(3.)), size: size(px(6.), px(6.)) };
+                        window.paint_quad(fill(knob, rgb(0x000000)).border_widths(1.).border_color(rgb(0xffffff)));
+                    }
                     if let Some(line) = build_path(&[from, to], false, Some(1.0)) {
                         window.paint_path(line, rgb(0x000000));
                     }
@@ -659,6 +667,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         mask_of: None,
         fill_style: None,
         stroke_profile: Vec::new(),
+        fill_look: Default::default(),
         filters: Vec::new(),
         fill: None,
         stroke: None,

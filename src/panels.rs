@@ -64,6 +64,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         mask_of: None,
         fill_style: None,
         stroke_profile: Vec::new(),
+        fill_look: Default::default(),
         filters: Vec::new(),
         fill,
         stroke,
@@ -388,6 +389,15 @@ impl Workspace {
                     });
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
+                .collect(),
+            Combo::FillEdge => crate::model::FillEdge::ALL
+                .into_iter()
+                .map(|edge| item(edge.label().into(), self.current_fill_look().edge == edge, cx, Box::new(move |this, _, _| this.change_fill_look(|look| look.edge = edge))))
+                .collect(),
+            Combo::FillTexture => std::iter::once(t("None"))
+                .chain(crate::pseffects::PATTERNS.iter().map(|name| crate::pseffects::label(name)))
+                .enumerate()
+                .map(|(index, name)| item(name.into(), self.current_fill_look().texture as usize == index, cx, Box::new(move |this, _, _| this.change_fill_look(|look| look.texture = index as u8))))
                 .collect(),
             Combo::ToneRange => crate::bitmap::ToneRange::ALL
                 .into_iter()

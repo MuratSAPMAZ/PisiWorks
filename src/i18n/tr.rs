@@ -936,4 +936,10 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Edit Guides...", "Kılavuzları Düzenle..."),
     ("Move Guide", "Kılavuzu Taşı"),
     ("Clear All", "Tümünü Temizle"),
+    ("Hard", "Sert"),
+    ("Anti-Alias", "Kenar Yumuşatma"),
+    ("Feather", "Geçiş Yumuşatma"),
+    ("Web Dither", "Web Renk Taklidi"),
+    ("Edge:", "Kenar:"),
+    ("Texture:", "Doku:"),
 ];
