@@ -3904,6 +3904,26 @@ impl Document {
         names
     }
 
+    /// The names worth offering in a list: those of [`Self::object_names`], less the texts that are only
+    /// called what they say. A text gets its words for a name by itself; one that was given a name is kept.
+    pub fn chosen_names(&self) -> Vec<String> {
+        let own_words = |o: &Object| matches!(&o.shape, Shape::Text { content, .. } if content.trim() == o.name.trim());
+        let all = |keep: &dyn Fn(&Object) -> bool| -> Vec<String> {
+            self.pages
+                .iter()
+                .flat_map(|page| {
+                    let kept = page.timeline.iter().flat_map(|timeline| timeline.layers.iter().flatten().flat_map(|span| span.objects.iter()));
+                    page.objects().chain(kept).filter(|o| !o.is_web() && !o.name.trim().is_empty() && keep(o)).map(|o| o.name.clone()).collect::<Vec<_>>()
+                })
+                .collect()
+        };
+        // A name that something other than such a text has is kept.
+        let mut names = all(&|o| !own_words(o));
+        names.sort();
+        names.dedup();
+        names
+    }
+
     /// The pages that are scenes of the animation, in order: every page that is not the timeline of a movie clip.
     pub fn scenes(&self) -> Vec<usize> {
         (0..self.pages.len()).filter(|index| self.pages[*index].clip_of.is_none()).collect()

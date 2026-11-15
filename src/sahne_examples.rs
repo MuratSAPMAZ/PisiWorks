@@ -613,6 +613,10 @@ mod tests {
         // Each wheel says what it is attached to, and the car, which has no behavior, is a picture the page can follow.
         assert_eq!(html.matches("\"a\":\"Car\"").count(), 2);
         assert!(html.contains("\"l\":[],\"n\":\"Car\""));
+        // The words at the top of the stage are a text called what it says: no list offers it. The car and the wheels are offered.
+        let names = doc.chosen_names();
+        assert!(names.contains(&t("Car").to_string()) && names.contains(&t("Wheel").to_string()));
+        assert!(doc.object_names().iter().any(|name| name.starts_with("Hold Right")) && !names.iter().any(|name| name.starts_with("Hold Right")));
         // It is kept with the document.
         let again = crate::model::document_from_json(&crate::model::document_to_json(&doc).unwrap()).unwrap();
         assert_eq!(again.pages[0].objects().filter(|o| o.attached == t("Car")).count(), 2);

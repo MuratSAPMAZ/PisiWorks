@@ -3643,7 +3643,7 @@ impl Workspace {
     pub fn script_offers(&self) -> Vec<crate::script_edit::Offer> {
         let Some(script) = self.script.as_ref().filter(|_| !self.script_quiet) else { return Vec::new() };
         let (numbers, commands) = crate::script::declared(&script.text());
-        let names = crate::script_edit::Names { objects: self.ed.doc.object_names(), numbers, commands, sounds: self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect() };
+        let names = crate::script_edit::Names { objects: self.ed.doc.chosen_names(), numbers, commands, sounds: self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect() };
         script.offers(&names)
     }
 
@@ -3822,7 +3822,7 @@ impl Workspace {
         let listed = |list: &[(&str, &str)]| list.iter().map(|(key, _)| (key.to_string(), choice_name(pick, key))).collect();
         let own = |names: Vec<String>| names.into_iter().map(|name| (name.clone(), name)).collect();
         match pick {
-            Pick::Object => own(self.ed.doc.object_names()),
+            Pick::Object => own(self.ed.doc.chosen_names()),
             Pick::Variable => own(self.ed.doc.variables.iter().map(|v| v.name.clone()).collect()),
             Pick::Sound => own(self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect()),
             Pick::Command => own(self.ed.doc.commands.iter().map(|c| c.name.clone()).collect()),
@@ -3980,7 +3980,23 @@ impl Workspace {
     /// The objects the selection can be attached to: every name on the stage that is not the selection's own.
     pub fn attach_choices(&self) -> Vec<String> {
         let own: Vec<&str> = self.ed.selected().iter().map(|o| o.name.as_str()).collect();
-        self.ed.doc.object_names().into_iter().filter(|name| !own.contains(&name.as_str())).collect()
+        // Only what is on this scene can be gone along with; and not what is itself attached, by however
+        // many steps, to the selection: the two would hold each other.
+        let page = self.ed.doc.page();
+        let here: Vec<&Object> = page.objects().collect();
+        let leads_back = |name: &str| {
+            let (mut at, mut steps) = (name.to_string(), 0);
+            loop {
+                if own.contains(&at.as_str()) {
+                    return true;
+                }
+                match here.iter().find(|o| o.name == at && !o.attached.is_empty()) {
+                    Some(next) if steps < 16 => (at, steps) = (next.attached.clone(), steps + 1),
+                    _ => return false,
+                }
+            }
+        };
+        self.ed.doc.chosen_names().into_iter().filter(|name| here.iter().any(|o| o.name == *name) && !leads_back(name)).collect()
     }
 
     /// Attaches the selection to the object of a name, or, with no name, lets it go.

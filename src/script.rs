@@ -567,6 +567,16 @@ pub fn offers(edge: bool) -> Vec<(String, Opens)> {
     }
 }
 
+/// The words that come just before the name of a behavior, in the sentences that give one and take one.
+pub fn behavior_leads() -> Vec<String> {
+    STEP_FORMS
+        .iter()
+        .filter(|(_, kind, _, _)| kind.needs().1 == Some(Pick::Behavior))
+        .filter_map(|(pattern, _, _, _)| t(pattern).split("{}").nth(1).map(str::to_string))
+        .filter(|lead| !lead.trim().is_empty())
+        .collect()
+}
+
 /// The names of the keys an event can wait for, as they are written.
 pub fn key_names() -> Vec<String> {
     KEYS.iter().map(|(key, _)| choice_name(Pick::Key, key)).collect()

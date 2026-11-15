@@ -301,7 +301,13 @@ impl ScriptEdit {
         }
         // The word being typed, if it is the beginning of a name. A name already whole is not offered again.
         let word: String = typed.chars().rev().take_while(|c| c.is_alphanumeric() || *c == '_').collect::<Vec<_>>().into_iter().rev().collect();
-        if !word.is_empty() {
+        // Where the sentence wants a behavior, the behaviors are offered, even before a letter of one is typed.
+        let before_word = &typed[..typed.len() - word.len()];
+        if !edge && crate::script::behavior_leads().iter().any(|lead| before_word.ends_with(lead.as_str())) {
+            let partial = word.to_lowercase();
+            let fitting = crate::behavior::KINDS.iter().map(|kind| crate::i18n::t(kind.name()).to_string()).filter(|name| name.to_lowercase().starts_with(&partial) && *name != word);
+            found.splice(0..0, fitting.map(Offer::Name));
+        } else if !word.is_empty() {
             let partial = word.to_lowercase();
             let mut fitting: Vec<&String> = names.objects.iter().chain(&names.numbers).chain(&names.commands).chain(&names.sounds).filter(|name| name.to_lowercase().starts_with(&partial) && **name != word).collect();
             fitting.sort();
@@ -481,6 +487,17 @@ mod tests {
         let offer = edit.offers(&names)[0].clone();
         edit.accept(&offer);
         assert!(edit.lines[1].ends_with(" Score"));
+        // Where a behavior is wanted the behaviors are offered: all of them at first, then those that begin as typed.
+        let mut edit = ScriptEdit::new("When the film starts:");
+        edit.end();
+        edit.newline();
+        edit.insert("give Apple the behavior ");
+        assert_eq!(shown(&edit)[..2], ["Spin", "Bounce"]);
+        edit.insert("ro");
+        assert_eq!(shown(&edit), vec!["Roll Like a Wheel"]);
+        let offer = edit.offers(&names)[0].clone();
+        edit.accept(&offer);
+        assert_eq!(edit.lines[1], "    give Apple the behavior Roll Like a Wheel");
         // What the first word is decides what is offered: `tests/turkce.rs` tries that, where sentences open with a name.
         let english = |line: &str| {
             let mut edit = ScriptEdit::new("When the film starts:");
