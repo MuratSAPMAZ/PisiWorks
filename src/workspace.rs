@@ -68,6 +68,8 @@ pub enum ColorTarget {
     JpegMask,
     /// The color of the live filter being edited.
     Filter,
+    /// The color of one of the effects in the Photoshop Live Effects being edited.
+    PsEffect(usize),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -450,6 +452,18 @@ pub struct Workspace {
     pub jpeg_dialog: Option<(ExportSettings, Option<Color>)>,
     /// The live filter whose settings are open: its place in the list, and the list to go back to on Cancel.
     pub filter_dialog: Option<(usize, Vec<LiveFilter>)>,
+    /// A live filter being dragged in the list: where it is now, where the mouse took hold, and whether it has moved.
+    pub filter_drag: Option<(usize, Point<Pixels>, bool)>,
+    /// How many pixels of the object have each level of red, green and blue, as the
+    /// filter being edited receives them. Levels draws it and Auto reads it.
+    pub filter_histogram: Option<Rc<[[u32; 256]; 3]>>,
+    /// The point of the curve being dragged in the Curves dialog.
+    pub curve_drag: Option<usize>,
+    /// The point of the curve last touched, whose levels the dialog shows.
+    pub curve_point: Option<usize>,
+    pub curve_bounds: Rc<Cell<Bounds<Pixels>>>,
+    /// The effect whose settings show in the Photoshop Live Effects dialog.
+    pub ps_effect: usize,
     /// The JPEG mask as rectangles to tint, kept until the mask changes.
     jpeg_tint: std::cell::RefCell<Option<(usize, Arc<Vec<Rect>>)>>,
     pub collapsed_layers: Vec<usize>,
@@ -661,6 +675,12 @@ impl Workspace {
             numeric_dialog: None,
             jpeg_dialog: None,
             filter_dialog: None,
+            filter_drag: None,
+            filter_histogram: None,
+            curve_drag: None,
+            curve_point: None,
+            curve_bounds: Rc::new(Cell::new(Bounds::default())),
+            ps_effect: 0,
             jpeg_tint: std::cell::RefCell::new(None),
             collapsed_layers: Vec::new(),
             properties_collapsed: false,
@@ -789,15 +809,125 @@ impl Workspace {
         let before = self.current_filters();
         self.change_filters(|filters| filters.push(LiveFilter::new(kind)));
         if !kind.settings().is_empty() || kind.start_color().is_some() {
-            self.filter_dialog = Some((before.len(), before));
+            self.show_filter_dialog(before.len(), before);
         }
     }
 
     pub fn open_filter(&mut self, index: usize) {
         let filters = self.current_filters();
         if filters.get(index).is_some_and(|f| !f.kind.settings().is_empty() || f.kind.start_color().is_some()) {
-            self.filter_dialog = Some((index, filters));
+            self.show_filter_dialog(index, filters);
         }
+    }
+
+    fn show_filter_dialog(&mut self, index: usize, before: Vec<LiveFilter>) {
+        self.filter_dialog = Some((index, before));
+        (self.curve_drag, self.curve_point, self.ps_effect) = (None, None, 0);
+        self.filter_histogram = self.histogram_before(index).map(Rc::new);
+    }
+
+    fn histogram_before(&self, index: usize) -> Option<[[u32; 256]; 3]> {
+        histogram_before(self.ed.selected().first()?, index)
+    }
+
+    /// Takes hold of a filter in the list, to drag it to another place or, with no drag, to open it.
+    pub fn begin_filter_drag(&mut self, index: usize, at: Point<Pixels>) {
+        self.finish_pending();
+        self.filter_drag = Some((index, at, false));
+    }
+
+    /// Moves the dragged filter past its neighbors, one for each row the mouse has crossed.
+    fn drag_filter(&mut self, at: Point<Pixels>) {
+        let Some((index, held, moved)) = self.filter_drag else { return };
+        let (to, held) = dragged_place(index, held, at, self.current_filters().len());
+        if to != index {
+            self.ed.for_selected(|o| {
+                if index.max(to) < o.filters.len() {
+                    let filter = o.filters.remove(index);
+                    o.filters.insert(to, filter);
+                }
+            });
+        }
+        self.filter_drag = Some((to, held, moved || to != index));
+    }
+
+    fn finish_filter_drag(&mut self) {
+        match self.filter_drag.take() {
+            Some((_, _, true)) => self.ed.commit(t("Live Filters")),
+            Some((index, _, false)) => self.open_filter(index),
+            None => {}
+        }
+    }
+
+    /// The channel the Levels or Curves dialog is showing: 0 for all, then red, green and blue.
+    pub fn filter_channel(&self) -> usize {
+        self.edited_filter().map_or(0, |(_, filter)| match filter.kind {
+            FilterKind::Levels => filter.value(5).round() as usize,
+            _ => filter.value(0).round() as usize,
+        })
+    }
+
+    /// Changes the filter being edited without a step in the history, for use while dragging.
+    fn touch_edited_filter(&mut self, change: impl Fn(&mut LiveFilter)) {
+        let Some(index) = self.filter_dialog.as_ref().map(|(index, _)| *index) else { return };
+        self.ed.for_selected(|o| {
+            if let Some(filter) = o.filters.get_mut(index) {
+                change(filter);
+            }
+        });
+    }
+
+    /// Where a place on screen falls in the curve box, in levels, and the size of the box.
+    fn curve_level(&self, at: Point<Pixels>) -> ((f32, f32), (f32, f32)) {
+        let bounds = self.curve_bounds.get();
+        let (width, height) = (f32::from(bounds.size.width).max(1.0), f32::from(bounds.size.height).max(1.0));
+        ((f32::from(at.x - bounds.origin.x) / width * 255.0, 255.0 - f32::from(at.y - bounds.origin.y) / height * 255.0), (width, height))
+    }
+
+    /// A press in the curve box: takes hold of the point there, or puts a new one on the curve.
+    pub fn press_curve(&mut self, at: Point<Pixels>) {
+        self.commit_field();
+        let Some((_, filter)) = self.edited_filter() else { return };
+        let channel = self.filter_channel();
+        let (level, (width, _)) = self.curve_level(at);
+        let (points, index) = crate::effects::curve_pressed(filter.curve(channel), level, 7.0 * 255.0 / width);
+        self.touch_edited_filter(|f| f.set_curve(channel, points.clone()));
+        (self.curve_drag, self.curve_point) = (Some(index), Some(index));
+    }
+
+    /// Moves the held point of the curve. It stays between its neighbors, and one
+    /// dragged well out of the box is taken off the curve, unless it is an end.
+    pub fn drag_curve(&mut self, at: Point<Pixels>) -> bool {
+        let Some(index) = self.curve_drag else { return false };
+        let Some((_, filter)) = self.edited_filter() else { return false };
+        let channel = self.filter_channel();
+        let (level, (width, _)) = self.curve_level(at);
+        let (points, kept) = crate::effects::curve_dragged(filter.curve(channel), index, level, 24.0 * 255.0 / width);
+        if !kept {
+            (self.curve_drag, self.curve_point) = (None, None);
+        }
+        self.touch_edited_filter(|f| f.set_curve(channel, points.clone()));
+        true
+    }
+
+    pub fn release_curve(&mut self) {
+        if self.curve_drag.take().is_some() {
+            self.ed.commit(t("Live Filters"));
+        }
+    }
+
+    /// The Auto button of Levels and Curves: each color is stretched from its
+    /// darkest level in the object to its lightest, as Auto Levels does.
+    pub fn auto_filter(&mut self) {
+        self.commit_field();
+        let Some(histogram) = self.filter_histogram.clone() else { return };
+        let Some((index, _)) = self.edited_filter() else { return };
+        self.change_filters(|filters| {
+            if let Some(filter) = filters.get_mut(index) {
+                filter.stretch(&histogram);
+            }
+        });
+        self.curve_point = None;
     }
 
     /// The filter whose settings are open.
@@ -821,6 +951,7 @@ impl Workspace {
         if let Some((_, before)) = self.filter_dialog.take().filter(|_| !keep) {
             self.change_filters(|filters| *filters = before.clone());
         }
+        (self.filter_histogram, self.curve_drag, self.curve_point) = (None, None, None);
     }
 
     /// The blend mode the selection has, or Normal with nothing selected.
@@ -2873,6 +3004,11 @@ impl Workspace {
         let p = map.to_doc(ev.position);
         self.cursor_doc = p;
         self.cursor_screen = ev.position;
+        if self.filter_drag.is_some() {
+            self.drag_filter(ev.position);
+            cx.notify();
+            return;
+        }
         let Some(drag) = self.drag.as_mut() else {
             if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() {
                 cx.notify();
@@ -3071,6 +3207,11 @@ impl Workspace {
     pub fn mouse_up(&mut self, ev: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
         if self.panel_drag.is_some() {
             self.finish_panel_drag(ev.position);
+            cx.notify();
+            return;
+        }
+        if self.filter_drag.is_some() {
+            self.finish_filter_drag();
             cx.notify();
             return;
         }
@@ -3755,6 +3896,7 @@ impl Workspace {
             ColorTarget::Matte => self.ed.doc.page().export.matte,
             ColorTarget::JpegMask => Some(self.ed.doc.page().jpeg_mask_color.unwrap_or(JPEG_MASK_COLOR)),
             ColorTarget::Filter => self.edited_filter().and_then(|(_, filter)| filter.color.or(filter.kind.start_color())),
+            ColorTarget::PsEffect(effect) => self.edited_filter().map(|(_, filter)| filter.ps_color(effect)),
         }
     }
 
@@ -3790,6 +3932,16 @@ impl Workspace {
                     self.change_filters(|filters| {
                         if let Some(filter) = filters.get_mut(index) {
                             filter.color = color;
+                        }
+                    });
+                }
+            }
+            ColorTarget::PsEffect(effect) => {
+                // An effect always has a color: "none" leaves it as it was.
+                if let (Some(index), Some(color)) = (self.filter_dialog.as_ref().map(|(index, _)| *index), color) {
+                    self.change_filters(|filters| {
+                        if let Some(filter) = filters.get_mut(index) {
+                            filter.set_ps_color(effect, color);
                         }
                     });
                 }
@@ -3894,6 +4046,37 @@ pub fn app_quit_on_close(cx: &mut App) {
     .detach();
 }
 
+/// Where a filter held at `held` in the list is once the mouse is at `at`: one place
+/// further for each whole row crossed, with the hold moved along so the rest of the drag counts from there.
+fn dragged_place(mut index: usize, mut held: Point<Pixels>, at: Point<Pixels>, count: usize) -> (usize, Point<Pixels>) {
+    const ROW: f32 = 17.0;
+    loop {
+        let dy = f32::from(at.y - held.y);
+        if dy >= ROW && index + 1 < count {
+            (index, held.y) = (index + 1, held.y + px(ROW));
+        } else if dy <= -ROW && index > 0 {
+            (index, held.y) = (index - 1, held.y - px(ROW));
+        } else {
+            return (index, held);
+        }
+    }
+}
+
+/// Counts how many pixels of an object have each level of red, green and blue, as it
+/// looks with only the filters before the one at `index`.
+fn histogram_before(object: &Object, index: usize) -> Option<[[u32; 256]; 3]> {
+    let mut object = object.clone();
+    object.filters.truncate(index);
+    let (bitmap, _) = crate::export::render_object(&object)?;
+    let mut counts = [[0u32; 256]; 3];
+    for px in bitmap.rgba().chunks_exact(4).filter(|px| px[3] > 0) {
+        for channel in 0..3 {
+            counts[channel][px[channel] as usize] += 1;
+        }
+    }
+    Some(counts)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3945,6 +4128,32 @@ mod tests {
         assert_eq!(session.pivot(), v2(1.0, 2.0));
     }
     use gpui::{point, px, size};
+
+    #[test]
+    fn a_dragged_filter_moves_one_place_for_each_row_crossed() {
+        let at = |y: f32| point(px(100.), px(y));
+        // Less than a row moves nothing.
+        assert_eq!(dragged_place(0, at(100.), at(110.), 3), (0, at(100.)));
+        // Two rows down, the first of three ends up last, and the hold moves with it.
+        assert_eq!(dragged_place(0, at(100.), at(136.), 3), (2, at(134.)));
+        // Further down there is nowhere to go; back up a row it changes place again.
+        assert_eq!(dragged_place(2, at(134.), at(300.), 3), (2, at(134.)));
+        assert_eq!(dragged_place(2, at(134.), at(117.), 3), (1, at(117.)));
+        assert_eq!(dragged_place(1, at(117.), at(0.), 3), (0, at(100.)));
+    }
+
+    #[test]
+    fn levels_are_counted_from_the_object_before_the_filter() {
+        let pixels = crate::bitmap::Bitmap::from_rgba(40, 30, [200, 100, 50, 255].repeat(40 * 30)).expect("the sizes agree");
+        let mut object = Object::new_bitmap(1, "Bitmap", pixels, 10.0, 10.0);
+        object.filters = vec![LiveFilter::new(FilterKind::Invert), LiveFilter::new(FilterKind::Levels)];
+        // The Levels filter, second in the list, receives the inverted fill.
+        let counts = histogram_before(&object, 1).expect("the object draws");
+        assert!(counts[0][55] > 1000 && counts[1][155] > 1000 && counts[2][205] > 1000, "{:?}", counts[0].iter().position(|n| *n > 0));
+        // The first filter receives the fill as it is.
+        let counts = histogram_before(&object, 0).expect("the object draws");
+        assert!(counts[0][200] > 1000 && counts[0][55] == 0);
+    }
 
     fn map() -> ViewMap {
         let bounds = Bounds { origin: point(px(10.), px(20.)), size: size(px(800.), px(600.)) };

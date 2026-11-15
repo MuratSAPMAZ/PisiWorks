@@ -391,6 +391,7 @@ impl Workspace {
                 let current = self.edited_filter().map_or(0, |(_, filter)| filter.value(setting).round() as usize);
                 let names: Vec<&'static str> = match self.edited_filter().map(|(_, filter)| filter.kind) {
                     Some(crate::effects::FilterKind::ColorFill) => crate::blend::BlendMode::ALL.iter().map(|mode| mode.label()).collect(),
+                    Some(crate::effects::FilterKind::Levels | crate::effects::FilterKind::Curves) => crate::effects::CHANNELS.iter().map(|name| channel_label(name)).collect(),
                     _ => crate::effects::BEVEL_SHAPES.iter().map(|name| t(name)).collect(),
                 };
                 names
@@ -777,34 +778,82 @@ impl Workspace {
             .child(text)
     }
 
-    /// The settings of a live filter: a field for each number, a box for each switch,
-    /// a list for each choice and the color, if the filter has one.
+    /// The settings of a live filter. Levels, Curves and Photoshop Live Effects have
+    /// dialogs of their own; the others get a field for each number, a box for each
+    /// switch, a list for each choice and the color, if the filter has one.
     pub(crate) fn filter_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        use crate::effects::FilterKind;
         let (_, filter) = self.edited_filter()?;
+        let (width, rows) = match filter.kind {
+            FilterKind::Levels => (284., self.levels_rows(&filter, cx)),
+            FilterKind::Curves => (284., self.curves_rows(&filter, cx)),
+            FilterKind::PhotoshopEffects => (400., self.photoshop_rows(&filter, cx)),
+            _ => (280., self.plain_filter_rows(&filter, cx)),
+        };
+        Some(
+            deferred(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .occlude()
+                    // A point of the curve follows the mouse anywhere over the window, not only inside its box.
+                    .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
+                        if this.drag_curve(ev.position) {
+                            cx.notify();
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            this.release_curve();
+                            cx.notify();
+                        }),
+                    )
+                    .child(
+                        div()
+                            .w(px(width))
+                            .p_3()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .bg(rgb(PANEL))
+                            .border_1()
+                            .border_color(rgb(BORDER))
+                            .shadow_lg()
+                            .child(div().pb_1().font_weight(FontWeight::BOLD).child(filter.kind.label()))
+                            .children(rows)
+                            .child(
+                                div()
+                                    .pt_1()
+                                    .flex()
+                                    .justify_end()
+                                    .gap_1()
+                                    .when(matches!(filter.kind, FilterKind::Levels | FilterKind::Curves), |d| {
+                                        d.child(self.text_button(t("Auto"), self.filter_histogram.is_some(), cx, |this, _, _| this.auto_filter())).child(div().flex_1())
+                                    })
+                                    .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_filter_dialog(true)))
+                                    .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_filter_dialog(false))),
+                            ),
+                    ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
+    fn plain_filter_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let settings = filter.kind.settings();
         let name_width = label_width(&settings.iter().map(|s| t(s.name)).collect::<Vec<_>>(), 60.);
         let mut rows: Vec<AnyElement> = Vec::new();
         for (index, setting) in settings.iter().enumerate() {
             let chosen_from_list = matches!((filter.kind, setting.name), (_, "Edge shape") | (crate::effects::FilterKind::ColorFill, "Blend Mode"));
             if setting.toggle {
-                let on = filter.value(index) >= 0.5;
-                rows.push(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_1()
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _, _, cx| {
-                                this.commit_field();
-                                this.set_filter_value(index, if on { 0.0 } else { 1.0 });
-                                cx.notify();
-                            }),
-                        )
-                        .child(div().size(px(13.)).flex().flex_none().items_center().justify_center().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).when(on, |d| d.child(icon("check", 9., TEXT))))
-                        .child(t(setting.name))
-                        .into_any_element(),
-                );
+                rows.push(self.filter_toggle(index, t(setting.name), filter.value(index) >= 0.5, cx).into_any_element());
             } else if chosen_from_list {
                 let current = filter.value(index).round() as usize;
                 let value = if setting.name == "Blend Mode" {
@@ -817,38 +866,210 @@ impl Workspace {
                 rows.push(labelled_row(t(setting.name), name_width, self.field(FieldId::FilterValue(index), 60., cx)).into_any_element());
             }
         }
-        Some(
-            deferred(
-                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
-                    div()
-                        .w(px(280.))
-                        .p_3()
-                        .flex()
-                        .flex_col()
-                        .gap_1()
-                        .bg(rgb(PANEL))
-                        .border_1()
-                        .border_color(rgb(BORDER))
-                        .shadow_lg()
-                        .child(div().pb_1().font_weight(FontWeight::BOLD).child(filter.kind.label()))
-                        .children(rows)
-                        .when(filter.kind.start_color().is_some(), |d| {
-                            d.child(labelled_row(t("Color"), name_width, self.swatch(ColorTarget::Filter, 18., cx)))
-                        })
-                        .child(
-                            div()
-                                .pt_1()
-                                .flex()
-                                .justify_end()
-                                .gap_1()
-                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_filter_dialog(true)))
-                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_filter_dialog(false))),
-                        ),
-                ),
+        if filter.kind.start_color().is_some() {
+            rows.push(labelled_row(t("Color"), name_width, self.swatch(ColorTarget::Filter, 18., cx)).into_any_element());
+        }
+        rows
+    }
+
+    /// A box that switches one setting of the filter being edited on and off.
+    fn filter_toggle(&self, setting: usize, text: &'static str, on: bool, cx: &mut Context<Self>) -> Div {
+        div()
+            .flex()
+            .items_center()
+            .gap_1()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, _, cx| {
+                    this.commit_field();
+                    this.set_filter_value(setting, if on { 0.0 } else { 1.0 });
+                    cx.notify();
+                }),
             )
-            .with_priority(1)
-            .into_any_element(),
-        )
+            .child(div().size(px(13.)).flex().flex_none().items_center().justify_center().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).when(on, |d| d.child(icon("check", 9., TEXT))))
+            .child(text)
+    }
+
+    /// The list that picks the channel Levels and Curves show.
+    fn channel_row(&self, setting: usize, cx: &mut Context<Self>) -> AnyElement {
+        let channel = self.filter_channel().min(crate::effects::CHANNELS.len() - 1);
+        labelled_row(t("Channel:"), 50., self.combo(Combo::FilterChoice(setting), channel_label(crate::effects::CHANNELS[channel]), 110., cx).bg(rgb(PANEL_RAISED))).into_any_element()
+    }
+
+    /// Levels: the channel, how many pixels have each of its levels, and the levels
+    /// taken as black, mid gray and white on the way in and as black and white on the way out.
+    fn levels_rows(&self, _: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let channel = self.filter_channel();
+        let at = crate::effects::levels_start(channel);
+        let histogram = self.filter_histogram.clone();
+        let bars = canvas(|_, _, _| (), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            window.paint_quad(fill(bounds, rgb(INPUT)));
+            let Some(histogram) = histogram.as_ref() else { return };
+            // All channels together count a pixel once for each of its three colors.
+            let count = |level: usize| match channel {
+                0 => histogram[0][level] + histogram[1][level] + histogram[2][level],
+                c => histogram[(c - 1).min(2)][level],
+            };
+            let most = (0..256).map(count).max().unwrap_or(0).max(1) as f32;
+            let (step, height) = (f32::from(bounds.size.width) / 256.0, f32::from(bounds.size.height));
+            let color = [TEXT, 0xe04040, 0x40c040, 0x5080ff][channel.min(3)];
+            for level in 0..256 {
+                let bar = (count(level) as f32 / most * height).ceil().min(height);
+                if bar > 0.0 {
+                    let origin = point(bounds.origin.x + px(level as f32 * step), bounds.origin.y + px(height - bar));
+                    window.paint_quad(fill(Bounds { origin, size: size(px(step + 0.3), px(bar)) }, rgb(color)));
+                }
+            }
+        })
+        .w(px(256.))
+        .h(px(80.));
+        let fields: Vec<Div> = (0..5).map(|offset| self.field(FieldId::FilterValue(at + offset), 44., cx)).collect();
+        let mut fields = fields.into_iter();
+        let input = div().flex().gap_1().children(fields.by_ref().take(3));
+        let output = div().flex().gap_1().children(fields);
+        vec![
+            self.channel_row(5, cx),
+            div().border_1().border_color(rgb(INPUT_BORDER)).child(bars).into_any_element(),
+            labelled_row(t("Input levels:"), 100., input).into_any_element(),
+            labelled_row(t("Output levels:"), 100., output).into_any_element(),
+        ]
+    }
+
+    /// Curves: the channel and its curve. A press on the curve puts a point there, a
+    /// drag moves a point, and a point dragged out of the box is taken away.
+    fn curves_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        let channel = self.filter_channel();
+        let (points, table, picked) = (filter.curve(channel), filter.curve_table(channel), self.curve_point);
+        let shown = picked.and_then(|index| points.get(index).copied());
+        let cell = self.curve_bounds.clone();
+        let graph = canvas(move |bounds, _, _| cell.set(bounds), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            window.paint_quad(fill(bounds, rgb(INPUT)));
+            let (width, height) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
+            let at = |x: f32, y: f32| point(bounds.origin.x + px(x / 255.0 * width), bounds.origin.y + px((1.0 - y / 255.0) * height));
+            // A grid of quarters behind the curve.
+            for quarter in 1..4 {
+                let offset = quarter as f32 / 4.0;
+                window.paint_quad(fill(Bounds { origin: point(bounds.origin.x + px(offset * width), bounds.origin.y), size: size(px(1.), bounds.size.height) }, rgb(BORDER)));
+                window.paint_quad(fill(Bounds { origin: point(bounds.origin.x, bounds.origin.y + px(offset * height)), size: size(bounds.size.width, px(1.)) }, rgb(BORDER)));
+            }
+            let color = [TEXT, 0xe04040, 0x40c040, 0x5080ff][channel.min(3)];
+            // The curve, one level at a time: each piece spans from this level's output to the next one's.
+            for level in 0..255 {
+                let (from, to) = (table[level], table[level + 1]);
+                let (top, bottom) = (at(level as f32, from.max(to)), at(level as f32, from.min(to)));
+                let tall = f32::from(bottom.y - top.y).max(1.5);
+                window.paint_quad(fill(Bounds { origin: point(top.x, top.y - px(0.75)), size: size(px(width / 255.0 + 0.5), px(tall)) }, rgb(color)));
+            }
+            for (index, (x, y)) in points.iter().enumerate() {
+                let center = at(*x, *y);
+                let square = Bounds { origin: point(center.x - px(3.5), center.y - px(3.5)), size: size(px(7.), px(7.)) };
+                window.paint_quad(fill(square, rgb(if picked == Some(index) { color } else { INPUT })).border_widths(1.).border_color(rgb(color)));
+            }
+        })
+        .size(px(256.));
+        let level = |value: Option<f32>| value.map_or_else(String::new, |v| format!("{}", v.round() as i32));
+        vec![
+            self.channel_row(0, cx),
+            div()
+                .border_1()
+                .border_color(rgb(INPUT_BORDER))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                        this.press_curve(ev.position);
+                        cx.notify();
+                    }),
+                )
+                .child(graph)
+                .into_any_element(),
+            div()
+                .flex()
+                .gap_3()
+                .child(div().flex().gap_1().child(label(t("Input:"))).child(level(shown.map(|p| p.0))))
+                .child(div().flex().gap_1().child(label(t("Output:"))).child(level(shown.map(|p| p.1))))
+                .into_any_element(),
+        ]
+    }
+
+    /// Photoshop Live Effects: the effects in a list, each with a box that switches it
+    /// on, and beside it the settings of the one picked.
+    fn photoshop_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
+        use crate::effects::{PS_BLOCK, PS_EFFECTS};
+        let shown = self.ps_effect.min(PS_EFFECTS.len() - 1);
+        let list: Vec<AnyElement> = PS_EFFECTS
+            .iter()
+            .enumerate()
+            .map(|(effect, name)| {
+                let on = filter.value(effect * PS_BLOCK) >= 0.5;
+                div()
+                    .h(px(20.))
+                    .px_1()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .when(effect == shown, |d| d.bg(rgb(ACCENT)))
+                    .child(
+                        div()
+                            .size(px(13.))
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .bg(rgb(INPUT))
+                            .border_1()
+                            .border_color(rgb(INPUT_BORDER))
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.commit_field();
+                                    this.ps_effect = effect;
+                                    this.set_filter_value(effect * PS_BLOCK, if on { 0.0 } else { 1.0 });
+                                    cx.notify();
+                                }),
+                            )
+                            .when(on, |d| d.child(icon("check", 9., TEXT))),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    this.commit_field();
+                                    this.ps_effect = effect;
+                                    cx.notify();
+                                }),
+                            )
+                            .child(t(name)),
+                    )
+                    .into_any_element()
+            })
+            .collect();
+        // Which of an effect's numbers it uses, by their place in its block, and what each is called there.
+        let numbers: &[(usize, &str)] = match shown {
+            0 | 1 | 5 => &[(1, "Opacity:"), (2, "Angle:"), (3, "Distance:"), (4, "Size:")],
+            2 | 3 => &[(1, "Opacity:"), (4, "Size:")],
+            4 => &[(3, "Depth:"), (4, "Size:"), (2, "Angle:"), (1, "Opacity:")],
+            6 => &[(1, "Opacity:")],
+            _ => &[(4, "Size:"), (1, "Opacity:")],
+        };
+        let name_width = label_width(&numbers.iter().map(|(_, name)| t(name)).chain([t("Color:")]).collect::<Vec<_>>(), 60.);
+        let mut settings: Vec<AnyElement> = vec![div().pb_1().font_weight(FontWeight::BOLD).child(t(PS_EFFECTS[shown])).into_any_element()];
+        for (place, name) in numbers {
+            settings.push(labelled_row(t(name), name_width, self.field(FieldId::FilterValue(shown * PS_BLOCK + place), 60., cx)).into_any_element());
+        }
+        // A bevel is made of light and shade, not of a color of its own.
+        if shown != 4 {
+            settings.push(labelled_row(t("Color:"), name_width, self.swatch(ColorTarget::PsEffect(shown), 18., cx)).into_any_element());
+        }
+        vec![
+            div()
+                .flex()
+                .gap_3()
+                .child(div().w(px(170.)).flex().flex_col().flex_none().bg(rgb(PANEL_RAISED)).border_1().border_color(rgb(INPUT_BORDER)).children(list))
+                .child(div().flex_1().flex().flex_col().gap_1().children(settings))
+                .into_any_element(),
+        ]
     }
 
     pub(crate) fn jpeg_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -1519,4 +1740,9 @@ impl Workspace {
             Panel::Toolbar | Panel::Tools | Panel::Properties => div().into_any_element(),
         }
     }
+}
+
+/// The name of a channel as lists show it: RGB is the same in every language.
+fn channel_label(name: &'static str) -> &'static str {
+    if name == "RGB" { name } else { t(name) }
 }

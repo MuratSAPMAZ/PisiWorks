@@ -16,9 +16,11 @@ pub enum FilterKind {
     AutoLevels,
     BrightnessContrast,
     ColorFill,
+    Curves,
     HueSaturation,
     Invert,
     Levels,
+    PhotoshopEffects,
     InnerBevel,
     InsetEmboss,
     OuterBevel,
@@ -45,14 +47,15 @@ pub enum FilterKind {
 use FilterKind::*;
 
 /// The groups of the Filters menu, in its order.
-pub const MENU: [(&str, &[FilterKind]); 7] = [
-    ("Adjust Color", &[AutoLevels, BrightnessContrast, ColorFill, HueSaturation, Invert, Levels]),
+pub const MENU: [(&str, &[FilterKind]); 8] = [
+    ("Adjust Color", &[AutoLevels, BrightnessContrast, ColorFill, Curves, HueSaturation, Invert, Levels]),
     ("Bevel and Emboss", &[InnerBevel, InsetEmboss, OuterBevel, RaisedEmboss]),
     ("Blur", &[Blur, BlurMore, GaussianBlur, MotionBlur, RadialBlur, ZoomBlur]),
     ("Noise", &[AddNoise]),
     ("Other", &[ConvertToAlpha, FindEdges]),
     ("Shadow and Glow", &[DropShadow, Glow, InnerGlow, InnerShadow, SolidShadow]),
     ("Sharpen", &[Sharpen, SharpenMore, UnsharpMask]),
+    ("Photoshop Live Effects", &[PhotoshopEffects]),
 ];
 
 /// One setting of a filter: its name, its range and what it starts at.
@@ -74,6 +77,21 @@ const fn toggle(name: &'static str, start: bool) -> Setting {
     Setting { name, min: 0.0, max: 1.0, start: if start { 1.0 } else { 0.0 }, toggle: true }
 }
 
+/// The channels Levels and Curves can work on, by the number stored for "Channel".
+pub const CHANNELS: [&str; 4] = ["RGB", "Red", "Green", "Blue"];
+
+/// The effects inside Photoshop Live Effects, in the order of its dialog. Each has
+/// [`PS_BLOCK`] settings in a row: whether it is on, then its own numbers.
+pub const PS_EFFECTS: [&str; 8] =
+    ["Drop Shadow", "Inner Shadow", "Outer Glow", "Inner Glow", "Bevel and Emboss", "Satin", "Color Overlay", "Stroke"];
+pub const PS_BLOCK: usize = 5;
+
+/// Where the five Levels numbers of a channel start among the settings: all channels
+/// together first, as before channels could be told apart, then red, green and blue.
+pub fn levels_start(channel: usize) -> usize {
+    if channel == 0 { 0 } else { 6 + (channel.min(3) - 1) * 5 }
+}
+
 /// The edge shapes of a bevel, by the number stored for "Edge shape".
 pub const BEVEL_SHAPES: [&str; 7] = ["Flat", "Smooth", "Sloped", "Frame 1", "Frame 2", "Ring", "Ruffle"];
 
@@ -83,6 +101,8 @@ impl FilterKind {
             AutoLevels => t("Auto Levels"),
             BrightnessContrast => t("Brightness/Contrast"),
             ColorFill => t("Color Fill"),
+            Curves => t("Curves"),
+            PhotoshopEffects => t("Photoshop Live Effects"),
             HueSaturation => t("Hue/Saturation"),
             Invert => t("Invert"),
             Levels => t("Levels"),
@@ -139,13 +159,49 @@ impl FilterKind {
         const FILL: [Setting; 2] = [number("Opacity", 0.0, 100.0, 100.0), number("Blend Mode", 0.0, 44.0, 0.0)];
         const HUE: [Setting; 4] =
             [number("Hue", -180.0, 180.0, 0.0), number("Saturation", -100.0, 100.0, 0.0), number("Lightness", -100.0, 100.0, 0.0), toggle("Colorize", false)];
-        const LEVELS: [Setting; 5] = [
+        const LEVEL: [Setting; 5] = [
             number("Input black", 0.0, 255.0, 0.0),
             number("Gamma", 0.1, 10.0, 1.0),
             number("Input white", 0.0, 255.0, 255.0),
             number("Output black", 0.0, 255.0, 0.0),
             number("Output white", 0.0, 255.0, 255.0),
         ];
+        // The five numbers for all channels together, the channel on show, then five each for red, green and blue.
+        const LEVELS: [Setting; 21] = {
+            let mut all = [number("Channel", 0.0, 3.0, 0.0); 21];
+            let mut i = 0;
+            while i < 21 {
+                if i != 5 {
+                    all[i] = LEVEL[if i < 5 { i } else { (i - 6) % 5 }];
+                }
+                i += 1;
+            }
+            all
+        };
+        const CURVES: [Setting; 1] = [number("Channel", 0.0, 3.0, 0.0)];
+        // For each effect: on or off, opacity, angle, distance or depth, size.
+        const fn ps(on: bool, opacity: f32, angle: f32, distance: f32, size: f32) -> [Setting; PS_BLOCK] {
+            [toggle("On", on), number("Opacity", 0.0, 100.0, opacity), number("Angle", 0.0, 360.0, angle), number("Distance", 0.0, 100.0, distance), number("Size", 0.0, 100.0, size)]
+        }
+        const PS: [[Setting; PS_BLOCK]; 8] = [
+            ps(true, 75.0, 120.0, 5.0, 5.0),
+            ps(false, 75.0, 120.0, 5.0, 5.0),
+            ps(false, 75.0, 0.0, 0.0, 5.0),
+            ps(false, 75.0, 0.0, 0.0, 5.0),
+            ps(false, 75.0, 120.0, 100.0, 5.0),
+            ps(false, 50.0, 19.0, 11.0, 14.0),
+            ps(false, 100.0, 0.0, 0.0, 0.0),
+            ps(false, 100.0, 0.0, 0.0, 3.0),
+        ];
+        const PS_FLAT: [Setting; 8 * PS_BLOCK] = {
+            let mut flat = [PS[0][0]; 8 * PS_BLOCK];
+            let mut i = 0;
+            while i < 8 * PS_BLOCK {
+                flat[i] = PS[i / PS_BLOCK][i % PS_BLOCK];
+                i += 1;
+            }
+            flat
+        };
         const GAUSSIAN: [Setting; 1] = [number("Radius", 0.1, 250.0, 4.0)];
         const MOTION: [Setting; 2] = [number("Angle", 0.0, 360.0, 0.0), number("Distance", 1.0, 100.0, 10.0)];
         const SPIN: [Setting; 2] = [number("Amount", 1.0, 100.0, 10.0), number("Quality", 1.0, 100.0, 20.0)];
@@ -158,6 +214,8 @@ impl FilterKind {
             ColorFill => &FILL,
             HueSaturation => &HUE,
             Levels => &LEVELS,
+            Curves => &CURVES,
+            PhotoshopEffects => &PS_FLAT,
             InnerBevel | OuterBevel => &BEVEL,
             InsetEmboss | RaisedEmboss => &EMBOSS,
             GaussianBlur => &GAUSSIAN,
@@ -176,6 +234,7 @@ impl FilterKind {
     pub fn start_color(self) -> Option<Color> {
         match self {
             ColorFill | Glow | InnerGlow => Some(Color::rgb(255, 0, 0)),
+            PhotoshopEffects => Some(Color::BLACK),
             OuterBevel => Some(Color::rgb(223, 223, 223)),
             DropShadow | InnerShadow | SolidShadow => Some(Color::BLACK),
             _ => None,
@@ -192,6 +251,60 @@ pub struct LiveFilter {
     pub color: Option<Color>,
     #[serde(default = "on")]
     pub enabled: bool,
+    /// The curves of a Curves filter: one for all channels together, then red, green and
+    /// blue. Each point is an input level and the output it gives, from 0 to 255.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub curves: Vec<Vec<(f32, f32)>>,
+    /// The colors of the effects in Photoshop Live Effects, one for each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub colors: Vec<Color>,
+}
+
+/// The curve that changes nothing, which every channel starts with.
+pub const STRAIGHT: [(f32, f32); 2] = [(0.0, 0.0), (255.0, 255.0)];
+
+/// A press on a curve at `level`: the point within `reach` levels of it is taken
+/// hold of, or a new one is put there. Gives the points and the one held.
+pub fn curve_pressed(mut points: Vec<(f32, f32)>, level: (f32, f32), reach: f32) -> (Vec<(f32, f32)>, usize) {
+    let level = (level.0.clamp(0.0, 255.0).round(), level.1.clamp(0.0, 255.0).round());
+    if let Some(index) = points.iter().position(|p| (p.0 - level.0).abs() <= reach && (p.1 - level.1).abs() <= reach) {
+        return (points, index);
+    }
+    // Two points cannot share an input level: the new one goes beside the old.
+    let taken = |x: f32, points: &[(f32, f32)]| points.iter().any(|p| (p.0 - x).abs() < 0.5);
+    let mut x = level.0;
+    while taken(x, &points) {
+        x += if level.0 < 128.0 { 1.0 } else { -1.0 };
+    }
+    points.push((x, level.1));
+    points.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let index = points.iter().position(|p| p.0 == x).unwrap_or(0);
+    (points, index)
+}
+
+/// The held point of a curve dragged to `level`. It stays between its neighbors;
+/// one taken more than `out` levels outside the box leaves the curve, unless it is
+/// an end. Gives the points and whether the point is still there.
+pub fn curve_dragged(mut points: Vec<(f32, f32)>, index: usize, level: (f32, f32), out: f32) -> (Vec<(f32, f32)>, bool) {
+    if index >= points.len() {
+        return (points, false);
+    }
+    let is_end = index == 0 || index + 1 == points.len();
+    let outside = |v: f32| v < -out || v > 255.0 + out;
+    if !is_end && (outside(level.0) || outside(level.1)) {
+        points.remove(index);
+        return (points, false);
+    }
+    let low = if index == 0 { 0.0 } else { points[index - 1].0 + 1.0 };
+    let high = if index + 1 == points.len() { 255.0 } else { points[index + 1].0 - 1.0 };
+    points[index] = (level.0.round().clamp(low, high.max(low)), level.1.round().clamp(0.0, 255.0));
+    (points, true)
+}
+
+/// The colors the Photoshop effects start with, in the order of [`PS_EFFECTS`].
+fn ps_start_colors() -> Vec<Color> {
+    let (black, glow, red) = (Color::BLACK, Color::rgb(255, 255, 190), Color::rgb(255, 0, 0));
+    vec![black, black, glow, glow, black, black, red, red]
 }
 
 fn on() -> bool {
@@ -200,7 +313,14 @@ fn on() -> bool {
 
 impl LiveFilter {
     pub fn new(kind: FilterKind) -> Self {
-        Self { kind, values: kind.settings().iter().map(|s| s.start).collect(), color: kind.start_color(), enabled: true }
+        Self {
+            kind,
+            values: kind.settings().iter().map(|s| s.start).collect(),
+            color: kind.start_color(),
+            enabled: true,
+            curves: if kind == Curves { vec![STRAIGHT.to_vec(); 4] } else { Vec::new() },
+            colors: if kind == PhotoshopEffects { ps_start_colors() } else { Vec::new() },
+        }
     }
 
     /// A setting by its place, kept inside its range. Files with fewer values than
@@ -214,6 +334,112 @@ impl LiveFilter {
         let Some(setting) = self.kind.settings().get(index) else { return };
         self.values.resize(self.kind.settings().len(), 0.0);
         self.values[index] = if value.is_finite() { value.clamp(setting.min, setting.max) } else { setting.start };
+    }
+
+    /// The color of one of the Photoshop effects.
+    pub fn ps_color(&self, effect: usize) -> Color {
+        self.colors.get(effect).copied().or_else(|| ps_start_colors().get(effect).copied()).unwrap_or(Color::BLACK)
+    }
+
+    pub fn set_ps_color(&mut self, effect: usize, color: Color) {
+        if self.colors.len() < PS_EFFECTS.len() {
+            self.colors = (0..PS_EFFECTS.len()).map(|i| self.ps_color(i)).collect();
+        }
+        if let Some(slot) = self.colors.get_mut(effect) {
+            *slot = color;
+        }
+    }
+
+    /// The points of a channel's curve, from left to right.
+    pub fn curve(&self, channel: usize) -> Vec<(f32, f32)> {
+        let mut points: Vec<(f32, f32)> = self.curves.get(channel).filter(|c| !c.is_empty()).map_or(STRAIGHT.to_vec(), |c| c.clone());
+        points.sort_by(|a, b| a.0.total_cmp(&b.0));
+        points
+    }
+
+    pub fn set_curve(&mut self, channel: usize, points: Vec<(f32, f32)>) {
+        self.curves.resize(4, STRAIGHT.to_vec());
+        if let Some(curve) = self.curves.get_mut(channel) {
+            *curve = points;
+        }
+    }
+
+    /// What the Auto button of Levels and Curves does: each color is stretched from
+    /// its darkest level in the object to its lightest, as Auto Levels does. `counts`
+    /// is how many pixels have each level of red, green and blue.
+    pub fn stretch(&mut self, counts: &[[u32; 256]; 3]) {
+        for (channel, counts) in counts.iter().enumerate() {
+            let (Some(low), Some(high)) = (counts.iter().position(|n| *n > 0), counts.iter().rposition(|n| *n > 0)) else { continue };
+            if high <= low {
+                continue;
+            }
+            match self.kind {
+                Levels => {
+                    for (offset, value) in [low as f32, 1.0, high as f32, 0.0, 255.0].into_iter().enumerate() {
+                        self.set_value(levels_start(channel + 1) + offset, value);
+                    }
+                }
+                Curves => self.set_curve(channel + 1, vec![(low as f32, 0.0), (high as f32, 255.0)]),
+                _ => {}
+            }
+        }
+    }
+
+    /// The output level for every input level of a channel's curve: a smooth curve
+    /// through its points that never turns back on itself.
+    pub fn curve_table(&self, channel: usize) -> [f32; 256] {
+        let mut points: Vec<(f32, f32)> = self.curve(channel).iter().map(|(x, y)| (x.clamp(0.0, 255.0), y.clamp(0.0, 255.0))).collect();
+        points.sort_by(|a, b| a.0.total_cmp(&b.0));
+        points.dedup_by(|a, b| (a.0 - b.0).abs() < 0.5);
+        let mut table = [0.0; 256];
+        if points.len() < 2 {
+            for (level, slot) in table.iter_mut().enumerate() {
+                *slot = points.first().map_or(level as f32, |p| p.1);
+            }
+            return table;
+        }
+        // Monotone cubic interpolation (Fritsch and Carlson): the slope at each point
+        // is cut back where a plain spline would overshoot.
+        let count = points.len();
+        let slopes: Vec<f32> = (0..count - 1).map(|i| (points[i + 1].1 - points[i].1) / (points[i + 1].0 - points[i].0)).collect();
+        let mut tangents: Vec<f32> = (0..count)
+            .map(|i| match i {
+                0 => slopes[0],
+                i if i == count - 1 => slopes[count - 2],
+                i if slopes[i - 1] * slopes[i] <= 0.0 => 0.0,
+                i => (slopes[i - 1] + slopes[i]) / 2.0,
+            })
+            .collect();
+        for i in 0..count - 1 {
+            if slopes[i] == 0.0 {
+                (tangents[i], tangents[i + 1]) = (0.0, 0.0);
+                continue;
+            }
+            let (a, b) = (tangents[i] / slopes[i], tangents[i + 1] / slopes[i]);
+            let length = (a * a + b * b).sqrt();
+            if length > 3.0 {
+                (tangents[i], tangents[i + 1]) = (3.0 * a / length * slopes[i], 3.0 * b / length * slopes[i]);
+            }
+        }
+        for (level, slot) in table.iter_mut().enumerate() {
+            let x = level as f32;
+            *slot = if x <= points[0].0 {
+                points[0].1
+            } else if x >= points[count - 1].0 {
+                points[count - 1].1
+            } else {
+                let i = (0..count - 1).find(|i| x <= points[i + 1].0).unwrap_or(count - 2);
+                let width = points[i + 1].0 - points[i].0;
+                let t = (x - points[i].0) / width;
+                let (t2, t3) = (t * t, t * t * t);
+                (2.0 * t3 - 3.0 * t2 + 1.0) * points[i].1
+                    + (t3 - 2.0 * t2 + t) * width * tangents[i]
+                    + (-2.0 * t3 + 3.0 * t2) * points[i + 1].1
+                    + (t3 - t2) * width * tangents[i + 1]
+            }
+            .clamp(0.0, 255.0);
+        }
+        table
     }
 
     fn rgb(&self) -> [f32; 3] {
@@ -451,12 +677,74 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
             })
         }
         Levels => {
-            let (in_black, gamma, in_white, out_black, out_white) = (v(0) / 255.0, v(1), v(2) / 255.0, v(3) / 255.0, v(4) / 255.0);
-            let span = (in_white - in_black).max(1.0 / 255.0);
+            let set = |channel: usize| {
+                let at = levels_start(channel);
+                [v(at) / 255.0, v(at + 1), v(at + 2) / 255.0, v(at + 3) / 255.0, v(at + 4) / 255.0]
+            };
+            let sets = [set(0), set(1), set(2), set(3)];
+            let level = |c: f32, [in_black, gamma, in_white, out_black, out_white]: [f32; 5]| {
+                out_black + ((c - in_black) / (in_white - in_black).max(1.0 / 255.0)).clamp(0.0, 1.0).powf(1.0 / gamma) * (out_white - out_black)
+            };
+            // Each color by its own numbers first, then all three by the ones they share.
             each(&|p, _, _| {
-                let f = |c: f32| out_black + ((c - in_black) / span).clamp(0.0, 1.0).powf(1.0 / gamma) * (out_white - out_black);
-                [f(p[0]), f(p[1]), f(p[2]), p[3]]
+                let one = |index: usize| level(level(p[index], sets[index + 1]), sets[0]);
+                [one(0), one(1), one(2), p[3]]
             })
+        }
+        Curves => {
+            let tables = [filter.curve_table(0), filter.curve_table(1), filter.curve_table(2), filter.curve_table(3)];
+            let read = |c: f32, table: &[f32; 256]| {
+                // Between two whole levels the table is read in proportion.
+                let level = (c * 255.0).clamp(0.0, 255.0);
+                let (low, part) = (level.floor() as usize, level.fract());
+                (table[low] + (table[(low + 1).min(255)] - table[low]) * part) / 255.0
+            };
+            each(&|p, _, _| {
+                let one = |index: usize| read(read(p[index], &tables[index + 1]), &tables[0]);
+                [one(0), one(1), one(2), p[3]]
+            })
+        }
+        PhotoshopEffects => {
+            let block = |effect: usize, index: usize| v(effect * PS_BLOCK + index);
+            let on = |effect: usize| block(effect, 0) >= 0.5;
+            // One of this module's own filters, set from an effect's numbers and color.
+            let part = |kind: FilterKind, effect: usize, values: &[f32]| {
+                let mut filter_part = LiveFilter::new(kind);
+                for (index, value) in values.iter().enumerate() {
+                    filter_part.set_value(index, *value);
+                }
+                filter_part.color = Some(filter.ps_color(effect));
+                filter_part
+            };
+            // Photoshop measures its angles toward the light; a shadow falls the other way.
+            let away = |effect: usize| (block(effect, 2) + 180.0).rem_euclid(360.0);
+            let mut out = layer.clone();
+            // What lies on the object first, from the bottom of the list up, then what lies around it.
+            if on(6) {
+                out = apply(&out, &part(ColorFill, 6, &[block(6, 1), 0.0]));
+            }
+            if on(5) {
+                out = satin(&out, block(5, 1) / 100.0, block(5, 2), block(5, 3), block(5, 4), filter.ps_color(5));
+            }
+            if on(3) {
+                out = apply(&out, &part(InnerGlow, 3, &[block(3, 4), block(3, 1), block(3, 4) / 2.0]));
+            }
+            if on(1) {
+                out = apply(&out, &part(InnerShadow, 1, &[block(1, 3), block(1, 1), block(1, 4), away(1)]));
+            }
+            if on(4) {
+                out = apply(&out, &part(InnerBevel, 4, &[1.0, block(4, 4).min(35.0), block(4, 1) * block(4, 3) / 100.0, 2.0, block(4, 2)]));
+            }
+            if on(7) {
+                out = outline(&out, &layer.alpha(), block(7, 4), block(7, 1) / 100.0, filter.ps_color(7));
+            }
+            if on(2) {
+                out = apply(&out, &part(Glow, 2, &[block(2, 4).min(35.0), block(2, 1), (block(2, 4) / 2.0).min(30.0), 0.0]));
+            }
+            if on(0) {
+                out = apply(&out, &part(DropShadow, 0, &[block(0, 3), block(0, 1), block(0, 4).min(30.0), away(0)]));
+            }
+            out
         }
         AutoLevels => {
             // Each channel is stretched so its darkest value is black and its lightest white.
@@ -531,6 +819,52 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         DropShadow | InnerShadow | Glow | InnerGlow | SolidShadow => shadow_or_glow(layer, filter),
         InnerBevel | OuterBevel | InsetEmboss | RaisedEmboss => bevel_or_emboss(layer, filter),
     }
+}
+
+/// Photoshop's Satin: the object's own outline, shifted both ways along an angle and
+/// blurred, laid back on it as soft shading.
+fn satin(layer: &Layer, opacity: f32, angle: f32, distance: f32, size: f32, color: Color) -> Layer {
+    let (w, h) = (layer.width, layer.height);
+    let (dx, dy) = direction(angle);
+    let soft = blur_channel(&layer.alpha(), w, h, size.max(0.5));
+    let at = |x: f32, y: f32| -> f32 {
+        let (ix, iy) = (x.round() as i64, y.round() as i64);
+        if ix < 0 || iy < 0 || ix >= w as i64 || iy >= h as i64 { 0.0 } else { soft[iy as usize * w + ix as usize] }
+    };
+    let tint = [color.r as f32 / 255.0, color.g as f32 / 255.0, color.b as f32 / 255.0];
+    let mut out = layer.clone();
+    for y in 0..h {
+        for x in 0..w {
+            let px = &mut out.pixels[y * w + x];
+            if px[3] <= 0.0 {
+                continue;
+            }
+            let (fx, fy) = (x as f32, y as f32);
+            // Where the two shifted copies differ, the sheen shows.
+            let sheen = (at(fx + dx * distance, fy + dy * distance) - at(fx - dx * distance, fy - dy * distance)).abs();
+            let amount = (sheen * opacity).clamp(0.0, 1.0);
+            for c in 0..3 {
+                px[c] += (tint[c] - px[c]) * amount;
+            }
+        }
+    }
+    out
+}
+
+/// Photoshop's Stroke: a band of color around the outside of the object.
+fn outline(layer: &Layer, alpha: &[f32], size: f32, opacity: f32, color: Color) -> Layer {
+    if size <= 0.0 {
+        return layer.clone();
+    }
+    let (w, h) = (layer.width, layer.height);
+    // The outline grown by the size: half of the blurred edge lies that far out.
+    let grown: Vec<f32> = blur_channel(alpha, w, h, size * 2.0).iter().map(|a| ((a - 0.02) * 8.0).clamp(0.0, 1.0)).collect();
+    let tint = [color.r as f32 / 255.0, color.g as f32 / 255.0, color.b as f32 / 255.0];
+    let mut out = layer.clone();
+    for (px, g) in out.pixels.iter_mut().zip(&grown) {
+        *px = over(*px, [tint[0], tint[1], tint[2], (g * opacity).clamp(0.0, 1.0)]);
+    }
+    out
 }
 
 /// Averages each pixel with others found by `along`, which is given a number from 0 to 1 for each step.
@@ -768,6 +1102,8 @@ pub fn reach(filter: &LiveFilter) -> f32 {
         SolidShadow => v(1),
         Glow => (v(0) + v(3)) * 3.0 + v(2) * 2.0,
         OuterBevel => v(1) * 3.0 + v(3) * 2.0,
+        // The shadow, the glow and the stroke are what reach past the object.
+        PhotoshopEffects => (v(3) + v(4) * 2.0).max(v(2 * PS_BLOCK + 4) * 4.0).max(v(7 * PS_BLOCK + 4) * 3.0) + 2.0,
         InsetEmboss | RaisedEmboss => v(0) + v(2) * 2.0,
         GaussianBlur => v(0) * 2.0,
         Blur | BlurMore => 4.0,
@@ -821,7 +1157,7 @@ mod tests {
                 }
             }
         }
-        assert_eq!(MENU.iter().map(|(_, kinds)| kinds.len()).sum::<usize>(), 27);
+        assert_eq!(MENU.iter().map(|(_, kinds)| kinds.len()).sum::<usize>(), 29);
     }
 
     #[test]
@@ -910,6 +1246,116 @@ mod tests {
         assert!(at(&bevelled, 30, 42) < 0.4, "the bottom edge is in shade: {}", at(&bevelled, 30, 42));
         assert!(near(at(&bevelled, 30, 30), 0.5), "the flat top is untouched");
         assert_eq!(bevelled.pixels[0], [0.0; 4]);
+    }
+
+    #[test]
+    fn levels_and_curves_have_numbers_for_each_channel() {
+        let layer = square(8, 2, [0.5, 0.5, 0.5]);
+        let middle = |l: &Layer| l.pixels[4 * 8 + 4];
+        // Mid gray taken as white, on the red channel only.
+        let mut levels = LiveFilter::new(Levels);
+        levels.set_value(levels_start(1) + 2, 128.0);
+        let red = middle(&apply(&layer, &levels));
+        assert!(near(red[0], 1.0) && near(red[1], 0.5) && near(red[2], 0.5), "{red:?}");
+        // The shared numbers still work on all three, after each channel's own.
+        levels.set_value(levels_start(0) + 4, 128.0);
+        let both = middle(&apply(&layer, &levels));
+        assert!(near(both[0], 0.5) && near(both[1], 0.25), "{both:?}");
+        assert_eq!((levels_start(0), levels_start(1), levels_start(3) + 5), (0, 6, Levels.settings().len()));
+        // A new curve is a straight line and changes nothing.
+        let mut curve = LiveFilter::new(Curves);
+        assert!(near(middle(&apply(&layer, &curve))[0], 0.5));
+        let table = curve.curve_table(0);
+        assert!((0..256).all(|level| (table[level] - level as f32).abs() < 0.01));
+        // Lifting its middle lightens the mid tones and leaves black and white where they are.
+        curve.set_curve(0, vec![(0.0, 0.0), (128.0, 192.0), (255.0, 255.0)]);
+        let table = curve.curve_table(0);
+        assert!(near(table[128] / 255.0, 0.75) && table[0] < 0.5 && table[255] > 254.5);
+        assert!(table.windows(2).all(|pair| pair[1] >= pair[0] - 0.01), "it never turns back");
+        assert!(near(middle(&apply(&layer, &curve))[0], 0.75));
+        // Blue has a curve of its own, applied before the shared one.
+        curve.set_curve(0, STRAIGHT.to_vec());
+        curve.set_curve(3, vec![(0.0, 0.0), (128.0, 192.0), (255.0, 255.0)]);
+        let blue = middle(&apply(&layer, &curve));
+        assert!(near(blue[0], 0.5) && near(blue[2], 0.75), "{blue:?}");
+        // Points given out of order, or twice, still make a curve.
+        curve.set_curve(0, vec![(255.0, 0.0), (0.0, 255.0), (0.0, 255.0)]);
+        assert!(curve.curve_table(0)[0] > 254.0 && curve.curve_table(0)[255] < 1.0);
+        // A file written before curves had channels, or with none, reads as straight lines.
+        curve.curves.clear();
+        assert_eq!(curve.curve(2), STRAIGHT.to_vec());
+    }
+
+    #[test]
+    fn curve_points_are_added_moved_and_dragged_away() {
+        // A press above the middle of the line puts a point there and holds it.
+        let (points, held) = curve_pressed(STRAIGHT.to_vec(), (128.2, 191.7), 7.0);
+        assert_eq!((points.clone(), held), (vec![(0.0, 0.0), (128.0, 192.0), (255.0, 255.0)], 1));
+        // Dragged, it follows the mouse but cannot pass its neighbors.
+        let (points, kept) = curve_dragged(points, 1, (100.0, 100.0), 24.0);
+        assert_eq!((points[1], kept), ((100.0, 100.0), true));
+        let (points, _) = curve_dragged(points, 1, (270.0, 100.0), 24.0);
+        assert_eq!(points[1], (254.0, 100.0));
+        // A press on a point takes hold of it without adding another.
+        let (points, held) = curve_pressed(points, (250.0, 104.0), 7.0);
+        assert_eq!((points.len(), held), (3, 1));
+        // Dragged well out of the box, it is taken off the curve.
+        let (points, kept) = curve_dragged(points, 1, (250.0, -40.0), 24.0);
+        assert_eq!((points.clone(), kept), (STRAIGHT.to_vec(), false));
+        // An end can be dragged anywhere, and stays on the curve.
+        let (points, kept) = curve_dragged(points, 0, (30.0, -500.0), 24.0);
+        assert_eq!((points.clone(), kept), (vec![(30.0, 0.0), (255.0, 255.0)], true));
+        // A new point never shares an input level with another.
+        let (points, held) = curve_pressed(points, (30.0, 90.0), 7.0);
+        assert_eq!((points[1], held), ((31.0, 90.0), 1));
+        let (points, held) = curve_pressed(points, (255.0, 20.0), 7.0);
+        assert_eq!((points[2], held, points.len()), ((254.0, 20.0), 2, 4));
+    }
+
+    #[test]
+    fn auto_stretches_each_color_between_its_darkest_and_lightest() {
+        let mut counts = [[0u32; 256]; 3];
+        (counts[0][40], counts[0][210], counts[1][7]) = (5, 9, 3);
+        // Red has a range and takes its ends; green has one level and blue none, so they stay.
+        let mut levels = LiveFilter::new(Levels);
+        levels.stretch(&counts);
+        let red = levels_start(1);
+        assert_eq!((levels.value(red), levels.value(red + 2)), (40.0, 210.0));
+        assert_eq!((levels.value(levels_start(2)), levels.value(levels_start(2) + 2)), (0.0, 255.0));
+        assert_eq!((levels.value(0), levels.value(2)), (0.0, 255.0), "the shared numbers are left alone");
+        let mut curves = LiveFilter::new(Curves);
+        curves.stretch(&counts);
+        assert_eq!(curves.curve(1), vec![(40.0, 0.0), (210.0, 255.0)]);
+        assert_eq!((curves.curve(0), curves.curve(2)), (STRAIGHT.to_vec(), STRAIGHT.to_vec()));
+    }
+
+    #[test]
+    fn photoshop_effects_are_switched_on_one_by_one() {
+        let layer = square(60, 20, [0.0, 0.0, 1.0]);
+        let at = |l: &Layer, x: usize, y: usize| l.pixels[y * 60 + x];
+        let mut effects = LiveFilter::new(PhotoshopEffects);
+        assert_eq!(effects.kind.settings().len(), PS_EFFECTS.len() * PS_BLOCK);
+        // Only the drop shadow is on to begin with. Light from 120 degrees, the upper left, throws it down and right.
+        let shadowed = apply(&layer, &effects);
+        assert!(at(&shadowed, 42, 42)[3] > 0.1 && at(&shadowed, 42, 42)[2] < 0.1, "{:?}", at(&shadowed, 42, 42));
+        assert!(at(&shadowed, 15, 15)[3] < 0.01);
+        assert_eq!(at(&shadowed, 30, 30), [0.0, 0.0, 1.0, 1.0]);
+        // A color overlay in place of the shadow paints the whole object in its color.
+        effects.set_value(0, 0.0);
+        effects.set_value(6 * PS_BLOCK, 1.0);
+        let painted = apply(&layer, &effects);
+        assert!(near(at(&painted, 30, 30)[0], 1.0) && near(at(&painted, 30, 30)[2], 0.0));
+        assert!(at(&painted, 42, 42)[3] < 0.01, "and nothing falls outside it now");
+        // A stroke is a band of its color around the outside.
+        effects.set_value(6 * PS_BLOCK, 0.0);
+        effects.set_value(7 * PS_BLOCK, 1.0);
+        effects.set_ps_color(7, Color::rgb(0, 255, 0));
+        let stroked = apply(&layer, &effects);
+        assert!(at(&stroked, 18, 30)[3] > 0.5 && at(&stroked, 18, 30)[1] > 0.9, "{:?}", at(&stroked, 18, 30));
+        assert_eq!(at(&stroked, 30, 30), [0.0, 0.0, 1.0, 1.0]);
+        assert!(at(&stroked, 5, 5)[3] < 0.01);
+        assert_eq!(effects.ps_color(7), Color::rgb(0, 255, 0));
+        assert_eq!(effects.ps_color(0), Color::BLACK);
     }
 
     #[test]

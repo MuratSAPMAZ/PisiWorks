@@ -47,7 +47,11 @@ Serbest Biçim (O), işaretçinin yakınındaki bir yolu veya şekli çeker. Bı
 
 ## Canlı filtreler
 
-Özellikler panelindeki Filtreler, seçili nesnelere efekt ekler: renk ayarları, eğim ve kabartmalar, bulanıklaştırmalar, parazit, gölge ve ışımalar, keskinleştirme. Eklemek ve ayarlamak için listeden birini seçin. Her filtre; onu kapatan bir kutu, ayarlarını yeniden açan adı ve onu kaldıran bir eksi ile listelenir. Filtreler eklendikleri sırayla, nesne her çizildiğinde uygulanır; bu yüzden nesnenin kendisi düzenlenebilir kalır. Bir nesneden oluşturulan stil, nesnenin filtrelerini de saklar.
+Özellikler panelindeki Filtreler, seçili nesnelere efekt ekler: renk ayarları, eğim ve kabartmalar, bulanıklaştırmalar, parazit, gölge ve ışımalar, keskinleştirme. Eklemek ve ayarlamak için listeden birini seçin. Her filtre; onu kapatan bir kutu, ayarlarını yeniden açan adı ve onu kaldıran bir eksi ile listelenir. Filtreler listenin başından sonuna doğru, nesne her çizildiğinde uygulanır; bu yüzden nesnenin kendisi düzenlenebilir kalır. Bir filtrenin yerini değiştirmek için adını yukarı veya aşağı sürükleyin. Bir nesneden oluşturulan stil, nesnenin filtrelerini de saklar.
+
+Düzeyler, her düzeyde kaç piksel olduğunu ve girişte siyah, orta gri ve beyaz, çıkışta siyah ve beyaz sayılacak düzeyleri gösterir. Eğriler, girdi düzeyinden çıktı düzeyine bir eğri gösterir: nokta eklemek için eğriye tıklayın, bükmek için bir noktayı sürükleyin, kaldırmak için noktayı kutunun dışına sürükleyin. İkisinde de Kanal listesi vardır; kırmızı, yeşil ve mavinin, üçünün ortak ayarlarından ayrı kendi ayarları olur. Otomatik düğmesi her rengi en koyu düzeyinden en açık düzeyine yayar.
+
+Photoshop Canlı Efektleri; Alt Gölge, İç Gölge, Dış Işıma, İç Işıma, Eğim Ver ve Kabart, Saten, Renk Kaplama ve Kontur efektlerini bir arada tutan tek bir filtredir. İstediklerinizi işaretleyin; opaklık, açı, mesafe, boyut ve rengini ayarlamak için efektin adına tıklayın.
 
 ## Maskeler
 

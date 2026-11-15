@@ -45,7 +45,11 @@ Freeform (O) pulls a path or shape near the pointer, and Knife (Y, press again f
 
 ## Live filters
 
-Filters in Properties adds effects to the selected objects: color adjustments, bevels and embosses, blurs, noise, shadows and glows, and sharpening. Pick one from the list to add it and set it. Each filter is listed with a box that switches it off, its name, which opens its settings again, and a minus that removes it. Filters are applied in the order they were added, every time the object is drawn, so the object itself can still be edited. A style made from an object keeps its filters.
+Filters in Properties adds effects to the selected objects: color adjustments, bevels and embosses, blurs, noise, shadows and glows, and sharpening. Pick one from the list to add it and set it. Each filter is listed with a box that switches it off, its name, which opens its settings again, and a minus that removes it. Filters are applied from the top of the list down, every time the object is drawn, so the object itself can still be edited. Drag a filter's name up or down to change its place. A style made from an object keeps its filters.
+
+Levels shows how many pixels have each level, with the levels taken as black, mid gray and white on the way in and as black and white on the way out. Curves shows a curve from input level to output level: click it to add a point, drag a point to bend it, and drag a point out of the box to remove it. Both have a Channel list, with settings for red, green and blue apart from the ones all three share, and an Auto button that stretches each color from its darkest level to its lightest.
+
+Photoshop Live Effects is one filter holding Drop Shadow, Inner Shadow, Outer Glow, Inner Glow, Bevel and Emboss, Satin, Color Overlay and Stroke. Tick the ones you want, and click a name to set its opacity, angle, distance, size and color.
 
 ## Masks
 

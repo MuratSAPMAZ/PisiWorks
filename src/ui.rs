@@ -813,10 +813,12 @@ impl Workspace {
                             .min_w_0()
                             .truncate()
                             .hover(|s| s.bg(rgb(HOVER)))
+                            .when(self.filter_drag.is_some_and(|(held, _, _)| held == index), |d| d.bg(rgb(HOVER)))
+                            // A press takes hold of the filter: dragged, it changes place; let go where it is, it opens.
                             .on_mouse_down(
                                 MouseButton::Left,
-                                cx.listener(move |this, _, _, cx| {
-                                    this.open_filter(index);
+                                cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                                    this.begin_filter_drag(index, ev.position);
                                     cx.notify();
                                 }),
                             )
