@@ -336,6 +336,9 @@ pub fn font_entries() -> &'static [Entry] {
 pub enum ReadyCmd {
     Grayscale,
     Sepia,
+    AddArrowheads,
+    AddPictureFrame,
+    AddShadow,
     DistributeToLayers,
     HideOtherLayers,
     LockOtherLayers,
@@ -903,7 +906,16 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Manage Saved Commands...", "", Cmd::ManageCommands),
             cmd("Run Script...", "", Cmd::RunScript),
             Sep,
-            Sub("Creative", &[cmd("Convert to Grayscale", "", Cmd::Ready(ReadyCmd::Grayscale)), cmd("Convert to Sepia Tone", "", Cmd::Ready(ReadyCmd::Sepia))]),
+            Sub(
+                "Creative",
+                &[
+                    cmd("Add Arrowheads...", "", Cmd::Ready(ReadyCmd::AddArrowheads)),
+                    cmd("Add Picture Frame...", "", Cmd::Ready(ReadyCmd::AddPictureFrame)),
+                    cmd("Add Shadow", "", Cmd::Ready(ReadyCmd::AddShadow)),
+                    cmd("Convert to Grayscale", "", Cmd::Ready(ReadyCmd::Grayscale)),
+                    cmd("Convert to Sepia Tone", "", Cmd::Ready(ReadyCmd::Sepia)),
+                ],
+            ),
             Sub(
                 "Document",
                 &[

@@ -391,6 +391,8 @@ pub enum FieldId {
     NewSymbolName,
     TemplateName,
     CommandName,
+    ArrowSize,
+    FrameSize,
     /// Reverse State Range: the first state, or the last.
     ReverseState(bool),
     /// A text of Batch Process: 0 width, 1 height, 2 percentage, 3 prefix, 4 suffix.
@@ -698,6 +700,10 @@ pub struct Workspace {
     pub command_name: Option<(String, Option<usize>)>,
     /// Reverse State Range: the first and the last state, counted from 1.
     pub reverse_dialog: Option<(u32, u32)>,
+    /// Add Arrowheads: whether the start and the end get one, and how long the heads are.
+    pub arrow_dialog: Option<(bool, bool, f32)>,
+    /// Add Picture Frame: how wide the frame is.
+    pub frame_dialog: Option<f32>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -994,6 +1000,8 @@ impl Workspace {
             commands_dialog: None,
             command_name: None,
             reverse_dialog: None,
+            arrow_dialog: None,
+            frame_dialog: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2572,7 +2580,9 @@ impl Workspace {
             Cmd::TextAlignDown(_) => self.shown_text_style().orientation.is_vertical(),
             Cmd::SaveSteps => !self.steps_to_save().is_empty(),
             Cmd::Ready(ready) => match ready {
-                crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia => has_selection,
+                crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia | crate::menus::ReadyCmd::AddShadow => has_selection,
+                crate::menus::ReadyCmd::AddArrowheads => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Line | Shape::Path { closed: false })),
+                crate::menus::ReadyCmd::AddPictureFrame => true,
                 crate::menus::ReadyCmd::DistributeToLayers => self.ed.selection.len() >= 2,
                 crate::menus::ReadyCmd::HideOtherLayers | crate::menus::ReadyCmd::LockOtherLayers => self.ed.doc.page().layers.len() >= 2,
                 crate::menus::ReadyCmd::ReverseStates | crate::menus::ReadyCmd::ReverseStateRange => self.ed.doc.page().states.len() >= 2,
@@ -2735,8 +2745,83 @@ impl Workspace {
                     self.ed.commit(t("Reverse All States"));
                 }
             }
+            ReadyCmd::AddArrowheads => self.arrow_dialog = Some((false, true, 12.0)),
+            ReadyCmd::AddPictureFrame => self.frame_dialog = Some(10.0),
+            ReadyCmd::AddShadow => {
+                if self.ed.add_shadows() > 0 {
+                    self.ed.commit(t("Add Shadow"));
+                }
+            }
             ReadyCmd::ReverseStateRange => self.reverse_dialog = Some((1, self.ed.doc.page().states.len() as u32)),
         }
+    }
+
+    /// Closes Add Arrowheads; kept, each selected open path gets a head at the ends asked for, in the color of its stroke.
+    pub fn close_arrow_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some((at_start, at_end, size)) = self.arrow_dialog.take() else { return };
+        if !keep || !(at_start || at_end) {
+            return;
+        }
+        let paths: Vec<(Vec<Vec2>, Color)> = self
+            .ed
+            .selected()
+            .into_iter()
+            .filter(|o| matches!(o.shape, Shape::Line | Shape::Path { closed: false }) && o.points.len() >= 2)
+            .map(|o| (o.points.clone(), o.stroke.map_or(Color::BLACK, |s| s.color)))
+            .collect();
+        let before = self.ed.selection.clone();
+        let mut heads = Vec::new();
+        for (points, color) in paths {
+            let last = points.len() - 1;
+            let ends = [(at_start, points[0], points[1]), (at_end, points[last], points[last - 1])];
+            for (_, tip, from) in ends.into_iter().filter(|(wanted, _, _)| *wanted) {
+                let (dx, dy) = (tip.x - from.x, tip.y - from.y);
+                let length = dx.hypot(dy).max(0.001);
+                let (ux, uy) = (dx / length, dy / length);
+                // The point of the head is the end of the path; its back is as wide as four fifths of its length.
+                let back = v2(tip.x - ux * size, tip.y - uy * size);
+                let half = size * 0.4;
+                let corners = vec![tip, v2(back.x - uy * half, back.y + ux * half), v2(back.x + uy * half, back.y - ux * half)];
+                let mut head = self.new_object(t("Arrowhead"), Shape::Path { closed: true }, Rect::of_points(&corners), corners);
+                (head.fill, head.stroke) = (Some(color), None);
+                heads.push(head);
+            }
+        }
+        if heads.is_empty() {
+            self.status = t("Select an open path to add arrowheads to").into();
+            return;
+        }
+        for head in heads {
+            self.ed.add_object(head);
+        }
+        self.ed.selection = before;
+        self.ed.commit(t("Add Arrowheads"));
+    }
+
+    /// Closes Add Picture Frame; kept, a frame of the width asked for is laid round the canvas on a locked layer of its own.
+    pub fn close_frame_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(width) = self.frame_dialog.take() else { return };
+        if !keep {
+            return;
+        }
+        self.ed.leave_symbol();
+        let area = self.ed.doc.page().rect();
+        let thickness = (width / area.w.min(area.h)).clamp(0.02, 0.49);
+        let top = self.ed.doc.page().layers.len() - 1;
+        self.ed.doc.page_mut().active_layer = top;
+        self.ed.add_layer();
+        let mut frame = self.new_object(t("Frame"), Shape::Auto { kind: AutoKind::Frame, a: thickness, b: 0.0, count: 0 }, area, Vec::new());
+        (frame.fill, frame.stroke) = (Some(Color::rgb(0x8b, 0x5a, 0x2b)), None);
+        frame.filters.push(LiveFilter::new(FilterKind::InnerBevel));
+        let page = self.ed.doc.page_mut();
+        let layer = &mut page.layers[page.active_layer];
+        layer.name = t("Frame").into();
+        layer.objects.push(frame);
+        layer.locked = true;
+        self.ed.selection.clear();
+        self.ed.commit(t("Add Picture Frame"));
     }
 
     /// Closes Reverse State Range; kept, the states from the first to the last asked for change places.
@@ -5731,6 +5816,10 @@ impl Workspace {
             }
         } else if self.command_name.is_some() && matches!(key, "enter" | "escape") {
             self.close_command_name(key == "enter");
+        } else if self.arrow_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_arrow_dialog(key == "enter");
+        } else if self.frame_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_frame_dialog(key == "enter");
         } else if self.reverse_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_reverse_dialog(key == "enter");
         } else if self.commands_dialog.is_some() && key == "escape" {
@@ -6024,6 +6113,8 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::ArrowSize => self.arrow_dialog.map_or_else(String::new, |d| number(d.2)),
+            FieldId::FrameSize => self.frame_dialog.map_or_else(String::new, number),
             FieldId::CommandName => self.command_name.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
             FieldId::ReverseState(last) => self.reverse_dialog.map_or_else(String::new, |(from, to)| if last { to } else { from }.to_string()),
             FieldId::Batch(which) => self.batch_dialog.as_ref().map_or_else(String::new, |d| match which {
@@ -6247,6 +6338,16 @@ impl Workspace {
                     (3, _) => dialog.prefix = text.to_string(),
                     (4, _) => dialog.suffix = text.to_string(),
                     _ => {}
+                }
+            }
+            FieldId::ArrowSize => {
+                if let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.arrow_dialog.as_mut()) {
+                    dialog.2 = v.min(500.0);
+                }
+            }
+            FieldId::FrameSize => {
+                if let (Some(v), Some(width)) = (number.filter(|v| *v >= 1.0), self.frame_dialog.as_mut()) {
+                    *width = v.min(2000.0);
                 }
             }
             FieldId::CommandName => {

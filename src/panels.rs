@@ -1676,6 +1676,36 @@ impl Workspace {
         Some(self.dialog_frame(280., t("Save Command"), rows, buttons))
     }
 
+    /// Commands > Creative > Add Arrowheads: which ends, and how large.
+    pub(crate) fn arrow_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (at_start, at_end, _) = self.arrow_dialog?;
+        let rows = vec![
+            self.check_box(t("Add to Start"), at_start, cx, |this| this.arrow_dialog.iter_mut().for_each(|d| d.0 = !d.0)).into_any_element(),
+            self.check_box(t("Add to End"), at_end, cx, |this| this.arrow_dialog.iter_mut().for_each(|d| d.1 = !d.1)).into_any_element(),
+            labelled_row(t("Size:"), 60., div().flex().items_center().gap_1().child(self.field(FieldId::ArrowSize, 50., cx)).child(label(t("pixels")))).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_arrow_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_arrow_dialog(false)));
+        Some(self.dialog_frame(230., t("Add Arrowheads"), rows, buttons))
+    }
+
+    /// Commands > Creative > Add Picture Frame: how wide the frame is.
+    pub(crate) fn frame_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.frame_dialog?;
+        let rows = vec![labelled_row(t("Frame size:"), 90., div().flex().items_center().gap_1().child(self.field(FieldId::FrameSize, 50., cx)).child(label(t("pixels")))).into_any_element()];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_frame_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_frame_dialog(false)));
+        Some(self.dialog_frame(230., t("Add Picture Frame"), rows, buttons))
+    }
+
     /// Commands > Document > Reverse State Range: the first and the last state to change places.
     pub(crate) fn reverse_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.reverse_dialog?;

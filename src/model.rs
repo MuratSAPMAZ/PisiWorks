@@ -145,6 +145,12 @@ impl Warp {
         }
     }
 
+    /// Lays what stands on the level line `foot` down behind it, as a cast shadow lies:
+    /// leaning over by `lean` for each pixel of height, and `squash` times as tall.
+    pub fn cast(foot: f32, lean: f32, squash: f32) -> Self {
+        Self { m: [1.0, -lean, lean * foot, 0.0, squash, foot * (1.0 - squash), 0.0, 0.0, 1.0] }
+    }
+
     /// This map followed by `next`.
     pub fn then(&self, next: &Warp) -> Self {
         let (a, b) = (&next.m, &self.m);
@@ -3504,6 +3510,34 @@ impl Editor {
         }
     }
 
+    /// Fireworks' Add Shadow: under each selected object, a dark copy of it lying on the ground behind it.
+    pub fn add_shadows(&mut self) -> usize {
+        let ids = self.selection.clone();
+        let mut added = 0;
+        for id in ids {
+            let Some(original) = self.object(id).filter(|o| !o.is_web()).cloned() else { continue };
+            let mut shadow = original.clone();
+            shadow.id = self.alloc_id();
+            shadow.name = t("Shadow").into();
+            (shadow.filters, shadow.mask, shadow.fill_style, shadow.opacity) = (Vec::new(), None, None, 0.4);
+            if shadow.takes_color() {
+                shadow.fill = shadow.fill.map(|_| Color::BLACK);
+                shadow.stroke = shadow.stroke.map(|stroke| Stroke { color: Color::BLACK, ..stroke });
+            }
+            if !shadow.warp(&Warp::cast(original.bounds.bottom(), 0.5, 0.5)) {
+                continue;
+            }
+            for layer in &mut self.doc.page_mut().layers {
+                if let Some(at) = layer.objects.iter().position(|o| o.id == id) {
+                    layer.objects.insert(at, shadow);
+                    added += 1;
+                    break;
+                }
+            }
+        }
+        added
+    }
+
     /// Fireworks' Distribute to Layers: each selected object goes to a new layer of its own, named after it.
     pub fn distribute_to_layers(&mut self) -> usize {
         let objects = self.selected_in_order();
@@ -5235,6 +5269,22 @@ mod tests {
         e.delete_selected();
         assert!(e.leave_symbol());
         assert!(e.doc.symbols[0].objects.is_empty() && e.doc.page().objects().count() == 3);
+    }
+
+    #[test]
+    fn add_shadow_lays_a_dark_copy_under_the_object() {
+        let mut e = editor();
+        e.selection = vec![100];
+        assert_eq!(e.add_shadows(), 1);
+        let objects: Vec<&Object> = e.doc.page().objects().collect();
+        assert_eq!(objects.len(), 4);
+        // The shadow lies under the object it belongs to, half as tall, with the same foot, leaning to the right.
+        let (shadow, original) = (objects[0], objects[1]);
+        assert_eq!(original.id, 100);
+        assert_eq!((shadow.fill, shadow.opacity), (Some(Color::BLACK), 0.4));
+        assert!((shadow.bounds.bottom() - original.bounds.bottom()).abs() < 0.01 && (shadow.bounds.h - 20.0).abs() < 0.01);
+        assert!(shadow.bounds.right() > original.bounds.right() + 5.0 && (shadow.bounds.x - original.bounds.x).abs() < 0.01);
+        assert_eq!(e.selection, vec![100]);
     }
 
     #[test]

@@ -1851,6 +1851,8 @@ impl Render for Workspace {
             .children(self.commands_dialog_view(cx))
             .children(self.command_name_view(cx))
             .children(self.reverse_dialog_view(cx))
+            .children(self.arrow_dialog_view(cx))
+            .children(self.frame_dialog_view(cx))
             .children(self.animate_dialog_view(cx))
             .children(self.shortcuts_view(cx))
             .children(self.spell_dialog_view(cx))
