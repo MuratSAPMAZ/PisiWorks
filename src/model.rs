@@ -3578,6 +3578,8 @@ impl SymbolKind {
         match self {
             SymbolKind::Graphic => t("Graphic"),
             SymbolKind::Button => t("Button"),
+            // In the animation program this kind is a movie clip, with a timeline of its own.
+            SymbolKind::Animation if crate::theme::is_sahne() => t("Movie Clip"),
             SymbolKind::Animation => t("Animation"),
         }
     }
@@ -4638,6 +4640,12 @@ impl Editor {
 
     pub fn set_active_page(&mut self, index: usize) {
         if index < self.doc.pages.len() {
+            // Going elsewhere from a movie clip's page ends the edit of the clip.
+            if self.editing_clip().is_some() {
+                self.sync_clip();
+                self.doc.clip_return = None;
+                self.commit(t("Edit Symbol"));
+            }
             self.leave_symbol_for_good();
             self.close_groups();
             self.navigate(|doc| doc.active_page = index);

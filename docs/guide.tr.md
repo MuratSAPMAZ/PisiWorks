@@ -212,3 +212,38 @@ Menü çubuğunun sağ ucundaki **Örnekler** menüsü, Fireworks'te bulunmayan 
 - **Dışa aktarma ve döngü.** En İyileştir panelinde **Animasyonlu GIF** seçin. Aynı satırdaki **Döngü** listesi animasyonun kaç kez oynayacağını belirler: Sonsuz, Döngü Yok (bir kez) ya da belirli bir sayı.
 - **Ara kareler.** Aynı sembolün iki ya da daha çok kopyasını seçip **Değiştir > Sembol > Örneklerin Arasını Doldur** (Ctrl+Alt+Shift+T) deyin. Adım sayısı kadar ara kopya üretilir; konum, boyut, dönüş ve opaklık adım adım değişir. **Durumlara dağıt** işaretliyse her kopya kendi durumuna yerleşir ve animasyon hazır olur.
 - **GIF Oluştur.** Menü çubuğunun sağındaki **GIF > GIF Oluştur** resim dosyalarından animasyon yapar: dosyaları ekleyin (ada göre sıralanır), kare süresini ve döngüyü seçin. **GIF Kaydet** doğrudan dosyaya yazar; **Belge Olarak Aç** kareleri durumlara dağıtır ve üzerinde çalışmaya devam edersiniz. Farklı boyuttaki resimler en büyüğünün boyutundaki tuvalin ortasına yerleşir.
+
+## PisiSahne ile animasyon
+
+PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahnenin üstündeki zaman çizelgesidir. Aşağıdaki terimler bizim çevirimizdir; ders notlarınızdaki sözcükler farklı olabilir.
+
+**Zaman çizelgesi.** Her katmanın bir kare satırı vardır. Bir kareye tıklayınca o kare gösterilir; numaraların üzerinde sürükleyerek kareler arasında gezinirsiniz. Katman adının yanındaki göz katmanı gizler, kilit kilitler.
+
+| Tuş | İş |
+|---|---|
+| F5 | Kare ekle (anahtar karenin süresini uzatır) |
+| Shift+F5 | Kareleri kaldır |
+| F6 | Anahtar kare ekle (o karedeki görüntüyle başlar) |
+| F7 | Boş anahtar kare ekle |
+| Shift+F6 | Anahtar kareyi temizle |
+| Enter | Oynat ya da durdur |
+| . ve , | Bir kare ileri, bir kare geri |
+| Ctrl+Enter | Filmi Test Et |
+
+**Hareket ara doldurma.** Nesneyi ilk karede çizin, ileri bir karede F6 ile anahtar kare ekleyip nesneyi taşıyın, büyütün ya da döndürün; ilk anahtar kareye dönüp **Zaman Çizelgesi > Hareket Ara Doldurması Oluştur** deyin. Aradaki kareler mavi olur. Altta **Yavaşlama** (−100 yavaş başlar, 100 yavaş biter) ve **Tur** (yol boyunca tam dönüş sayısı) alanları çıkar.
+
+**Şekil ara doldurma.** İlk karede bir şekil, ileride F7 ile açtığınız boş anahtar karede başka bir şekil çizin; ilk karede **Şekil Ara Doldurması Oluştur** deyin. Aradaki kareler yeşil olur. Dönüşüm istediğiniz gibi olmuyorsa **Şekil İpucu Ekle** (Ctrl+Shift+H) ile işaretler koyun: ilk karedeki sarı işareti ve son karedeki yeşil işareti, birbirine dönüşmesini istediğiniz noktalara sürükleyin.
+
+**Kılavuz katmanı.** Hareket eden nesnenin katmanının üstüne yeni bir katman ekleyip içine bir yol çizin, sonra **Kılavuz Katmanı** deyin. Nesne yolu izler; **Yola yönlendir** işaretliyse yolun yönüne de döner. Kılavuz yayımlanan filmde görünmez.
+
+**Maske katmanı.** Maskelenecek katmanın üstüne bir katman ekleyip içine şekil çizin ve **Maske Katmanı** deyin: alttaki katman yalnızca o şeklin olduğu yerde görünür. Maske Önizleme'de, yayımda ve iki katman da kilitlenince sahnede uygulanır. Başka katmanları da aynı kılavuza ya da maskeye bağlamak için **Kılavuza ya da Maskeye Bağla** kullanılır.
+
+**Semboller.** **Düzenle > Ekle > Yeni Sembol** üç tür sunar. *Grafik* yerinde düzenlenir. *Film Klibi*nin kendi zaman çizelgesi vardır: kopyasına çift tıklayınca klibin sayfası açılır, sahnenin üstündeki **◀** düğmesi geri döndürür. *Düğme*nin Yukarıda, Üzerinde ve Aşağıda durumları vardır.
+
+**Eylemler.** Zaman çizelgesinin altındaki **Kare eylemi** listesi, o anahtar kareye gelindiğinde ne olacağını belirler; eylemi olan anahtar kare kırmızı görünür. Bir düğme seçiliyken Özellikler'deki **Eylem** listesi tıklanınca ne olacağını belirler. Eylemler: Dur, Oynat, Kareye Git ve Oynat, Kareye Git ve Dur, Sahneye Git, Adrese Git. Kare ve sahne numaraları 1'den başlar.
+
+**Sahneler.** Sahneler panelinde her sayfa bir sahnedir. Film sahneleri sırayla oynatır; sonuncudan sonra başa döner.
+
+**Ses.** **Ses İçe Aktar** bir MP3, OGG ya da WAV dosyasını belgeye ekler ve bulunduğunuz anahtar karede başlatır; mavi çerçeveli anahtar kare sesli demektir. Program içinde oynatırken ses, sistemde `ffplay`, `mpv`, `paplay` ya da `aplay` kuruluysa duyulur.
+
+**Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.

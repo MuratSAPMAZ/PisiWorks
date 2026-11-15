@@ -107,6 +107,9 @@ pub enum Combo {
     TextOrientation,
     GifLoop,
     GifWizardLoop,
+    /// The action of the frame on show, or, with `true`, of the selected button.
+    Action(bool),
+    FrameSound,
     ArrowStyle,
     AutoMask,
     Printer,
@@ -411,6 +414,8 @@ pub enum FieldId {
     TweenSteps,
     GifDelay,
     FrameRate,
+    /// The number or address an action takes: of the frame's action, or of the selected button's.
+    ActionParam(bool),
     TweenEase,
     TweenTurns,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
@@ -2430,6 +2435,8 @@ impl Workspace {
             FrameCmd::Forward => self.show_frame((current + 1).min(count.saturating_sub(1)), None),
             FrameCmd::Back => self.show_frame(current.saturating_sub(1), None),
             FrameCmd::PublishHtml => self.publish_html(window, cx),
+            FrameCmd::TestMovie => self.test_movie(),
+            FrameCmd::ImportSound => self.pick_file(window, cx, |this, path| this.import_sound(&path)),
         }
     }
 
@@ -2440,7 +2447,11 @@ impl Workspace {
             this.update(cx, |this, cx| {
                 if this.frames_playing && this.play_token == token {
                     if let Some((current, count)) = this.frame_position() {
-                        this.ed.goto_frame(if current + 1 >= count { 0 } else { current + 1 });
+                        let next = if current + 1 >= count { 0 } else { current + 1 };
+                        this.ed.goto_frame(next);
+                        for sound in this.sounds_starting(next) {
+                            this.play_sound(sound);
+                        }
                     }
                     this.schedule_timeline(token, cx);
                     cx.notify();
@@ -2451,17 +2462,129 @@ impl Workspace {
         .detach();
     }
 
-    /// Control > Publish as HTML5: asks for a file and writes the scene as a page that plays in a browser.
-    fn publish_html(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.ed.leave_symbol_for_good();
-        self.ed.end_mask_edit();
-        self.ed.close_groups();
-        // The whole animation, every scene and clip with the work on its frame on show written into its timeline.
+    /// The whole animation as it is to be published: every scene and clip with the work on its frame on show written into its timeline.
+    fn movie(&mut self) -> Document {
         self.ed.sync_clip();
         let mut movie = self.ed.doc.clone();
         for page in &mut movie.pages {
             page.store_frame();
         }
+        movie
+    }
+
+    /// Control > Test Movie: publishes the animation to a file of the program's own and opens it in the browser, as Flash's Test Movie opens the finished film.
+    fn test_movie(&mut self) {
+        let movie = self.movie();
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
+        let path = folder.join("test.html");
+        let written = std::fs::create_dir_all(&folder).map_err(anyhow::Error::from).and_then(|()| crate::publish::html(&movie, &self.document_name())).and_then(|html| std::fs::write(&path, html).map_err(anyhow::Error::from));
+        self.status = match written.and_then(|()| std::process::Command::new("xdg-open").arg(&path).spawn().map(|_| ()).map_err(anyhow::Error::from)) {
+            Ok(()) => t("The movie is open in the browser").to_string(),
+            Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
+        };
+    }
+
+    /// Timeline > Import Sound: adds a sound file to the animation and starts it on the keyframe the frame on show belongs to.
+    pub fn import_sound(&mut self, path: &Path) {
+        let extension = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let mime = match extension.as_str() {
+            "mp3" => "audio/mpeg",
+            "ogg" | "oga" => "audio/ogg",
+            "wav" => "audio/wav",
+            _ => {
+                self.status = t("Sounds can be MP3, OGG or WAV files").into();
+                return;
+            }
+        };
+        match std::fs::read(path) {
+            Ok(bytes) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                let id = self.ed.add_sound(&name, mime, &bytes);
+                self.set_frame_sound(Some(id));
+                self.status = tf("Imported {}", &[&name]);
+            }
+            Err(error) => self.status = tf("Could not import file: {}", &[&error]),
+        }
+    }
+
+    /// The keyframe the frame on show belongs to, on the active layer.
+    pub fn current_span(&self) -> Option<&crate::model::Span> {
+        let page = self.ed.doc.page();
+        let timeline = page.timeline.as_ref()?;
+        let span = timeline.span_at(page.active_layer, timeline.current)?;
+        timeline.layers[page.active_layer].get(span)
+    }
+
+    /// Sets what the keyframe the frame on show belongs to does when the animation reaches it.
+    pub fn set_frame_action(&mut self, action: Option<crate::model::Action>) {
+        let text = action.map_or_else(String::new, |action| action.text());
+        self.ed.on_timeline(|timeline, layer, frame| {
+            if let Some(at) = timeline.span_at(layer, frame) {
+                timeline.layers[layer][at].action = text;
+            }
+        });
+        self.ed.commit(t("Frame Action"));
+    }
+
+    /// Sets the sound that starts on the keyframe the frame on show belongs to.
+    pub fn set_frame_sound(&mut self, sound: Option<u64>) {
+        self.ed.on_timeline(|timeline, layer, frame| {
+            if let Some(at) = timeline.span_at(layer, frame) {
+                timeline.layers[layer][at].sound = sound;
+            }
+        });
+        self.ed.commit(t("Frame Sound"));
+    }
+
+    /// The action of the selected button, if one copy of a button symbol is selected.
+    pub fn button_action(&self) -> Option<Option<crate::model::Action>> {
+        let selected = self.ed.selected();
+        let [object] = selected.as_slice() else { return None };
+        let Shape::Instance { symbol, .. } = object.shape else { return None };
+        self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == SymbolKind::Button).then(|| crate::model::Action::parse(&object.link))
+    }
+
+    pub fn set_button_action(&mut self, action: Option<crate::model::Action>) {
+        let text = action.map_or_else(String::new, |action| action.text());
+        self.ed.for_selected(|o| o.link.clone_from(&text));
+        self.ed.commit(t("Button Action"));
+    }
+
+    /// Plays a sound of the animation while the timeline plays in the program, with whichever player the system has.
+    fn play_sound(&self, id: u64) {
+        use base64::Engine;
+        let Some(sound) = self.ed.doc.sounds.iter().find(|s| s.id == id) else { return };
+        let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(sound.data.as_bytes()) else { return };
+        let extension = match sound.mime.as_str() {
+            "audio/mpeg" => "mp3",
+            "audio/ogg" => "ogg",
+            _ => "wav",
+        };
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
+        let file = folder.join(format!("ses-{id}.{extension}"));
+        if std::fs::create_dir_all(&folder).is_err() || (!file.exists() && std::fs::write(&file, bytes).is_err()) {
+            return;
+        }
+        let players: [(&str, &[&str]); 4] = [("ffplay", &["-nodisp", "-autoexit", "-loglevel", "quiet"]), ("mpv", &["--no-video", "--really-quiet"]), ("paplay", &[]), ("aplay", &["-q"])];
+        for (program, arguments) in players {
+            let started = std::process::Command::new(program).args(arguments).arg(&file).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
+            if started.is_ok() {
+                break;
+            }
+        }
+    }
+
+    /// The sounds that start on a frame: those of the keyframes that begin there.
+    fn sounds_starting(&self, frame: usize) -> Vec<u64> {
+        self.ed.doc.page().timeline.as_ref().map_or_else(Vec::new, |timeline| timeline.layers.iter().filter_map(|spans| spans.iter().find(|span| span.start == frame)?.sound).collect())
+    }
+
+    /// Control > Publish as HTML5: asks for a file and writes the scene as a page that plays in a browser.
+    fn publish_html(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.ed.leave_symbol_for_good();
+        self.ed.end_mask_edit();
+        self.ed.close_groups();
+        let movie = self.movie();
         let stem = self.path.as_ref().map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
         let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.html")));
         cx.spawn_in(window, async move |this, cx| {
@@ -2623,6 +2746,13 @@ impl Workspace {
         self.ed.leave_symbol();
         let id = self.ed.new_symbol(name, kind);
         self.symbol_selection = Some(id);
+        // A new movie clip opens with its own empty timeline; its first copy is placed when the edit ends.
+        if is_sahne() && kind == SymbolKind::Animation {
+            self.ed.open_clip(id);
+            self.ed.commit(t("New Symbol"));
+            self.status = t("Draw the movie clip on its own timeline, then go back to the scene").into();
+            return;
+        }
         self.ed.edit_symbol(id, None, true);
         self.ed.commit(if kind == SymbolKind::Button { t("New Button") } else { t("New Symbol") });
         self.set_view_mode(ViewMode::Original);
@@ -2631,6 +2761,30 @@ impl Workspace {
 
     /// Edit Symbol: opens the selected copy where it lies, or ends the edit that is going on.
     pub fn toggle_symbol_edit(&mut self) {
+        self.frames_playing = false;
+        // In the animation program a movie clip is edited on a page of its own, with its own timeline.
+        if let Some(symbol) = self.ed.editing_clip() {
+            self.ed.leave_clip();
+            // A clip made from nothing gets its first copy now, in the middle of the scene.
+            let placed = self.ed.doc.pages.iter().any(|page| page.objects().any(|o| matches!(o.shape, Shape::Instance { symbol: of, .. } if of == symbol)));
+            if !placed {
+                let middle = self.ed.doc.page().rect().center();
+                self.ed.place_symbol_at(symbol, middle);
+            }
+            self.ed.commit(t("Edit Symbol"));
+            return;
+        }
+        let clip = self.ed.selected().iter().find_map(|o| match o.shape {
+            Shape::Instance { symbol, .. } if is_sahne() && self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == SymbolKind::Animation) => Some(symbol),
+            _ => None,
+        });
+        if let Some(symbol) = clip.filter(|_| self.ed.editing_symbol().is_none()) {
+            if self.ed.open_clip(symbol) {
+                self.ed.commit(t("Edit Symbol"));
+                self.status = t("Editing the movie clip: the timeline is its own. The button above the stage goes back to the scene").into();
+            }
+            return;
+        }
         if self.ed.leave_symbol() || self.ed.edit_selected_symbol() {
             self.ed.commit(t("Edit Symbol"));
             if self.ed.editing_symbol().is_some() {
@@ -2955,7 +3109,7 @@ impl Workspace {
                 crate::menus::ReadyCmd::HideOtherLayers | crate::menus::ReadyCmd::LockOtherLayers => self.ed.doc.page().layers.len() >= 2,
                 crate::menus::ReadyCmd::ReverseStates | crate::menus::ReadyCmd::ReverseStateRange => self.ed.doc.page().states.len() >= 2,
             },
-            Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some(),
+            Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some() || self.ed.editing_clip().is_some(),
             Cmd::TweenInstances => self.ed.can_tween(),
             Cmd::AnimateSettings | Cmd::RemoveAnimation => self.ed.selected_animation().is_some(),
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
@@ -6292,6 +6446,11 @@ impl Workspace {
             return;
         }
         let typing = self.field.is_some() || self.text_edit.is_some();
+        if is_sahne() && !typing && m.control && !m.alt && !m.shift && key == "enter" {
+            self.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx);
+            cx.notify();
+            return;
+        }
         // The animation program's own keys, where Flash has them.
         if is_sahne() && !typing && !m.control && !m.alt {
             use crate::menus::FrameCmd;
@@ -6658,6 +6817,14 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
+            FieldId::ActionParam(button) => {
+                let action = if button { self.button_action().flatten() } else { self.current_span().and_then(|span| crate::model::Action::parse(&span.action)) };
+                match action {
+                    Some(crate::model::Action::GotoPlay(n) | crate::model::Action::GotoStop(n) | crate::model::Action::Scene(n)) => n.to_string(),
+                    Some(crate::model::Action::Url(address)) => address,
+                    _ => String::new(),
+                }
+            }
             FieldId::TweenEase => self.current_tween().map_or_else(String::new, |tween| number(tween.ease)),
             FieldId::TweenTurns => self.current_tween().map_or_else(String::new, |tween| tween.turns.to_string()),
             FieldId::FrameRate => self.ed.doc.page().timeline.as_ref().map_or_else(String::new, |timeline| number(timeline.fps)),
@@ -6899,6 +7066,23 @@ impl Workspace {
                     3 => s.rotation = v.clamp(-360.0, 360.0),
                     4 => s.scale = v.clamp(1.0, 1000.0),
                     _ => s.fade_to = v.clamp(0.0, 100.0),
+                }
+            }
+            FieldId::ActionParam(button) => {
+                use crate::model::Action;
+                let before = if button { self.button_action().flatten() } else { self.current_span().and_then(|span| Action::parse(&span.action)) };
+                let whole = number.filter(|v| *v >= 1.0).map(|v| v.round() as usize);
+                let action = match (before, whole) {
+                    (Some(Action::GotoPlay(_)), Some(n)) => Action::GotoPlay(n),
+                    (Some(Action::GotoStop(_)), Some(n)) => Action::GotoStop(n),
+                    (Some(Action::Scene(_)), Some(n)) => Action::Scene(n),
+                    (Some(Action::Url(_)), _) if !cleared => Action::Url(text.to_string()),
+                    _ => return,
+                };
+                if button {
+                    self.set_button_action(Some(action));
+                } else {
+                    self.set_frame_action(Some(action));
                 }
             }
             FieldId::TweenEase | FieldId::TweenTurns => {

@@ -168,13 +168,18 @@ Working at this stage:
 - Shape hints (Ctrl+Shift+H): lettered marks, dragged on the stage, that say which point of a shape is to become which.
 - Guide layers: the tweened objects of the layers tied to one travel along its path, turning to face the way it runs if asked. Mask layers: the layers tied to one show only where the mask has something drawn. Several layers can be tied to one guide or mask. Guides are not drawn when publishing; masks are applied in Preview, when publishing and, as in Flash, on the stage once their layers are locked.
 - Easing (from −100 to 100) and, for a motion tween, a number of turns.
+- Movie clip symbols: symbols with a timeline of their own. A double-click on a copy opens the clip's own page; in the published film it plays its own frames even while the scene stands still.
+- Button symbols and ready-made actions: Stop, Play, Go to Frame and Play, Go to Frame and Stop, Go to Scene, Go to Address. An action is given to a keyframe or to a button; no code is written.
+- Scenes: every page in the Scenes panel is a scene, and the film plays them one after another.
+- Sound: an MP3, OGG or WAV file is imported and started on a keyframe.
+- Test Movie (Ctrl+Enter) publishes the film and opens it in the browser.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 
 The window is laid out as Flash's classic workspace is: the timeline over the stage, the tools on the left, Properties at the bottom; layers are in the timeline. Enter plays. The `.deb` package installs both programs.
 
-Not there yet (the third stage): movie clip symbols, frame and button actions, moving between scenes, and sound.
+Known differences from Flash: there is no ActionScript; ready-made actions take its place. `.fla` and `.swf` files are neither opened nor written. In the published page every frame, and every frame of a clip, is a picture. Clips and buttons inside a movie clip show their first frame, standing still, in the published film, and live filters given to a copy of a clip are not applied there. While playing inside the program (Enter), frame actions are not run and clips show their first frame, as in Flash; the whole film is seen with Test Movie.
 
 The Turkish terms are our own rendering, for want of a Turkish Flash installation to take them from, and may differ from the words in teachers' notes. They are all in one translation table and will be corrected if the right ones are reported.
 

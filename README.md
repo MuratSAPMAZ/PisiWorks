@@ -169,13 +169,18 @@ Bu aşamada çalışanlar:
 - Şekil ipuçları (Ctrl+Shift+H): şeklin bir noktasının hangi noktaya dönüşeceğini belirleyen, sahnede sürüklenen harfli işaretler.
 - Kılavuz katmanı: ona bağlı katmanların ara doldurulan nesneleri kılavuzdaki yol boyunca ilerler; istenirse yolun yönüne döner. Maske katmanı: ona bağlı katmanlar yalnızca maskede çizili olan yerde görünür. Bir kılavuza ya da maskeye birden çok katman bağlanabilir. Kılavuzlar yayımda çizilmez; maskeler Önizleme'de, yayımda ve, Flash'ta olduğu gibi, katmanları kilitlenince sahnede de uygulanır.
 - Yavaşlama (−100 ile 100 arası) ve hareket ara doldurmada tur sayısı.
+- Film klibi sembolleri: kendi zaman çizelgesi olan semboller. Kopyasına çift tıklayınca klibin kendi sayfası açılır; yayımlanan filmde sahne dursa bile kendi karelerini oynatır.
+- Düğme sembolleri ve hazır eylemler: Dur, Oynat, Kareye Git ve Oynat, Kareye Git ve Dur, Sahneye Git, Adrese Git. Eylem bir anahtar kareye ya da bir düğmeye verilir; kod yazmak gerekmez.
+- Sahneler: Sahneler panelindeki her sayfa bir sahnedir; film sahneleri sırayla oynatır.
+- Ses: MP3, OGG ya da WAV dosyası içe aktarılır ve bir anahtar karede başlatılır.
+- Filmi Test Et (Ctrl+Enter): filmi yayımlayıp tarayıcıda açar.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 
 Pencere, Flash'ın klasik çalışma alanı gibi düzenlenir: zaman çizelgesi sahnenin üstünde, araçlar solda, Özellikler altta; katmanlar zaman çizelgesindedir. Enter oynatır. `.deb` paketi iki programı birlikte kurar.
 
-Henüz olmayanlar (üçüncü aşama): film klibi sembolleri, kare ve düğme eylemleri, sahneler arası geçiş ve ses.
+Flash'tan bilinen farklar: ActionScript yoktur, yerine hazır eylemler vardır. `.fla` ve `.swf` dosyaları açılmaz ve yazılmaz. Yayımlanan sayfada her kare ve her klip karesi bir resimdir. Bir film klibinin içindeki başka klipler ve düğmeler yayımlanan filmde ilk kareleriyle, hareketsiz görünür; kliplerin kopyalarına verilen canlı filtreler de yayımda uygulanmaz. Program içinde oynatırken (Enter) kare eylemleri çalışmaz ve klipler ilk kareleriyle görünür, Flash'ta olduğu gibi; filmin tamamı Filmi Test Et ile görülür.
 
 Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") elimizde Türkçe Flash kurulumu olmadığı için bizim çevirimizdir ve ders notlarındaki sözcüklerden farklı olabilir. Hepsi tek bir çeviri tablosundadır; doğrusunu bildirirseniz düzeltilir.
 

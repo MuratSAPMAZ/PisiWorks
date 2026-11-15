@@ -580,6 +580,29 @@ impl Workspace {
     /// While a symbol is edited in place: the way back to the page, the symbol's name
     /// and, for a button, which of its looks is on show.
     fn symbol_trail(&self, cx: &mut Context<Self>) -> Option<Div> {
+        // A movie clip being edited: the way back to its scene, and its name.
+        if let Some(symbol) = self.ed.editing_clip().filter(|_| self.ed.editing_symbol().is_none()) {
+            let scene = self.ed.doc.clip_return.or(self.ed.doc.scenes().first().copied()).and_then(|index| self.ed.doc.pages.get(index)).map_or_else(String::new, |page| page.name.clone());
+            let name = self.ed.doc.symbols.iter().find(|s| s.id == symbol).map_or_else(String::new, |s| s.name.clone());
+            let back = div()
+                .h(px(20.))
+                .px_1p5()
+                .flex()
+                .flex_none()
+                .items_center()
+                .border_1()
+                .border_color(rgb(INPUT_BORDER))
+                .hover(|s| s.bg(rgb(HOVER)))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(|this, _, _, cx| {
+                        this.toggle_symbol_edit();
+                        cx.notify();
+                    }),
+                )
+                .child(format!("◀ {scene}"));
+            return Some(div().ml_2().flex().items_center().gap_1().child(back).child(div().font_weight(FontWeight::BOLD).child(tf("Editing movie clip \"{}\"", &[&name]))));
+        }
         let edit = self.ed.editing_symbol()?;
         let symbol = self.ed.edited_symbol()?;
         let look = edit.look;
@@ -1121,6 +1144,21 @@ impl Workspace {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
             }
             // A button takes the visitor somewhere when the exported page is clicked.
+            // In an animation a button does an action when clicked; in a design it leads to an address.
+            crate::model::Shape::Instance { symbol, .. } if crate::theme::is_sahne() && self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == crate::model::SymbolKind::Button) => {
+                let action = self.button_action().flatten();
+                let takes_text = matches!(action, Some(crate::model::Action::GotoPlay(_) | crate::model::Action::GotoStop(_) | crate::model::Action::Scene(_) | crate::model::Action::Url(_)));
+                let wide = matches!(action, Some(crate::model::Action::Url(_)));
+                extra = extra.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap_1()
+                        .child(label(t("Action:")))
+                        .child(self.combo(Combo::Action(true), t(crate::model::ACTION_NAMES[crate::model::Action::choice(&action)]), 170., cx).bg(rgb(PANEL_RAISED)))
+                        .when(takes_text, |d| d.child(self.field(FieldId::ActionParam(true), if wide { 200. } else { 44. }, cx))),
+                );
+            }
             crate::model::Shape::Instance { symbol, .. } if self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == crate::model::SymbolKind::Button) => {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
             }
@@ -1407,6 +1445,8 @@ impl Workspace {
             .pages
             .iter()
             .enumerate()
+            // The page of a movie clip is not a scene: it is reached through the clip.
+            .filter(|(_, page)| page.clip_of.is_none())
             .map(|(i, page)| {
                 Self::list_row()
                     .when(i == active, |d| d.bg(rgb(ACCENT)))

@@ -378,6 +378,8 @@ pub enum FrameCmd {
     Forward,
     Back,
     PublishHtml,
+    TestMovie,
+    ImportSound,
 }
 
 /// The menus the animation program has beside PisiWorks' own, where Flash has them: after Modify.
@@ -400,6 +402,8 @@ pub const SAHNE_MENUS: &[(&str, &[Entry])] = &[
             cmd("Mask Layer", "", Cmd::Frame(FrameCmd::MaskLayer)),
             cmd("Tie to Guide or Mask", "", Cmd::Frame(FrameCmd::BindLayer)),
             Sep,
+            cmd("Import Sound...", "", Cmd::Frame(FrameCmd::ImportSound)),
+            Sep,
             cmd("Add Shape Hint", "Ctrl+Shift+H", Cmd::Frame(FrameCmd::AddHint)),
             cmd("Remove All Hints", "", Cmd::Frame(FrameCmd::RemoveHints)),
         ],
@@ -412,6 +416,7 @@ pub const SAHNE_MENUS: &[(&str, &[Entry])] = &[
             cmd("Step Forward One Frame", ".", Cmd::Frame(FrameCmd::Forward)),
             cmd("Step Backward One Frame", ",", Cmd::Frame(FrameCmd::Back)),
             Sep,
+            cmd("Test Movie", "Ctrl+Enter", Cmd::Frame(FrameCmd::TestMovie)),
             cmd("Publish as HTML5...", "", Cmd::Frame(FrameCmd::PublishHtml)),
         ],
     ),

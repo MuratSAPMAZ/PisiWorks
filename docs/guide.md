@@ -210,3 +210,38 @@ The **Examples** menu at the right end of the menu bar is for what PisiWorks has
 - **Export and looping.** Pick **Animated GIF** in the Optimize panel. The **Looping** list on the same row sets how many times the animation plays: Forever, No Looping (once through) or a number of times.
 - **Frames in between.** Select two or more copies of one symbol and choose **Modify > Symbol > Tween Instances** (Ctrl+Alt+Shift+T). As many copies as there are steps are made in between, going from one to the other in place, size, turn and opacity. With **Distribute to states** each copy goes to a state of its own, and the animation is ready.
 - **Make a GIF.** **GIF > Make a GIF** at the right end of the menu bar makes an animation from picture files: add the files (they are put in order of name), pick the frame delay and the looping. **Save GIF** writes the file straight away; **Open as Document** lays the pictures out as states to go on working with. Pictures of different sizes are put in the middle of a canvas the size of the largest.
+
+## Animating with PisiSahne
+
+PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline over the stage.
+
+**The timeline.** Each layer has a row of frames. A click on a frame shows it; dragging along the numbers scrubs through the frames. The eye beside a layer's name hides it, the lock locks it.
+
+| Key | Does |
+|---|---|
+| F5 | Insert frame (the keyframe lasts longer) |
+| Shift+F5 | Remove frames |
+| F6 | Insert keyframe (starting with what the frame shows) |
+| F7 | Insert blank keyframe |
+| Shift+F6 | Clear keyframe |
+| Enter | Play or stop |
+| . and , | One frame forward, one back |
+| Ctrl+Enter | Test Movie |
+
+**Motion tween.** Draw the object on the first frame, insert a keyframe further on with F6 and move, resize or turn the object there; go back to the first keyframe and choose **Timeline > Create Motion Tween**. The frames between turn blue. **Ease** (−100 starts slowly, 100 ends slowly) and **Turns** (whole turns on the way) appear below.
+
+**Shape tween.** Draw a shape on the first frame and another on a blank keyframe (F7) further on; on the first frame choose **Create Shape Tween**. The frames between turn green. If the change does not go as you want, add marks with **Add Shape Hint** (Ctrl+Shift+H): drag the yellow mark on the first keyframe and the green one on the last to the points that are to become one another.
+
+**Guide layer.** Add a layer above the moving object's layer, draw a path in it, and choose **Guide Layer**. The object follows the path, and with **Orient to path** it turns to face the way the path runs. The guide does not show in the published film.
+
+**Mask layer.** Add a layer above the one to be masked, draw a shape in it and choose **Mask Layer**: the layer beneath shows only where that shape is. The mask is applied in Preview, when publishing, and on the stage once both layers are locked. **Tie to Guide or Mask** ties further layers to the same guide or mask.
+
+**Symbols.** **Edit > Insert > New Symbol** offers three kinds. A *Graphic* is edited in place. A *Movie Clip* has a timeline of its own: a double-click on a copy opens the clip's page, and the **◀** button above the stage goes back. A *Button* has Up, Over and Down states.
+
+**Actions.** The **Frame action** list under the timeline says what happens when the film reaches that keyframe; a keyframe with an action shows red. With a button selected, the **Action** list in Properties says what a click does. The actions are Stop, Play, Go to Frame and Play, Go to Frame and Stop, Go to Scene and Go to Address. Frames and scenes are counted from 1.
+
+**Scenes.** Every page in the Scenes panel is a scene. The film plays them one after another and starts over after the last.
+
+**Sound.** **Import Sound** adds an MP3, OGG or WAV file to the document and starts it on the keyframe you are on; a keyframe with a blue rim has a sound. While playing inside the program the sound is heard if `ffplay`, `mpv`, `paplay` or `aplay` is installed.
+
+**Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.

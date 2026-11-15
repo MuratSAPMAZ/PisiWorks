@@ -350,12 +350,35 @@ impl Workspace {
                 .into_iter()
                 .map(|(text, compact)| item(text.into(), self.compact_workspace == compact, cx, Box::new(move |this, _, _| this.set_compact_workspace(compact))))
                 .collect(),
+            Combo::Action(button) => (0..crate::model::ACTION_NAMES.len())
+                .map(|choice| {
+                    let now = if button { self.button_action().flatten() } else { self.current_span().and_then(|span| crate::model::Action::parse(&span.action)) };
+                    item(t(crate::model::ACTION_NAMES[choice]).into(), crate::model::Action::choice(&now) == choice, cx, Box::new(move |this, _, _| {
+                        let before = if button { this.button_action().flatten() } else { this.current_span().and_then(|span| crate::model::Action::parse(&span.action)) };
+                        let action = crate::model::Action::chosen(choice, &before);
+                        if button {
+                            this.set_button_action(action);
+                        } else {
+                            this.set_frame_action(action);
+                        }
+                    }))
+                })
+                .collect(),
+            Combo::FrameSound => {
+                let now = self.current_span().and_then(|span| span.sound);
+                std::iter::once((t("None").to_string(), None))
+                    .chain(self.ed.doc.sounds.iter().map(|sound| (sound.name.clone(), Some(sound.id))))
+                    .map(|(name, id)| item(name.into(), now == id, cx, Box::new(move |this, _, _| this.set_frame_sound(id))))
+                    .collect()
+            }
             Combo::Page => self
                 .ed
                 .doc
                 .pages
                 .iter()
                 .enumerate()
+                // The page of a movie clip is no scene to go to: it opens only through its clip.
+                .filter(|(_, page)| page.clip_of.is_none())
                 .map(|(index, page)| item(page.name.clone().into(), index == self.ed.doc.active_page, cx, Box::new(move |this, _, _| this.ed.set_active_page(index))))
                 .collect(),
             Combo::State => page
@@ -1891,7 +1914,13 @@ impl Workspace {
                         // A keyframe is a dot: filled if it holds something, hollow if it is blank.
                         .children(key.map(|span| {
                             let dot = div().w(px(6.)).h(px(6.)).rounded_full().border_1().border_color(rgb(0x202020));
-                            if holds(span) { dot.bg(rgb(0x202020)) } else { dot }
+                            // A keyframe with an action is red, and one with a sound has a blue rim, so both tell at a glance.
+                            let dot = if span.sound.is_some() { dot.border_color(rgb(0x1060d0)).border_2() } else { dot };
+                            match (holds(span), span.action.is_empty()) {
+                                (_, false) => dot.bg(rgb(0xd03030)),
+                                (true, true) => dot.bg(rgb(0x202020)),
+                                (false, true) => dot,
+                            }
                         }))
                         .into_any_element()
                 })
@@ -1946,6 +1975,28 @@ impl Workspace {
                     })
                     .when(tween.shape, |d| d.child(label(tf("Hints: {}", &[&tween.hints.len()]))))
             }));
+        // What the keyframe the frame on show belongs to does and sounds like.
+        let span = self.current_span();
+        let action = span.and_then(|span| crate::model::Action::parse(&span.action));
+        let sound_name = span.and_then(|span| span.sound).and_then(|id| self.ed.doc.sounds.iter().find(|s| s.id == id)).map_or_else(|| t("None").to_string(), |s| s.name.clone());
+        let takes_text = matches!(action, Some(crate::model::Action::GotoPlay(_) | crate::model::Action::GotoStop(_) | crate::model::Action::Scene(_) | crate::model::Action::Url(_)));
+        let wide = matches!(action, Some(crate::model::Action::Url(_)));
+        let frame_row = div()
+            .h(px(26.))
+            .px_1()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap_1()
+            .child(label(t("Frame action:")))
+            .child(self.combo(Combo::Action(false), t(crate::model::ACTION_NAMES[crate::model::Action::choice(&action)]), 170., cx).bg(rgb(PANEL_RAISED)))
+            .when(takes_text, |d| d.child(self.field(FieldId::ActionParam(false), if wide { 220. } else { 44. }, cx)))
+            .child(div().w(px(8.)))
+            .child(label(t("Sound:")))
+            .child(self.combo(Combo::FrameSound, sound_name, 150., cx).bg(rgb(PANEL_RAISED)))
+            .child(self.text_button(t("Import Sound..."), true, cx, |this, window, cx| this.run(Cmd::Frame(FrameCmd::ImportSound), window, cx)))
+            .child(div().w(px(8.)))
+            .child(self.text_button(t("Test Movie"), true, cx, |this, window, cx| this.run(Cmd::Frame(FrameCmd::TestMovie), window, cx)));
         Some(
             div()
                 .id("timeline")
@@ -1965,6 +2016,7 @@ impl Workspace {
                         .child(div().id("timeline-frames").flex_1().min_w_0().overflow_x_scroll().child(div().flex().flex_col().children(rows))),
                 )
                 .child(controls)
+                .child(frame_row)
                 .into_any_element(),
         )
     }
