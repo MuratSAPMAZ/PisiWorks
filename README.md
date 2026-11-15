@@ -195,6 +195,8 @@ Bu aşamada çalışanlar:
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 
+**PisiSahne Kitabı.** Öğrenci ve öğretmen için, resimli ve ders ders ilerleyen bir kitap PisiSahne ile birlikte gelir: 31 bölüm, altı kısım (başlarken, hareket, oyun kuralları, altı oyun dersi, kuralları yazmak, çizim ve karakter) ve ekler (bütün cümleler, kısayollar ve sık sorulanlar, öğretmen için dönemlik plan). Her bölüm programın ekran görüntüleriyle adım adım anlatır, "Takıldıysan" ve "Sıra sende" bölümleri ve bir öğretmen notu taşır. PisiSahne'de **Yardım > Kullanım Kılavuzu** (F1) kitabı tarayıcıda açar. Kaynağı `docs/kitap/` klasöründedir; `packaging/kitap.py` sayfaları üretir.
+
 Pencere, Flash'ın klasik çalışma alanı gibi düzenlenir: zaman çizelgesi sahnenin üstünde, araçlar solda, Özellikler altta; katmanlar zaman çizelgesindedir. Enter oynatır. `.deb` paketi iki programı birlikte kurar.
 
 Flash'tan bilinen farklar: ActionScript yoktur, yerine hazır eylemler vardır. `.fla` ve `.swf` dosyaları açılmaz ve yazılmaz. Yayımlanan sayfada her kare ve her klip karesi bir resimdir. İç içe film klipleri de kendi kareleriyle oynar; yalnız bir klibin içine konan düğme yayımlanan filmde tıklanamaz (sahnedeki düğmeler tıklanır). Program içinde oynatırken (Enter) kare eylemleri çalışmaz ve klipler ilk kareleriyle görünür, Flash'ta olduğu gibi; filmin tamamı Filmi Test Et ile görülür.

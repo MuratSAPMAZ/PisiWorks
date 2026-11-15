@@ -194,6 +194,8 @@ Working at this stage:
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 
+**The PisiSahne book.** A book for students and teachers comes with PisiSahne, in Turkish, with pictures and in lessons: 31 chapters in six parts (getting started, motion, the rules of a game, six games as lessons, writing the rules, drawing and characters) and appendices (every sentence, shortcuts and common questions, a term's plan for the teacher). Each chapter goes step by step with pictures of the program, has a part for when one is stuck and things to try, and a note for the teacher. In PisiSahne, **Help > User Guide** (F1) opens it in the browser when the interface is in Turkish. Its sources are in `docs/kitap/`; `packaging/kitap.py` builds the pages.
+
 The window is laid out as Flash's classic workspace is: the timeline over the stage, the tools on the left, Properties at the bottom; layers are in the timeline. Enter plays. The `.deb` package installs both programs.
 
 Known differences from Flash: there is no ActionScript; ready-made actions take its place. `.fla` and `.swf` files are neither opened nor written. In the published page every frame, and every frame of a clip, is a picture. Clips inside clips play by their own frames too; only a button placed inside a clip cannot be clicked in the published film (buttons on the stage can). While playing inside the program (Enter), frame actions are not run and clips show their first frame, as in Flash; the whole film is seen with Test Movie.
