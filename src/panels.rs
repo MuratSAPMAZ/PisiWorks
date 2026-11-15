@@ -764,9 +764,15 @@ impl Workspace {
                 ]
             }
         };
+        // A click anywhere else puts the list away. A window such as Rules as Text lets no click through to
+        // what is behind it, so the list has a sheet of its own, over everything, that hears the click.
+        let away = |this: &mut Workspace, _: &MouseDownEvent, _: &mut Window, cx: &mut Context<Workspace>| {
+            this.open_combo = None;
+            cx.notify();
+        };
         Some(
             deferred(
-                anchored().position(position).snap_to_window().child(
+                div().absolute().top_0().left_0().size_full().occlude().on_mouse_down(MouseButton::Left, cx.listener(away)).on_mouse_down(MouseButton::Right, cx.listener(away)).child(anchored().position(position).snap_to_window().child(
                     // A long list, such as the blend modes, scrolls inside the window.
                     div()
                         .id("combo-popup")
@@ -784,7 +790,7 @@ impl Workspace {
                         .border_color(rgb(BORDER))
                         .shadow_md()
                         .children(items),
-                ),
+                )),
             )
             .with_priority(2)
             .into_any_element(),
