@@ -15,6 +15,7 @@
 <p align="center">
   <a href="#kurulum">Kurulum</a> ·
   <a href="#özellikler">Özellikler</a> ·
+  <a href="#pisiworkste-neler-yapıldı">Neler yapıldı</a> ·
   <a href="docs/guide.tr.md">Kullanım kılavuzu</a> ·
   <a href="README.en.md">English</a>
 </p>
@@ -23,7 +24,7 @@
   <img src="docs/screenshots/pisiworks-calisma-alani.png" alt="PisiWorks çalışma alanı: solda araçlar, altta Özellikler, sağda paneller, ortada örnek bir açılış sayfası tasarımı">
 </p>
 
-> PisiWorks, [Med Amine Belbachir](https://medamineweb.com/)'in yazdığı [Emberframe](https://github.com/gregstein/emberframe) projesinin bir çatalıdır. Temeli Emberframe'in kodudur; üzerine neler eklendiği [aşağıda](#emberframeden-farklar) yazıyor.
+> **PisiWorks'ü Murat SAPMAZ geliştiriyor**; Türkiye'deki okullar ve Pardus kullanıcıları için bağımsız bir özgür yazılım projesidir. Temeli, [Med Amine Belbachir](https://medamineweb.com/)'in yazdığı [Emberframe](https://github.com/gregstein/emberframe)'dir: o olmasaydı bu proje bu kadar kısa sürede var olamazdı, kendisine teşekkür ederiz. Bugünkü kodun yaklaşık üçte biri Emberframe'den gelir, üçte ikisi PisiWorks için yazıldı; [neler yapıldığı aşağıda](#pisiworkste-neler-yapıldı).
 
 ## Neden PisiWorks
 
@@ -115,29 +116,38 @@ cargo test
 
 Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
 
-## Emberframe'den farklar
+## PisiWorks'te neler yapıldı
 
-PisiWorks, Emberframe 0.1'den çatallandı ve onu temel olarak korur: pencere düzeni, menüler, araç paleti ve paneller, simgeler, katmanları, sayfaları, durumları ve sembolleriyle nesne modeli, temel çizim ve bitmap araçları, yol işlemleri, Otomatik Şekiller ve dışa aktarma Emberframe'den gelir. Emberframe'in satırlarının yaklaşık %94'ü yerinde durur.
+PisiWorks, Emberframe 0.1'den çatallandı. Emberframe bize sağlam bir başlangıç verdi: pencere düzeni, araç paleti ve paneller, simgeler, katmanları, sayfaları, durumları ve sembolleriyle nesne modeli, temel çizim ve bitmap araçları, yol işlemleri, Otomatik Şekiller ve dışa aktarma ondan gelir, ve o kodun yaklaşık %92'si hâlâ yerindedir.
+
+Üzerine, Fireworks'ü derste anlatan bir öğretmenin ihtiyaç duyacağı her şeyi tek tek ekledik. Emberframe'in menülerinde 42 komut gri duruyordu; PisiWorks'te gri komut yok.
 
 | | Emberframe 0.1 | PisiWorks |
 |---|---|---|
-| Kaynak kod | 16 dosyada 12.286 satır | 25 dosyada 25.179 satır |
-| Test | 141 | 271 |
+| Kaynak kod | 16 dosyada 12.286 satır | 29 dosyada 32.733 satır |
+| Otomatik test | 141 | 300 |
+| Menüde çalışmayan (gri) komut | 42 | 0 |
+| Arayüz dili | İngilizce | Türkçe ve İngilizce |
 
-Üzerine eklenenler:
+PisiWorks için yazılanlar:
 
 | Alan | PisiWorks'te eklenen |
 |---|---|
-| **Linux ve Pardus** | Linux'ta derlenip çalışma, giriş yöntemiyle Türkçe harf yazınca oluşan çökmenin düzeltilmesi, kurulu fontlardan seçim, grafik sürücüsü eksikse anlaşılır bir uyarı |
-| **Türkçe** | Türkçe Fireworks'ün terimleriyle bütün arayüz, dil menüsü, çevirisi eksik metni yakalayan testler |
+| **Linux ve Pardus** | Linux'ta derlenip çalışma, giriş yöntemiyle Türkçe harf yazınca oluşan çökmenin düzeltilmesi, kurulu fontlardan seçim, grafik sürücüsü eksikse anlaşılır bir uyarı, `.deb` paketi, uygulama simgesi ve `.pisi` dosya türü |
+| **Türkçe** | Türkçe Fireworks'ün terimleriyle bütün arayüz, dil menüsü, çevirisi eksik metni yakalayan testler, Türkçe kullanım kılavuzu |
+| **Araçlar** | 21 yeni araç: Arkasındakini Seç, Oval Seçim Çerçevesi, Çokgen Kement, Keskinleştir, Soldurma, Yakma, Leke, Renk Değiştir, Kırmızı Göz Kaldırma, Degrade, Vektör Yol, Yolu Yeniden Çiz, Çokgen, Serbest Biçim, Alanı Yeniden Şekillendir, Yol Süpürgesi, 9 Dilimli Ölçekleme, çokgen ve daire Sıcak Nokta ile Dilim araçları; araç grupları ve araç seçenekleri |
 | **Vektör** | Bezier eğrileri, Kalem ve Alt Seçim araçlarıyla nokta ve tutamaç düzenleme, yol işlemlerinden sonra eğri uydurma |
 | **Dönüştürme** | Taşınabilir merkez noktasıyla Ölçek, Eğriltme ve Deformasyon; Sayısal Dönüştürme |
-| **Görünüm** | 45 karışım modu, bütün komutlarıyla maskeler, Düzeyler ve Eğriler dahil 29 canlı filtre, on efekti ve degrade düzenleyicisiyle Photoshop Canlı Efektleri |
+| **Dolgu ve görünüm** | 12 türde degrade dolgu, desen ve web renk taklidi dolguları, tuvalde degrade tutamaçları, kenar ve doku; 45 karışım modu; bütün komutlarıyla maskeler |
+| **Filtreler** | Düzeyler ve Eğriler dahil 29 canlı filtre; on efekti, bütün ayarları ve degrade düzenleyicisiyle Photoshop Canlı Efektleri |
 | **Bitmap** | Seçili pikselleri taşıma, Geçiş Yumuşatma, Benzerini ve Tersini Seç, seçim çerçevesi komutları, Seçimi Düzleştir, Aşağıda Birleştir, Katmanları Düzleştir |
-| **Metin** | Font, kalın, italik, altı çizili ve hizalama |
-| **Düzen** | Kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar için Üst Seç ve Alt Seç |
-| **Dışa aktarma** | Kendi JPEG kodlayıcısıyla seçmeli JPEG kalitesi ve yumuşatma |
-| **Diğer** | Yazdırma ve Sayfa Yapısı, kitaplık panellerinden tuvale sürükleme, `.pisi` dosya uzantısı, daha önce gri olan otuzdan fazla menü komutu |
+| **Metin** | Font, kalın, italik, altı çizili, beş hizalama, dikey ve sağdan sola metin, yola eklenen metin, sistem sözlükleriyle Türkçe yazım denetimi |
+| **Düzen** | Kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, ayarlanabilir ızgara ve Izgaraya Bitiştir, gruplar için Üst Seç ve Alt Seç |
+| **Semboller ve animasyon** | Sembolü yerinde düzenleme, Yeni Sembol, dört durumlu düğme sembolleri (Önizleme'de ve dışa aktarılan HTML'de fareye tepki verir), Seçimi Canlandır ve sürüklenebilir animasyon yolu |
+| **Dosyalar** | Fireworks PNG dosyalarının katmanlarını okuma, Şablondan Yeni ve Şablon Olarak Kaydet, Toplu İşleme, Görüntü Önizleme, kendi JPEG kodlayıcısıyla seçmeli JPEG kalitesi |
+| **Komutlar** | Geçmiş'teki adımları komut olarak kaydetme ve yeniden çalıştırma, komut dosyaları, hazır komutlar (Ok Başları, Resim Çerçevesi, Gölge, Otomatik Vektör Maskesi, Bük ve Soldur, Gri Tonlama, Sepya, Katmanlara Dağıt ve diğerleri) |
+| **Yazdırma** | Sayfa Yapısı, sayfa aralığı, büyük sayfaları kâğıtlara döşeme, yazıcıya gönderme ya da PDF |
+| **Ayarlar** | Tercihler ve her menü komutuna yeniden atanabilen klavye kısayolları |
 
 Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
@@ -150,14 +160,16 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Tek istisna: Fireworks 8 ile yazılmış bir dosyadaki Alt Gölge (yumuşaklık 1) bizim çizimimizle karşılaştırıldı ve 289 pikselin 287'si aynı çıktı. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
 
-## Lisans ve teşekkür
+## Kimlik, lisans ve teşekkür
 
-PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır; lisans, Emberframe'in yazarının telif satırını korur.
+**PisiWorks**'ü **Murat SAPMAZ** geliştirir ve sürdürür: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Hata bildirimleri, öneriler ve katkılar oradan beklenir. Bağımsız bir projedir; Pardus'u geliştiren TÜBİTAK ULAKBİM ile ya da Adobe ile kurumsal bir bağı yoktur.
 
-Emberframe'i **Med Amine Belbachir** yazdı:
+**Teşekkür.** PisiWorks, **Med Amine Belbachir**'in yazıp MIT lisansıyla herkese açtığı Emberframe'in üzerinde yükselir. Emeği ve cömertliği için kendisine teşekkür ederiz:
 
 - Web sitesi: [medamineweb.com](https://medamineweb.com/)
-- Proje sayfası: [medamineweb.com/en/emberframe](https://medamineweb.com/en/emberframe/)
+- Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [proje sayfası](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-Adobe ve Fireworks, Adobe Inc.'in ticari markalarıdır. PisiWorks'ün Adobe ile bir bağı yoktur.
+**Lisans.** PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır. Lisans dosyası Emberframe'in yazarının telif satırını korur ve PisiWorks için yazılanların telif satırını onun yanına ekler.
+
+Adobe ve Fireworks, Adobe Inc.'in ticari markalarıdır. PisiWorks Adobe'ye ait hiçbir kod ya da görsel içermez.

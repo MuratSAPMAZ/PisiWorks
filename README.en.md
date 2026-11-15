@@ -23,7 +23,7 @@
   <img src="docs/screenshots/pisiworks-calisma-alani.png" alt="The PisiWorks workspace in Turkish, with the tools on the left, Properties below, the panel dock on the right and a landing page design in the middle">
 </p>
 
-> PisiWorks is a fork of [Emberframe](https://github.com/gregstein/emberframe) by [Med Amine Belbachir](https://medamineweb.com/). Emberframe's code is its foundation; what was built on it is listed [below](#what-pisiworks-adds-to-emberframe).
+> **PisiWorks is developed by Murat SAPMAZ** as an independent free-software project for schools in Turkey and for Pardus users. Its foundation is [Emberframe](https://github.com/gregstein/emberframe) by [Med Amine Belbachir](https://medamineweb.com/): without it this project could not have existed so soon, and we thank him. About a third of today's code comes from Emberframe and two thirds were written for PisiWorks; [what was done is listed below](#what-was-done-in-pisiworks).
 
 ## Why PisiWorks
 
@@ -115,29 +115,38 @@ cargo test
 
 Printing needs the system's print service (CUPS).
 
-## What PisiWorks adds to Emberframe
+## What was done in PisiWorks
 
-PisiWorks was forked from Emberframe 0.1 and keeps it as its foundation: the window layout, the menus, tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from Emberframe. About 94% of Emberframe's lines are still in place.
+PisiWorks was forked from Emberframe 0.1. Emberframe gave us a sound start: the window layout, the tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from it, and about 92% of that code is still in place.
+
+On top of it we added, piece by piece, everything a teacher who still teaches Fireworks would need. Emberframe's menus had 42 commands greyed out; PisiWorks has none.
 
 | | Emberframe 0.1 | PisiWorks |
 |---|---|---|
-| Source code | 12,286 lines in 16 files | 25,179 lines in 25 files |
-| Tests | 141 | 271 |
+| Source code | 12,286 lines in 16 files | 32,733 lines in 29 files |
+| Automated tests | 141 | 300 |
+| Menu commands that do nothing (greyed out) | 42 | 0 |
+| Interface language | English | Turkish and English |
 
-What was added on top:
+Written for PisiWorks:
 
 | Area | Added in PisiWorks |
 |---|---|
-| **Linux and Pardus** | Builds and runs on Linux, a fix for the crash when typing Turkish letters through an input method, a font chosen from those installed, and a plain message when the graphics driver is missing |
-| **Turkish** | The whole interface in Turkish, with the terms of the Turkish edition of Fireworks, a language menu, and tests that fail when a text has no translation |
+| **Linux and Pardus** | Builds and runs on Linux, a fix for the crash when typing Turkish letters through an input method, a font chosen from those installed, a plain message when the graphics driver is missing, a `.deb` package, an application icon and the `.pisi` file type |
+| **Turkish** | The whole interface in Turkish, with the terms of the Turkish edition of Fireworks, a language menu, tests that fail when a text has no translation, and a user guide in Turkish |
+| **Tools** | 21 new tools: Select Behind, Oval Marquee, Polygon Lasso, Sharpen, Dodge, Burn, Smudge, Replace Color, Red Eye Removal, Gradient, Vector Path, Redraw Path, Polygon, Freeform, Reshape Area, Path Scrubber, 9-Slice Scaling, and polygon and circle Hotspot and Slice tools; tool groups and tool options |
 | **Vectors** | Bezier curves, full point and handle editing with the Pen and Subselection tools, and curve fitting after path operations |
 | **Transforming** | Scale, Skew and Distort with a movable center point, and Numeric Transform |
-| **Appearance** | 45 blend modes, masks with all their commands, 29 live filters including Levels and Curves, and Photoshop Live Effects with ten effects and a gradient editor |
+| **Fills and appearance** | Gradient fills of 12 kinds, pattern and web-dither fills, gradient handles on the canvas, edge and texture; 45 blend modes; masks with all their commands |
+| **Filters** | 29 live filters including Levels and Curves; Photoshop Live Effects with ten effects, all their settings and a gradient editor |
 | **Bitmaps** | Moving selected pixels, Feather, Select Similar and Inverse, the marquee commands, Flatten Selection, Merge Down and Flatten Layers |
-| **Text** | Fonts, bold, italic, underline and alignment |
-| **Layout** | Guides, smart guides, slice guides, and Subselect and Superselect for groups |
-| **Export** | Selective JPEG quality and smoothing, with a JPEG encoder of its own |
-| **Other** | Printing and Page Setup, dragging from the library panels onto the canvas, the `.pisi` file extension, and more than thirty menu commands that were greyed out |
+| **Text** | Fonts, bold, italic, underline, five alignments, vertical and right-to-left text, text on a path, and spell checking with the system's dictionaries |
+| **Layout** | Guides, smart guides, slice guides, an adjustable grid with Snap to Grid, and Subselect and Superselect for groups |
+| **Symbols and animation** | Editing a symbol in place, New Symbol, button symbols with four states (answering the mouse in Preview and in the exported HTML), Animate Selection and an animation path that can be dragged |
+| **Files** | Reading the layers of Fireworks PNG files, New from Template and Save as Template, Batch Process, Image Preview, and selective JPEG quality with a JPEG encoder of its own |
+| **Commands** | Saving the steps of the History panel as commands and playing them again, command files, and ready-made commands (Add Arrowheads, Add Picture Frame, Add Shadow, Auto Vector Mask, Twist and Fade, Grayscale, Sepia, Distribute to Layers and others) |
+| **Printing** | Page Setup, page ranges, tiling large pages over sheets, sending to a printer or saving a PDF |
+| **Settings** | Preferences, and keyboard shortcuts that can be reassigned for every menu command |
 
 The figures are from November 2026 and will drift as work goes on.
 
@@ -150,14 +159,16 @@ The figures are from November 2026 and will drift as work goes on.
 
 The program has not been tested side by side with Adobe Fireworks itself; the pixel results of filters and blend modes may differ from those of Fireworks. The one exception: a Drop Shadow (softness 1) in a file written by Fireworks 8 was compared with our drawing of it, and 287 of 289 pixels came out the same. Reports of differences and bugs are welcome.
 
-## License and credits
+## Who we are, license and thanks
 
-PisiWorks is released under the same [MIT license](LICENSE) as Emberframe, and the license keeps the copyright notice of Emberframe's author.
+**PisiWorks** is developed and maintained by **Murat SAPMAZ**: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Bug reports, suggestions and contributions are welcome there. It is an independent project, not affiliated with TÜBİTAK ULAKBİM, which develops Pardus, nor with Adobe.
 
-Emberframe was created by **Med Amine Belbachir**:
+**Thanks.** PisiWorks stands on Emberframe, which **Med Amine Belbachir** wrote and opened to everyone under the MIT license. We thank him for his work and his generosity:
 
 - Website: [medamineweb.com](https://medamineweb.com/)
-- Project page: [medamineweb.com/en/emberframe](https://medamineweb.com/en/emberframe/)
+- Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [project page](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-Adobe and Fireworks are trademarks of Adobe Inc. PisiWorks is not affiliated with Adobe.
+**License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
+
+Adobe and Fireworks are trademarks of Adobe Inc. PisiWorks contains no code or artwork of Adobe's.

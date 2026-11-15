@@ -896,6 +896,28 @@ fn selection_mode(modifiers: gpui::Modifiers) -> MaskMode {
     }
 }
 
+/// What Help > About says: what the program is and who makes it, then whose work it stands on.
+pub fn about_text() -> String {
+    [
+        tf("Version {}", &[&env!("CARGO_PKG_VERSION")]),
+        String::new(),
+        // The box does not wrap, so every line is short enough to fit it.
+        t("A Fireworks-like design program").to_string(),
+        t("for Pardus, in Turkish.").to_string(),
+        String::new(),
+        t("Developed by Murat SAPMAZ").to_string(),
+        "github.com/MuratSAPMAZ/PisiWorks".to_string(),
+        String::new(),
+        t("Thanks to Med Amine Belbachir:").to_string(),
+        t("PisiWorks is built on his Emberframe.").to_string(),
+        "github.com/gregstein/emberframe".to_string(),
+        String::new(),
+        t("Free software, MIT license.").to_string(),
+        t("Not affiliated with Adobe.").to_string(),
+    ]
+    .join("\n")
+}
+
 /// The names of the heads Add Arrowheads offers.
 pub const ARROW_STYLES: [&str; 5] = ["Triangle", "Lines", "Diamond", "Circle", "Square"];
 
@@ -3270,11 +3292,7 @@ impl Workspace {
                 let _ = window.prompt(
                     PromptLevel::Info,
                     APP_NAME,
-                    Some(&format!(
-                        "{}\n{}\nhttps://github.com/gregstein/emberframe",
-                        tf("Version {}", &[&env!("CARGO_PKG_VERSION")]),
-                        t("Based on Emberframe by Med Amine Belbachir, under the MIT license.")
-                    )),
+                    Some(&about_text()),
                     &[t("OK")],
                     cx,
                 );
@@ -7034,6 +7052,10 @@ mod tests {
         let bitmap = Bitmap::from_rgba(2, 2, vec![200; 16]).unwrap();
         let png = bitmap.encode_png().unwrap();
         assert!(matches!(parse_file(&png), Ok(Opened::Image(b)) if b == bitmap));
+        // About names the program's own maker and thanks the author of what it is built on.
+        let about = about_text();
+        assert!(about.contains("Murat SAPMAZ") && about.contains("github.com/MuratSAPMAZ/PisiWorks"));
+        assert!(about.contains("Med Amine Belbachir") && about.contains("github.com/gregstein/emberframe"));
         // Arrowheads point where the path ends, whichever way it runs.
         let (closed, triangle) = arrow_head(0, v2(10.0, 0.0), v2(0.0, 0.0), 10.0);
         assert!(closed);

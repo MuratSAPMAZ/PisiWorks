@@ -47,7 +47,7 @@ install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/ex
     echo
     echo "Files: *"
     echo "Copyright: 2026 Med Amine Belbachir (https://medamineweb.com)"
-    echo "           2026 the PisiWorks contributors"
+    echo "           2026 Murat SAPMAZ (https://github.com/MuratSAPMAZ/PisiWorks)"
     echo "License: Expat"
     sed -e '1,/^$/d' -e '/^Copyright/,/^$/d' -e 's/^$/./' -e 's/^/ /' LICENSE
 } > "$stage/usr/share/doc/pisiworks/copyright"
