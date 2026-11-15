@@ -78,6 +78,10 @@ Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi 
 
 Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
 
+## Metin
+
+Bir metin nesnesi seçiliyken Özellikler'de fontu ve boyutu, kalın, italik ve altı çizili düğmeleri ile satırları sola, ortaya veya sağa hizalayan düğmeler görünür. Aynıları Metin menüsünde de vardır: Font bilgisayarda kurulu fontları listeler; Boyut'ta Daha Küçük (Ctrl+Shift+,), Daha Büyük (Ctrl+Shift+.) ve bir boyut listesi; Stil'de Düz, Kalın (Ctrl+B), İtalik (Ctrl+I) ve Altı Çizili (Ctrl+U); Hizala'da Sol, Yatay Ortalanmış ve Sağ bulunur. Hiçbir şey seçili değilken ayarlanırsa bir sonraki yazacağınız metne uygulanır. Kendi kalın veya italik yüzü olmayan font, sahip olduğu en yakın yüzle gösterilir.
+
 ## Kılavuzlar
 
 Sayfaya kılavuz koymak için üstteki veya yandaki cetvelden sürükleyin. İşaretçi ile bir kılavuzu sürükleyerek taşıyın; kaldırmak için cetvelin üzerine geri sürükleyin. Taşınan, çizilen veya yeniden boyutlandırılan nesneler kılavuzlara bitişir. Görünüm > Kılavuzlar onları gösterir veya gizler (Ctrl+;), kilitler, bitiştirmeyi kapatır ve hepsini temizler.

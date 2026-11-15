@@ -387,6 +387,14 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::TextFont => {
+                let shown = self.shown_text_style().font;
+                crate::fonts::families()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, name)| item(name.clone().into(), *name == shown, cx, Box::new(move |this, window, cx| this.run(Cmd::TextFont(index as u16), window, cx))))
+                    .collect()
+            }
             Combo::GradientPreset => crate::pseffects::PRESETS
                 .iter()
                 .enumerate()

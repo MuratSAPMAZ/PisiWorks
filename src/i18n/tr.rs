@@ -843,4 +843,13 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Clear Guides", "Kılavuzları Temizle"),
     ("Show Smart Guides", "Akıllı Kılavuzları Göster"),
     ("Snap to Smart Guides", "Akıllı Kılavuzlara Bitiştir"),
+    ("Smaller", "Daha Küçük"),
+    ("Larger", "Daha Büyük"),
+    ("Plain", "Düz"),
+    ("Bold", "Kalın"),
+    ("Italic", "İtalik"),
+    ("Underline", "Altı Çizili"),
+    ("Centered Horizontally", "Yatay Ortalanmış"),
+    ("Justified", "Yaslanmış"),
+    ("Stretched", "Uzatılmış"),
 ];

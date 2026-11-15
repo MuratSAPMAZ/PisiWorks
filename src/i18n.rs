@@ -234,8 +234,8 @@ mod tests {
         labels.extend(Panel::ALL.iter().map(|panel| panel.title()));
 
         let entries = Language::Turkish.entries().unwrap();
-        // Zoom levels, the language names and the URL panel read the same in Turkish.
-        let same = |label: &str| label.ends_with('%') || label == "URL" || Language::ALL.iter().any(|l| l.name() == label);
+        // Zoom levels, text sizes, the language names and the URL panel read the same in Turkish.
+        let same = |label: &str| label.ends_with('%') || label == "URL" || label.chars().all(|c| c.is_ascii_digit()) || Language::ALL.iter().any(|l| l.name() == label);
         let missing: Vec<_> = labels.into_iter().filter(|label| !same(label) && !entries.contains_key(label)).collect();
         assert!(missing.is_empty(), "no Turkish entry for: {missing:#?}");
     }

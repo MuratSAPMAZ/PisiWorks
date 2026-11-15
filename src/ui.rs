@@ -241,17 +241,12 @@ impl Workspace {
     fn menu_panel(&self, entries: &'static [Entry], top_level: bool, cx: &mut Context<Self>) -> Div {
         let rows: Vec<AnyElement> =
             entries.iter().enumerate().map(|(i, entry)| self.menu_row(entry, i, top_level, cx)).collect();
-        div()
-            .occlude()
-            .w(px(240.))
-            .py_1()
-            .flex()
-            .flex_col()
-            .bg(rgb(PANEL_RAISED))
-            .border_1()
-            .border_color(rgb(BORDER))
-            .shadow_md()
-            .children(rows)
+        let panel = div().occlude().w(px(240.)).py_1().flex().flex_col().bg(rgb(PANEL_RAISED)).border_1().border_color(rgb(BORDER)).shadow_md();
+        // A menu too long for the window, as the list of fonts is, scrolls.
+        if entries.len() > 28 {
+            return panel.child(div().id("long-menu").max_h(px(480.)).flex().flex_col().overflow_y_scroll().children(rows));
+        }
+        panel.children(rows)
     }
 
     fn menu_row(&self, entry: &'static Entry, index: usize, top_level: bool, cx: &mut Context<Self>) -> AnyElement {
@@ -282,6 +277,8 @@ impl Workspace {
                     .into_any_element()
             }
             Entry::Sub(name, children) => {
+                // The fonts are those of this system, so their menu is made as it is shown.
+                let children: &'static [Entry] = if *name == "Font" { crate::menus::font_entries() } else { children };
                 let open = self.open_sub == Some(index);
                 row()
                     .text_color(rgb(TEXT))
@@ -976,7 +973,42 @@ impl Workspace {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Roundness:"))).child(self.field(FieldId::Radius, 44., cx)));
             }
             crate::model::Shape::Text { .. } => {
-                extra = extra.child(div().flex().items_center().gap_1().child(label(t("Size:"))).child(self.field(FieldId::TextSize, 44., cx)));
+                use crate::menus::TextStyleCmd;
+                use crate::model::TextAlign;
+                let style = self.shown_text_style();
+                let font = if style.font.is_empty() { crate::fonts::family().to_string() } else { style.font.clone() };
+                // A small button that is held down while what it stands for is on.
+                let toggle = |this: &Self, child: AnyElement, on: bool, cmd: Cmd, cx: &mut Context<Self>| {
+                    div()
+                        .size(px(18.))
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .border_1()
+                        .border_color(rgb(if on { INPUT_BORDER } else { PANEL }))
+                        .when(on, |d| d.bg(rgb(PANEL_RAISED)))
+                        .hover(|s| s.bg(rgb(HOVER)))
+                        .on_mouse_down(MouseButton::Left, cx.listener(move |this, _, window, cx| this.run(cmd, window, cx)))
+                        .child(child)
+                        .when(false, |d| d.child(this.properties_collapsed.to_string()))
+                };
+                let letter = |text: &'static str| div().font_weight(FontWeight::BOLD).child(text).into_any_element();
+                extra = extra
+                    .child(div().flex().items_center().gap_1().child(self.combo(Combo::TextFont, font, 118., cx).bg(rgb(PANEL_RAISED))).child(self.field(FieldId::TextSize, 34., cx)))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_1()
+                            .child(toggle(self, letter("B"), style.bold, Cmd::TextStyle(TextStyleCmd::Bold), cx))
+                            .child(toggle(self, div().italic().child("I").into_any_element(), style.italic, Cmd::TextStyle(TextStyleCmd::Italic), cx))
+                            .child(toggle(self, div().underline().child("U").into_any_element(), style.underline, Cmd::TextStyle(TextStyleCmd::Underline), cx))
+                            .child(div().w(px(4.)))
+                            .child(toggle(self, icon("align-left", 13., TEXT).into_any_element(), style.align == TextAlign::Left, Cmd::TextAlign(TextAlign::Left), cx))
+                            .child(toggle(self, icon("align-center-x", 13., TEXT).into_any_element(), style.align == TextAlign::Center, Cmd::TextAlign(TextAlign::Center), cx))
+                            .child(toggle(self, icon("align-right", 13., TEXT).into_any_element(), style.align == TextAlign::Right, Cmd::TextAlign(TextAlign::Right), cx)),
+                    );
             }
             crate::model::Shape::Web { kind: crate::model::WebKind::Hotspot, .. } => {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));

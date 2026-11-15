@@ -570,7 +570,7 @@ mod tests {
     fn text_can_be_kept_at_the_selective_quality() {
         let mut source = noisy_page();
         let mut text = Object::new_bitmap(2, "t", crate::bitmap::Bitmap::from_rgba(1, 1, vec![0, 0, 0, 0]).unwrap(), 8.0, 8.0);
-        text.shape = crate::model::Shape::Text { content: "a".into(), size: 20.0 };
+        text.shape = crate::model::Shape::Text { content: "a".into(), size: 20.0, style: Default::default() };
         text.bounds = crate::model::Rect { x: 8.0, y: 8.0, w: 32.0, h: 24.0 };
         source.layers[0].objects.push(text);
         let plain = ExportSettings { quality: 20, selective: true, selective_quality: 95, ..settings(ExportFormat::Jpeg) };

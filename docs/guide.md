@@ -76,6 +76,10 @@ A masked object shows Mask in Properties: Path Outline or Grayscale Appearance f
 
 In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
 
+## Text
+
+With a text object selected, Properties shows its font and size, buttons for bold, italic and underline, and buttons that align its lines left, centered or right. The same is in the Text menu: Font lists the fonts installed on the computer, Size has Smaller (Ctrl+Shift+,) and Larger (Ctrl+Shift+.) and a list of sizes, Style has Plain, Bold (Ctrl+B), Italic (Ctrl+I) and Underline (Ctrl+U), and Align has Left, Centered Horizontally and Right. Set with nothing selected, they apply to the next text you type. A font with no bold or italic face of its own is shown in the nearest face it has.
+
 ## Guides
 
 Drag out of the ruler along the top or down the side to put a guide on the page. With the Pointer, drag a guide to move it, and drag it back onto a ruler to remove it. Objects being moved, drawn or resized snap to guides. View > Guides shows or hides them (Ctrl+;), locks them, turns snapping off, and clears them all.

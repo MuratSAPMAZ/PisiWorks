@@ -12,7 +12,7 @@ use image::Frame;
 
 use crate::i18n::{t};
 use crate::bitmap::Bitmap;
-use crate::export::{measure_text, LINE_HEIGHT};
+use crate::export::LINE_HEIGHT;
 use crate::menus::Tool;
 use crate::model::{flatten_curve, v2, Color, Handles, Object, Page, Rect, Shape, Vec2, WebKind};
 use crate::theme;
@@ -267,10 +267,13 @@ impl Scene {
             handle_guides.extend(w.visible_handles().into_iter().map(|(_, _, _, anchor, handle)| (anchor, handle)));
         }
         let caret = w.text_edit.and_then(|id| w.ed.object(id)).and_then(|o| match &o.shape {
-            Shape::Text { content, size } => {
+            Shape::Text { content, size, style } => {
                 let last = content.rsplit('\n').next().unwrap_or("");
                 let lines = content.split('\n').count() as f32;
-                let width = if last.is_empty() { 0.0 } else { measure_text(last, *size).0 };
+                // The caret stands after the last line, wherever its alignment puts that.
+                let frame_width = o.placement.map_or(o.bounds, |p| p.frame).w;
+                let last_width = if last.is_empty() { 0.0 } else { crate::export::line_width(last, *size, style) };
+                let width = crate::export::line_start(frame_width, last_width, style.align) + last_width;
                 // The caret is found in the upright frame, then follows the text's transform.
                 let frame = o.placement.map_or(o.bounds, |p| p.frame);
                 let at = Vec2 { x: frame.x + width, y: frame.y + (lines - 1.0) * size * LINE_HEIGHT };
@@ -647,9 +650,9 @@ pub fn paint_object(object: &Object, textures: &Textures, map: ViewMap, window: 
         }
         return;
     }
-    if let Shape::Text { content, size: text_size } = &object.shape {
+    if let Shape::Text { content, size: text_size, style } = &object.shape {
         let Some(color) = object.fill else { return };
-        paint_text(object, content, *text_size, to_hsla(color, object.opacity), map, window, cx);
+        paint_text(object, content, *text_size, style, to_hsla(color, object.opacity), map, window, cx);
         return;
     }
     let to_screen = |points: &[Vec2]| points.iter().map(|p| map.to_screen(*p)).collect::<Vec<_>>();
@@ -708,22 +711,30 @@ pub fn paint_thumbnail_with(objects: &[Object], textures: &Textures, bounds: Bou
     }
 }
 
-fn paint_text(object: &Object, content: &str, text_size: f32, color: Hsla, map: ViewMap, window: &mut Window, cx: &mut App) {
+fn paint_text(object: &Object, content: &str, text_size: f32, style: &crate::model::TextStyle, color: Hsla, map: ViewMap, window: &mut Window, cx: &mut App) {
     let line_height = text_size * LINE_HEIGHT;
+    let mut face = font(if style.font.is_empty() { crate::fonts::family().to_string() } else { style.font.clone() });
+    if style.bold {
+        face = face.bold();
+    }
+    if style.italic {
+        face = face.italic();
+    }
     for (row, line) in content.split('\n').enumerate() {
         if line.is_empty() {
             continue;
         }
         let run = TextRun {
             len: line.len(),
-            font: font(crate::fonts::family()),
+            font: face.clone(),
             color,
             background_color: None,
-            underline: None,
+            underline: style.underline.then(|| gpui::UnderlineStyle { thickness: px((text_size * map.zoom / 14.0).max(1.0)), color: Some(color), wavy: false }),
             strikethrough: None,
         };
         let shaped = window.text_system().shape_line(SharedString::from(line.to_string()), px(text_size * map.zoom), &[run], None);
-        let origin = map.to_screen(Vec2 { x: object.bounds.x, y: object.bounds.y + row as f32 * line_height });
+        let start = crate::export::line_start(object.bounds.w, crate::export::line_width(line, text_size, style), style.align);
+        let origin = map.to_screen(Vec2 { x: object.bounds.x + start, y: object.bounds.y + row as f32 * line_height });
         let _ = shaped.paint(origin, px(line_height * map.zoom), window, cx);
     }
 }

@@ -91,6 +91,8 @@ pub enum Combo {
     AddFilter,
     /// A setting of the filter being edited that is a choice from a list, by its place among the settings.
     FilterChoice(usize),
+    /// The fonts installed on this system, for text.
+    TextFont,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -516,6 +518,10 @@ pub struct Workspace {
     pub replace_text: String,
     pub show_rulers: bool,
     pub show_grid: bool,
+    /// How the next text made with the Text tool is set.
+    pub text_style: crate::model::TextStyle,
+    /// The size of the next text made with the Text tool.
+    pub text_size: f32,
     pub show_guides: bool,
     pub lock_guides: bool,
     pub snap_guides: bool,
@@ -749,6 +755,8 @@ impl Workspace {
             replace_text: String::new(),
             show_rulers: true,
             show_grid: false,
+            text_style: Default::default(),
+            text_size: 24.0,
             show_guides: true,
             lock_guides: false,
             snap_guides: true,
@@ -1348,6 +1356,21 @@ impl Workspace {
             Cmd::HidePanels => self.panels_off,
             Cmd::Rulers => self.show_rulers,
             Cmd::Grid => self.show_grid,
+            Cmd::TextFont(index) => crate::fonts::families().get(index as usize).is_some_and(|name| {
+                let style = self.shown_text_style();
+                *name == style.font || (style.font.is_empty() && name == crate::fonts::family())
+            }),
+            Cmd::TextSize(size) => self.shown_text_size() == size as f32,
+            Cmd::TextStyle(style) => {
+                let shown = self.shown_text_style();
+                match style {
+                    crate::menus::TextStyleCmd::Plain => !shown.bold && !shown.italic && !shown.underline,
+                    crate::menus::TextStyleCmd::Bold => shown.bold,
+                    crate::menus::TextStyleCmd::Italic => shown.italic,
+                    crate::menus::TextStyleCmd::Underline => shown.underline,
+                }
+            }
+            Cmd::TextAlign(align) => self.shown_text_style().align == align,
             Cmd::Guides(GuideCmd::Show) => self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
             Cmd::Guides(GuideCmd::Snap) => self.snap_guides,
@@ -2009,6 +2032,26 @@ impl Workspace {
             Cmd::FitAll => self.fit_all(),
             Cmd::Rulers => self.show_rulers = !self.show_rulers,
             Cmd::Grid => self.show_grid = !self.show_grid,
+            Cmd::TextFont(index) => {
+                if let Some(name) = crate::fonts::families().get(index as usize) {
+                    self.change_text_style(|style| style.font = name.clone());
+                }
+            }
+            Cmd::TextSize(size) => self.set_text_size(size as f32),
+            Cmd::TextSizeStep(larger) => {
+                let (now, sizes) = (self.shown_text_size(), crate::menus::TEXT_SIZES);
+                let next = if larger { sizes.iter().find(|s| **s as f32 > now + 0.01) } else { sizes.iter().rev().find(|s| (**s as f32) < now - 0.01) };
+                if let Some(size) = next {
+                    self.set_text_size(*size as f32);
+                }
+            }
+            Cmd::TextStyle(what) => self.change_text_style(|style| match what {
+                crate::menus::TextStyleCmd::Plain => (style.bold, style.italic, style.underline) = (false, false, false),
+                crate::menus::TextStyleCmd::Bold => style.bold = !style.bold,
+                crate::menus::TextStyleCmd::Italic => style.italic = !style.italic,
+                crate::menus::TextStyleCmd::Underline => style.underline = !style.underline,
+            }),
+            Cmd::TextAlign(align) => self.change_text_style(|style| style.align = align),
             Cmd::Guides(GuideCmd::Show) => self.show_guides = !self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides = !self.lock_guides,
             Cmd::Guides(GuideCmd::Snap) => self.snap_guides = !self.snap_guides,
@@ -2254,6 +2297,56 @@ impl Workspace {
             }
         }
         cx.notify();
+    }
+
+    /// How the selected text is set, or without one, how the next text will be.
+    pub fn shown_text_style(&self) -> crate::model::TextStyle {
+        self.ed.selected().iter().find_map(|o| match &o.shape {
+            Shape::Text { style, .. } => Some(style.clone()),
+            _ => None,
+        })
+        .unwrap_or_else(|| self.text_style.clone())
+    }
+
+    fn shown_text_size(&self) -> f32 {
+        self.ed.selected().iter().find_map(|o| match &o.shape {
+            Shape::Text { size, .. } => Some(*size),
+            _ => None,
+        })
+        .unwrap_or(self.text_size)
+    }
+
+    /// Changes how the selected text is set, and how the next text made will be.
+    /// A toggle goes by the first selected text, so several end up alike.
+    pub fn change_text_style(&mut self, change: impl Fn(&mut crate::model::TextStyle)) {
+        let mut style = self.shown_text_style();
+        change(&mut style);
+        self.text_style = style.clone();
+        let mut changed = false;
+        self.ed.for_selected(|o| {
+            if let Shape::Text { style: own, .. } = &mut o.shape {
+                *own = style.clone();
+                o.refit_text();
+            }
+        });
+        changed |= self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. }));
+        if changed {
+            self.ed.commit(t("Text"));
+        }
+    }
+
+    fn set_text_size(&mut self, to: f32) {
+        self.text_size = to;
+        let any = self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. }));
+        self.ed.for_selected(|o| {
+            if let Shape::Text { size, .. } = &mut o.shape {
+                *size = to;
+                o.refit_text();
+            }
+        });
+        if any {
+            self.ed.commit(t("Text Size"));
+        }
     }
 
     /// Fireworks' Revert: asks, then opens the file again as it was last saved.
@@ -3451,10 +3544,10 @@ impl Workspace {
     }
 
     fn begin_text(&mut self, p: Vec2) {
-        let size = 24.0;
+        let size = self.text_size;
         let (w, h) = measure_text("", size);
         let bounds = Rect { x: p.x, y: p.y, w, h };
-        let mut object = self.new_object(t("Text"), Shape::Text { content: String::new(), size }, bounds, Vec::new());
+        let mut object = self.new_object(t("Text"), Shape::Text { content: String::new(), size, style: self.text_style.clone() }, bounds, Vec::new());
         object.fill = self.stroke.or(self.fill).or(Some(Color::BLACK));
         object.stroke = None;
         let id = object.id;
@@ -3976,7 +4069,16 @@ impl Workspace {
             ("r", false, true) => Cmd::Rulers,
             ("g", false, true) => Cmd::Grid,
             ("f", false, false) => Cmd::Panel(Panel::Find),
+            // On text Ctrl+B is bold, as in Fireworks; on a symbol it breaks it apart.
+            ("b", false, false) if self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })) => Cmd::TextStyle(crate::menus::TextStyleCmd::Bold),
             ("b", false, false) => Cmd::BreakApart,
+            ("i", false, false) => Cmd::TextStyle(crate::menus::TextStyleCmd::Italic),
+            ("u", false, false) => Cmd::TextStyle(crate::menus::TextStyleCmd::Underline),
+            ("," | "<", true, false) => Cmd::TextSizeStep(false),
+            ("." | ">", true, false) => Cmd::TextSizeStep(true),
+            ("l", true, true) => Cmd::TextAlign(crate::model::TextAlign::Left),
+            ("c", true, true) => Cmd::TextAlign(crate::model::TextAlign::Center),
+            ("r", true, true) => Cmd::TextAlign(crate::model::TextAlign::Right),
             ("g", false, false) => Cmd::Group,
             ("t", false, false) => Cmd::FreeTransform,
             ("t", true, false) => Cmd::NumericTransform,

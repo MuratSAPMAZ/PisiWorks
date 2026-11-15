@@ -80,7 +80,7 @@ fn poly(points: &[(f32, f32)], fill: Option<Color>, stroke: Option<Color>) -> Ob
 /// Text placed by its top-left corner.
 fn text(x: f32, y: f32, content: &str, size: f32, color: Color) -> Object {
     let (w, h) = measure_text(content, size);
-    base(Shape::Text { content: content.into(), size }, t("Text"), r(x, y, w, h), Some(color), None)
+    base(Shape::Text { content: content.into(), size, style: Default::default() }, t("Text"), r(x, y, w, h), Some(color), None)
 }
 
 /// Text centered inside `area`.

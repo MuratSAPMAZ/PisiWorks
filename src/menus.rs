@@ -208,6 +208,33 @@ pub enum Cmd {
     FlattenLayers,
     RepeatFilter,
     Guides(GuideCmd),
+    /// Sets text in the font at this place in the list of installed fonts.
+    TextFont(u16),
+    TextSize(u16),
+    /// Makes text a size larger (true) or smaller.
+    TextSizeStep(bool),
+    TextStyle(TextStyleCmd),
+    TextAlign(crate::model::TextAlign),
+}
+
+/// The commands of the Text > Style menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TextStyleCmd {
+    Plain,
+    Bold,
+    Italic,
+    Underline,
+}
+
+/// The sizes the Text > Size menu offers, which Smaller and Larger also step through.
+pub const TEXT_SIZES: [u16; 11] = [8, 9, 10, 12, 14, 18, 24, 36, 48, 72, 96];
+
+/// The entries of the Text > Font menu: every font installed on this system.
+pub fn font_entries() -> &'static [Entry] {
+    static ENTRIES: std::sync::LazyLock<Vec<Entry>> = std::sync::LazyLock::new(|| {
+        crate::fonts::families().iter().take(u16::MAX as usize).enumerate().map(|(index, name)| Entry::Item(name.as_str(), "", Some(Cmd::TextFont(index as u16)))).collect()
+    });
+    &ENTRIES
 }
 
 /// The commands of the Guides, Smart Guides and Slice Guides menus.
@@ -648,7 +675,56 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Ungroup", "Ctrl+Shift+G", Cmd::Ungroup),
         ],
     ),
-    ("Text", &[na("Font"), na("Size"), na("Style"), na("Align"), Sep, na("Attach to Path"), cmd("Convert to Paths", "", Cmd::TextToPaths), Sep, na("Check Spelling...")]),
+    (
+        "Text",
+        &[
+            // Filled in with the installed fonts when the menu is shown.
+            Sub("Font", &[]),
+            Sub(
+                "Size",
+                &[
+                    cmd("Smaller", "Ctrl+Shift+,", Cmd::TextSizeStep(false)),
+                    cmd("Larger", "Ctrl+Shift+.", Cmd::TextSizeStep(true)),
+                    Sep,
+                    cmd("8", "", Cmd::TextSize(8)),
+                    cmd("9", "", Cmd::TextSize(9)),
+                    cmd("10", "", Cmd::TextSize(10)),
+                    cmd("12", "", Cmd::TextSize(12)),
+                    cmd("14", "", Cmd::TextSize(14)),
+                    cmd("18", "", Cmd::TextSize(18)),
+                    cmd("24", "", Cmd::TextSize(24)),
+                    cmd("36", "", Cmd::TextSize(36)),
+                    cmd("48", "", Cmd::TextSize(48)),
+                    cmd("72", "", Cmd::TextSize(72)),
+                    cmd("96", "", Cmd::TextSize(96)),
+                ],
+            ),
+            Sub(
+                "Style",
+                &[
+                    cmd("Plain", "", Cmd::TextStyle(TextStyleCmd::Plain)),
+                    cmd("Bold", "Ctrl+B", Cmd::TextStyle(TextStyleCmd::Bold)),
+                    cmd("Italic", "Ctrl+I", Cmd::TextStyle(TextStyleCmd::Italic)),
+                    cmd("Underline", "Ctrl+U", Cmd::TextStyle(TextStyleCmd::Underline)),
+                ],
+            ),
+            Sub(
+                "Align",
+                &[
+                    cmd("Left", "Ctrl+Alt+Shift+L", Cmd::TextAlign(crate::model::TextAlign::Left)),
+                    cmd("Centered Horizontally", "Ctrl+Alt+Shift+C", Cmd::TextAlign(crate::model::TextAlign::Center)),
+                    cmd("Right", "Ctrl+Alt+Shift+R", Cmd::TextAlign(crate::model::TextAlign::Right)),
+                    na("Justified"),
+                    na("Stretched"),
+                ],
+            ),
+            Sep,
+            na("Attach to Path"),
+            cmd("Convert to Paths", "", Cmd::TextToPaths),
+            Sep,
+            na("Check Spelling..."),
+        ],
+    ),
     ("Commands", &[na("Manage Saved Commands..."), na("Run Script...")]),
     (
         "Filters",

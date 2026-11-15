@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn text_is_refused() {
         let mut text = rect(1, 0.0, 0.0, 10.0, 10.0);
-        text.shape = Shape::Text { content: "a".into(), size: 12.0 };
+        text.shape = Shape::Text { content: "a".into(), size: 12.0, style: Default::default() };
         let mut ed = editor(vec![text]);
         assert!(ed.path_op(PathOp::Simplify, 1.0).is_err());
     }

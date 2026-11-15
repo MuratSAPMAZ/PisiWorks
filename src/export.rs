@@ -11,12 +11,50 @@ use tiny_skia::{
 
 use crate::i18n::{t, tf};
 use crate::bitmap::Bitmap;
-use crate::model::{Color, MaskKind, Object, ObjectMask, Page, Rect, Shape, Vec2, WebKind};
+use crate::model::{Color, MaskKind, Object, ObjectMask, Page, Rect, Shape, TextAlign, TextStyle, Vec2, WebKind};
 
 pub const LINE_HEIGHT: f32 = 1.2;
 
 fn font() -> Option<&'static FontVec> {
     crate::fonts::outlines()
+}
+
+/// The face a text is set in.
+fn styled_font(style: &TextStyle) -> Option<&'static FontVec> {
+    crate::fonts::face(&style.font, style.bold, style.italic).or_else(font)
+}
+
+/// How wide one line of text is.
+pub fn line_width(line: &str, size: f32, style: &TextStyle) -> f32 {
+    match styled_font(style) {
+        Some(f) => {
+            let scaled = f.as_scaled(em_scale(f, size));
+            line.chars().map(|c| scaled.h_advance(scaled.glyph_id(c))).sum::<f32>()
+        }
+        None => line.chars().count() as f32 * size * 0.55,
+    }
+}
+
+/// How far from the left of its box a line of text starts, for an alignment.
+pub fn line_start(box_width: f32, line_width: f32, align: TextAlign) -> f32 {
+    match align {
+        TextAlign::Left => 0.0,
+        TextAlign::Center => ((box_width - line_width) / 2.0).max(0.0),
+        TextAlign::Right => (box_width - line_width).max(0.0),
+    }
+}
+
+/// Returns the width and height of multi-line text at `size` pixels, in a style.
+pub fn measure_styled(content: &str, size: f32, style: &TextStyle) -> (f32, f32) {
+    let line_count = content.split('\n').count() as f32;
+    let width = content.split('\n').map(|line| line_width(line, size, style)).fold(0.0, f32::max);
+    (width.max(size * 0.5), line_count * size * LINE_HEIGHT)
+}
+
+/// The box of the line under underlined text: left, top, width and height, for a line of text starting at `left` on a baseline.
+fn underline_box(left: f32, baseline: f32, width: f32, size: f32) -> (f32, f32, f32, f32) {
+    let thick = (size / 14.0).max(1.0);
+    (left, baseline + thick, width, thick)
 }
 
 /// Converts an em size, as used by the canvas, to the font's pixel-height scale.
@@ -52,9 +90,10 @@ fn sk_paint(color: Color, opacity: f32) -> Paint<'static> {
 
 /// The outline of every character that draws something, as closed rings in document
 /// space. Text is laid out exactly as [`draw_text`] paints it.
-pub fn glyph_outlines(content: &str, size: f32, origin: Vec2) -> Vec<Vec<Vec<Vec2>>> {
+pub fn glyph_outlines(content: &str, size: f32, origin: Vec2, style: &TextStyle) -> Vec<Vec<Vec<Vec2>>> {
     use ab_glyph::OutlineCurve;
-    let Some(font) = font() else { return Vec::new() };
+    let Some(font) = styled_font(style) else { return Vec::new() };
+    let box_width = measure_styled(content, size, style).0;
     let scale = em_scale(font, size);
     let scaled = font.as_scaled(scale);
     let line_height = size * LINE_HEIGHT;
@@ -62,8 +101,13 @@ pub fn glyph_outlines(content: &str, size: f32, origin: Vec2) -> Vec<Vec<Vec<Vec
     let far = |a: Vec2, b: Vec2| (a.x - b.x).abs() + (a.y - b.y).abs() > 0.01;
     let mut glyphs = Vec::new();
     for (row, line) in content.split('\n').enumerate() {
-        let mut caret = origin.x;
+        let width = line_width(line, size, style);
+        let mut caret = origin.x + line_start(box_width, width, style.align);
         let baseline = origin.y + row as f32 * line_height + lead + scaled.ascent();
+        if style.underline && !line.is_empty() {
+            let (x, y, w, h) = underline_box(caret, baseline, width, size);
+            glyphs.push(vec![vec![Vec2 { x, y }, Vec2 { x: x + w, y }, Vec2 { x: x + w, y: y + h }, Vec2 { x, y: y + h }]]);
+        }
         for ch in line.chars() {
             let id = scaled.glyph_id(ch);
             if let Some(outline) = font.outline(id) {
@@ -145,8 +189,8 @@ fn blend_pixel(pixmap: &mut Pixmap, x: i32, y: i32, color: Color, coverage: f32)
     }
 }
 
-fn draw_text(pixmap: &mut Pixmap, object: &Object, content: &str, size: f32) {
-    let Some(font) = font() else { return };
+fn draw_text(pixmap: &mut Pixmap, object: &Object, content: &str, size: f32, style: &TextStyle) {
+    let Some(font) = styled_font(style) else { return };
     let Some(fill) = object.fill else { return };
     let color = Color { a: (fill.a as f32 * object.opacity) as u8, ..fill };
     let scale = em_scale(font, size);
@@ -154,8 +198,17 @@ fn draw_text(pixmap: &mut Pixmap, object: &Object, content: &str, size: f32) {
     let line_height = size * LINE_HEIGHT;
     let lead = (line_height - (scaled.ascent() - scaled.descent())) / 2.0;
     for (row, line) in content.split('\n').enumerate() {
-        let mut caret = object.bounds.x;
+        let width = line_width(line, size, style);
+        let mut caret = object.bounds.x + line_start(object.bounds.w, width, style.align);
         let baseline = object.bounds.y + row as f32 * line_height + lead + scaled.ascent();
+        if style.underline && !line.is_empty() {
+            let (x, y, w, h) = underline_box(caret, baseline, width, size);
+            for py in y.round() as i32..(y + h).round().max(y.round() + 1.0) as i32 {
+                for px in x.round() as i32..(x + w).round() as i32 {
+                    blend_pixel(pixmap, px, py, color, 1.0);
+                }
+            }
+        }
         for ch in line.chars() {
             let id = scaled.glyph_id(ch);
             let glyph = id.with_scale_and_position(scale, ab_glyph::point(caret, baseline));
@@ -365,8 +418,8 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
         }
         return;
     }
-    if let Shape::Text { content, size } = &object.shape {
-        draw_text(pixmap, object, content, *size);
+    if let Shape::Text { content, size, style } = &object.shape {
+        draw_text(pixmap, object, content, *size, style);
         return;
     }
     if let Shape::Image { bitmap } = &object.shape {
@@ -595,6 +648,56 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn text_is_aligned_underlined_and_set_in_other_faces() {
+        use crate::model::{TextAlign, TextStyle};
+        let plain = TextStyle::default();
+        assert!(plain.is_plain());
+        // The lines of a text stand in a box as wide as its longest line.
+        let (width, height) = measure_styled("HHHH\nH", 20.0, &plain);
+        let short = line_width("H", 20.0, &plain);
+        assert!(width > short * 3.5 && height == 2.0 * 20.0 * LINE_HEIGHT);
+        assert_eq!(measure_styled("HHHH\nH", 20.0, &plain), measure_text("HHHH\nH", 20.0));
+        assert_eq!(line_start(width, short, TextAlign::Left), 0.0);
+        assert_eq!(line_start(width, short, TextAlign::Center), (width - short) / 2.0);
+        assert_eq!(line_start(width, short, TextAlign::Right), width - short);
+        assert_eq!(line_start(10.0, 30.0, TextAlign::Right), 0.0, "a line never starts left of its box");
+        if font().is_none() {
+            return;
+        }
+        // Right-aligned, the short second line is drawn at the right of the box.
+        let left_most = |style: &TextStyle| {
+            let glyphs = glyph_outlines("HHHH\nH", 20.0, Vec2 { x: 0.0, y: 0.0 }, style);
+            glyphs.last().unwrap().iter().flatten().map(|p| p.x).fold(f32::MAX, f32::min)
+        };
+        let right = TextStyle { align: TextAlign::Right, ..TextStyle::default() };
+        assert!(left_most(&plain) < short && left_most(&right) > width - short - 1.0);
+        // Underlined text has a bar under each line, as wide as the line.
+        let underlined = TextStyle { underline: true, ..TextStyle::default() };
+        let (bare, lined) = (glyph_outlines("HH", 20.0, Vec2 { x: 0.0, y: 0.0 }, &plain), glyph_outlines("HH", 20.0, Vec2 { x: 0.0, y: 0.0 }, &underlined));
+        assert_eq!(lined.len(), bare.len() + 1);
+        let bar = &lined[0][0];
+        assert!((bar[1].x - bar[0].x - line_width("HH", 20.0, &plain)).abs() < 0.01);
+        // And it is drawn: more of the page is inked than without it.
+        let inked = |style: &TextStyle| {
+            let mut p = page();
+            let mut text = red_box(2.0, 30.0);
+            text.shape = Shape::Text { content: "HH".into(), size: 14.0, style: style.clone() };
+            p.layers[0].objects.push(text);
+            render_page(&p).unwrap().pixels().iter().filter(|px| px.red() > 200 && px.green() < 60).count()
+        };
+        assert!(inked(&underlined) > inked(&plain));
+        // A style that is not plain is kept in the file; plain text is written as before.
+        let styled = Shape::Text { content: "a".into(), size: 12.0, style: TextStyle { font: "Some Font".into(), bold: true, ..TextStyle::default() } };
+        let back: Shape = serde_json::from_str(&serde_json::to_string(&styled).unwrap()).unwrap();
+        assert_eq!(back, styled);
+        assert!(!serde_json::to_string(&Shape::Text { content: "a".into(), size: 12.0, style: plain }).unwrap().contains("style"));
+        let old: Shape = serde_json::from_str(r#"{"Text":{"content":"a","size":12.0}}"#).unwrap();
+        assert!(matches!(old, Shape::Text { style, .. } if style.is_plain()));
+        // An unknown family falls back to a font that is there, so text never vanishes.
+        assert!(line_width("H", 20.0, &TextStyle { font: "No Such Font 12345".into(), ..TextStyle::default() }) > 0.0);
     }
 
     #[test]

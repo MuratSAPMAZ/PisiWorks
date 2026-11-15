@@ -46,6 +46,52 @@ pub fn family() -> &'static str {
     &picked().family
 }
 
+fn database() -> &'static Database {
+    static DATABASE: OnceLock<Database> = OnceLock::new();
+    DATABASE.get_or_init(|| {
+        let mut db = Database::new();
+        db.load_system_fonts();
+        db
+    })
+}
+
+/// The font families installed on this system, in alphabetical order.
+pub fn families() -> &'static [String] {
+    static FAMILIES: OnceLock<Vec<String>> = OnceLock::new();
+    FAMILIES.get_or_init(|| {
+        let mut names: Vec<String> = database().faces().filter_map(|face| face.families.first().map(|(name, _)| name.clone())).collect();
+        names.sort_by_key(|name| name.to_lowercase());
+        names.dedup();
+        names
+    })
+}
+
+/// A face of a family as outlines: bold, italic, both or neither, or the nearest
+/// the family has. An empty family is the program's own font.
+pub fn face(family: &str, bold: bool, italic: bool) -> Option<&'static FontVec> {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    if family.is_empty() && !bold && !italic {
+        return outlines();
+    }
+    static FACES: OnceLock<Mutex<HashMap<(String, bool, bool), Option<&'static FontVec>>>> = OnceLock::new();
+    let mut faces = FACES.get_or_init(Default::default).lock().ok()?;
+    *faces.entry((family.to_string(), bold, italic)).or_insert_with(|| {
+        let name = if family.is_empty() { self::family() } else { family };
+        let query = Query {
+            families: &[Family::Name(name)],
+            weight: if bold { fontdb::Weight::BOLD } else { fontdb::Weight::NORMAL },
+            style: if italic { fontdb::Style::Italic } else { fontdb::Style::Normal },
+            ..Query::default()
+        };
+        let db = database();
+        let id = db.query(&query)?;
+        let font = db.with_face_data(id, |data, index| FontVec::try_from_vec_and_index(data.to_vec(), index).ok())??;
+        // Kept for as long as the program runs: there are only so many fonts.
+        Some(&*Box::leak(Box::new(font)))
+    })
+}
+
 /// The same face as outlines, for measuring and exporting text.
 pub fn outlines() -> Option<&'static FontVec> {
     picked().outlines.as_ref()

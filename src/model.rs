@@ -365,13 +365,49 @@ pub struct Stroke {
     pub width: f32,
 }
 
+/// Where the lines of a text stand in its box.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
+/// How a text is set: its font and what is done to it. The default is plain text in the program's own font.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TextStyle {
+    /// The font family; empty for the program's own font.
+    #[serde(default)]
+    pub font: String,
+    #[serde(default)]
+    pub bold: bool,
+    #[serde(default)]
+    pub italic: bool,
+    #[serde(default)]
+    pub underline: bool,
+    #[serde(default)]
+    pub align: TextAlign,
+}
+
+impl TextStyle {
+    pub fn is_plain(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Shape {
     Rect { radius: f32 },
     Ellipse,
     Line,
     Path { closed: bool },
-    Text { content: String, size: f32 },
+    Text {
+        content: String,
+        size: f32,
+        #[serde(default, skip_serializing_if = "TextStyle::is_plain")]
+        style: TextStyle,
+    },
     /// Pixels are shared copy-on-write, so undo snapshots stay cheap.
     Image { bitmap: Arc<Bitmap> },
     /// A web area drawn over the artwork and left out of flattened images.
@@ -742,9 +778,9 @@ impl Object {
     /// Replaces text with a group of paths, one for each character, so it can be
     /// reshaped like any other artwork. Returns false if the text draws nothing.
     pub fn text_to_paths(&mut self) -> bool {
-        let Shape::Text { content, size } = &self.shape else { return false };
+        let Shape::Text { content, size, style } = &self.shape else { return false };
         let frame = self.placement.map_or(self.bounds, |p| p.frame);
-        let glyphs = crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y));
+        let glyphs = crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y), style);
         let parts: Vec<Object> = glyphs
             .into_iter()
             .filter_map(|mut rings| {
@@ -794,8 +830,8 @@ impl Object {
 
     /// Sizes a text object to its content, after the text or its size has changed.
     pub fn refit_text(&mut self) {
-        let Shape::Text { content, size } = &self.shape else { return };
-        let (w, h) = crate::export::measure_text(content, *size);
+        let Shape::Text { content, size, style } = &self.shape else { return };
+        let (w, h) = crate::export::measure_styled(content, *size, style);
         match &mut self.placement {
             Some(placement) => {
                 (placement.frame.w, placement.frame.h) = (w, h);
@@ -3193,7 +3229,7 @@ mod tests {
     #[test]
     fn text_stays_text_when_it_turns() {
         let mut text = rect(1, 0.0, 0.0, 40.0, 10.0);
-        text.shape = Shape::Text { content: "a".into(), size: 12.0 };
+        text.shape = Shape::Text { content: "a".into(), size: 12.0, style: TextStyle::default() };
         assert!(text.rotate90(true, v2(0.0, 0.0)));
         assert!(matches!(&text.shape, Shape::Text { content, .. } if content == "a"));
         // A quarter turn clockwise around the origin stands the box on its end, left of the origin.
@@ -4240,7 +4276,7 @@ mod tests {
     #[test]
     fn text_becomes_paths_with_the_holes_of_its_letters() {
         let mut o = rect(1, 10.0, 10.0, 60.0, 120.0);
-        o.shape = Shape::Text { content: "o".into(), size: 100.0 };
+        o.shape = Shape::Text { content: "o".into(), size: 100.0, style: TextStyle::default() };
         o.fill = Some(Color::BLACK);
         // Without an installed font there is nothing to outline.
         if !o.text_to_paths() {
@@ -4255,7 +4291,7 @@ mod tests {
 
     fn label(content: &str) -> Object {
         let mut o = rect(1, 10.0, 20.0, 80.0, 30.0);
-        o.shape = Shape::Text { content: content.into(), size: 24.0 };
+        o.shape = Shape::Text { content: content.into(), size: 24.0, style: TextStyle::default() };
         o.fill = Some(Color::BLACK);
         o
     }
@@ -4279,7 +4315,7 @@ mod tests {
         o.set_bounds(doubled);
         assert!(same_rect(o.placement.unwrap().bounds(), doubled), "and grew with it");
         // The text itself was never touched.
-        assert!(matches!(&o.shape, Shape::Text { content, size } if content == "Pardus" && *size == 24.0));
+        assert!(matches!(&o.shape, Shape::Text { content, size, .. } if content == "Pardus" && *size == 24.0));
         assert_eq!(o.placement.unwrap().frame, Rect { x: 10.0, y: 20.0, w: 80.0, h: 30.0 });
     }
 
