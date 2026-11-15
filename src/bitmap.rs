@@ -45,6 +45,36 @@ impl Filter {
     }
 }
 
+/// The tones Dodge and Burn work on most.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ToneRange {
+    Shadows,
+    #[default]
+    Midtones,
+    Highlights,
+}
+
+impl ToneRange {
+    pub const ALL: [ToneRange; 3] = [ToneRange::Shadows, ToneRange::Midtones, ToneRange::Highlights];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ToneRange::Shadows => crate::i18n::t("Shadows"),
+            ToneRange::Midtones => crate::i18n::t("Midtones"),
+            ToneRange::Highlights => crate::i18n::t("Highlights"),
+        }
+    }
+
+    /// How much a pixel of this lightness, from 0 to 1, is changed.
+    fn weight(self, light: f32) -> f32 {
+        match self {
+            ToneRange::Shadows => (1.0 - light).powi(2),
+            ToneRange::Midtones => (4.0 * light * (1.0 - light)).clamp(0.0, 1.0).max(0.15),
+            ToneRange::Highlights => light.powi(2),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaskMode {
     Replace,
@@ -549,11 +579,14 @@ impl Bitmap {
         });
     }
 
-    /// Lightens (Dodge) or darkens (Burn) under a round stroke, by a quarter of the way to white or black.
-    pub fn tone_stroke(&mut self, points: &[Vec2], width: f32, lighten: bool) {
+    /// Lightens (Dodge) or darkens (Burn) under a round stroke. `exposure`, from 0 to
+    /// 1, is how far a pixel goes toward white or black, and `range` says which
+    /// tones are worked on most.
+    pub fn tone_stroke(&mut self, points: &[Vec2], width: f32, lighten: bool, exposure: f32, range: ToneRange) {
         let Some((left, top, layer)) = self.coverage(points, width) else { return };
         self.apply_layer(left, top, &layer, |_, _, dst, coverage| {
-            let amount = 0.25 * coverage;
+            let light = (0.3 * dst[0] as f32 + 0.59 * dst[1] as f32 + 0.11 * dst[2] as f32) / 255.0;
+            let amount = exposure.clamp(0.0, 1.0) * coverage * range.weight(light);
             for value in dst.iter_mut().take(3) {
                 let to = if lighten { 255.0 } else { 0.0 };
                 *value = (*value as f32 + (to - *value as f32) * amount).round() as u8;
@@ -563,7 +596,10 @@ impl Bitmap {
 
     /// Smudges along a stroke: the paint under the brush where it starts is carried
     /// along and rubbed into what the brush passes over, picking that up in turn.
-    pub fn smudge_stroke(&mut self, points: &[Vec2], width: f32) {
+    ///
+    /// `pressure`, from 0 to 1, is how strongly it rubs in. With `start` the brush
+    /// begins loaded with that color, as with Fireworks' Smudge color.
+    pub fn smudge_stroke(&mut self, points: &[Vec2], width: f32, pressure: f32, start: Option<Color>) {
         let radius = (width / 2.0).max(1.0);
         let reach = radius.ceil() as i64;
         // The stroke in steps of a quarter of the brush, so the smear has no gaps.
@@ -586,11 +622,15 @@ impl Bitmap {
                 let (x, y) = (first.x.floor() as i64 + ox, first.y.floor() as i64 + oy);
                 if inside(x, y, w, h) {
                     let i = self.index(x as u32, y as u32);
-                    carried[cell(ox, oy)] = Some([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]);
+                    carried[cell(ox, oy)] = Some(match start {
+                        Some(color) => [color.r, color.g, color.b, 255],
+                        None => [self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]],
+                    });
                 }
             }
         }
-        for step in steps.iter().skip(1) {
+        // Loaded with a color, the brush rubs it in where it starts as well.
+        for step in steps.iter().skip(if start.is_some() { 0 } else { 1 }) {
             for oy in -reach..=reach {
                 for ox in -reach..=reach {
                     let far = ((ox * ox + oy * oy) as f32).sqrt();
@@ -604,7 +644,7 @@ impl Bitmap {
                         continue;
                     };
                     // Strongest in the middle of the brush, fading to nothing at its rim.
-                    let strength = 0.5 * (1.0 - far / radius).clamp(0.0, 1.0).sqrt();
+                    let strength = pressure.clamp(0.0, 1.0) * (1.0 - far / radius).clamp(0.0, 1.0).sqrt();
                     mix(&mut self.rgba[i..i + 4], &paint, strength);
                     carried[cell(ox, oy)] = Some([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]);
                 }
@@ -625,18 +665,22 @@ impl Bitmap {
         });
     }
 
-    /// Takes the red out of eyes between two corners: where red far outweighs
-    /// green and blue, it is brought down to their level. Returns how many pixels changed.
-    pub fn remove_red_eye(&mut self, a: Vec2, b: Vec2) -> usize {
+    /// Takes the red out of eyes between two corners. `tolerance`, from 0 to 1, is
+    /// how readily a pixel counts as red: at 0 only the purest red, at 1 anything
+    /// redder than it is green or blue. `strength`, from 0 to 1, is how much of
+    /// the red is taken away. Returns how many pixels changed.
+    pub fn remove_red_eye(&mut self, a: Vec2, b: Vec2, tolerance: f32, strength: f32) -> usize {
         let (x0, x1) = (a.x.min(b.x).floor().max(0.0) as u32, (a.x.max(b.x).ceil().max(0.0) as u32).min(self.width));
         let (y0, y1) = (a.y.min(b.y).floor().max(0.0) as u32, (a.y.max(b.y).ceil().max(0.0) as u32).min(self.height));
+        // How many times redder than green and blue a pixel must be: 2 at no tolerance, 1 at full.
+        let ratio = 2.0 - tolerance.clamp(0.0, 1.0);
         let mut changed = 0;
         for y in y0..y1 {
             for x in x0..x1 {
                 let i = self.index(x, y);
                 let (r, g, bl) = (self.rgba[i] as f32, self.rgba[i + 1] as f32, self.rgba[i + 2] as f32);
-                if self.rgba[i + 3] > 0 && r > 80.0 && r > g * 1.5 && r > bl * 1.5 {
-                    self.rgba[i] = ((g + bl) / 2.0).round() as u8;
+                if self.rgba[i + 3] > 0 && r > 80.0 && r > g * ratio && r > bl * ratio {
+                    self.rgba[i] = (r + ((g + bl) / 2.0 - r) * strength.clamp(0.0, 1.0)).round() as u8;
                     changed += 1;
                 }
             }
@@ -1051,16 +1095,31 @@ mod tests {
         let red = |b: &Bitmap, x: u32, y: u32| b.pixel(x, y).unwrap()[0];
         // Dodge lightens the black, Burn darkens the white, and neither reaches the top row.
         let mut dodged = halves();
-        dodged.tone_stroke(&stroke, 6.0, true);
+        dodged.tone_stroke(&stroke, 6.0, true, 0.25, ToneRange::Shadows);
         assert!(red(&dodged, 8, 10) > 40 && red(&dodged, 8, 1) == 0 && red(&dodged, 30, 10) == 255);
         let mut burned = halves();
-        burned.tone_stroke(&stroke, 6.0, false);
+        burned.tone_stroke(&stroke, 6.0, false, 0.25, ToneRange::Highlights);
         assert!(red(&burned, 30, 10) < 215 && red(&burned, 30, 1) == 255 && red(&burned, 8, 10) == 0);
+        // A higher exposure goes further, and the range decides which tones move: highlights leave black alone.
+        let mut stronger = halves();
+        stronger.tone_stroke(&stroke, 6.0, true, 0.75, ToneRange::Shadows);
+        assert!(red(&stronger, 8, 10) > red(&dodged, 8, 10) + 60);
+        let mut highlights = halves();
+        highlights.tone_stroke(&stroke, 6.0, true, 0.75, ToneRange::Highlights);
+        assert_eq!(red(&highlights, 8, 10), 0);
         // Smudge drags black across the border into the white, and leaves the far end alone.
         let mut smudged = halves();
-        smudged.smudge_stroke(&[Vec2 { x: 14.0, y: 10.0 }, Vec2 { x: 26.0, y: 10.0 }], 8.0);
+        smudged.smudge_stroke(&[Vec2 { x: 14.0, y: 10.0 }, Vec2 { x: 26.0, y: 10.0 }], 8.0, 0.5, None);
         assert!(red(&smudged, 21, 10) < 200 && red(&smudged, 38, 10) == 255 && red(&smudged, 21, 1) == 255, "{}", red(&smudged, 21, 10));
         assert_eq!(red(&smudged, 5, 10), 0);
+        // More pressure drags more of it over, and a smudge color is rubbed in from the start.
+        let mut harder = halves();
+        harder.smudge_stroke(&[Vec2 { x: 14.0, y: 10.0 }, Vec2 { x: 26.0, y: 10.0 }], 8.0, 1.0, None);
+        assert!(red(&harder, 23, 10) < red(&smudged, 23, 10));
+        let mut tinted = halves();
+        tinted.smudge_stroke(&[Vec2 { x: 26.0, y: 10.0 }, Vec2 { x: 34.0, y: 10.0 }], 8.0, 1.0, Some(Color::rgb(0, 255, 0)));
+        let px = tinted.pixel(27, 10).unwrap();
+        assert!(px[0] < 120 && px[1] == 255, "{px:?}");
         // Sharpen makes the two sides of a soft edge differ more.
         let soft: Vec<u8> = (0..800).flat_map(|i| { let v = ((i % 40) * 255 / 39) as u8; [v, v, v, 255] }).collect();
         let mut sharpened = Bitmap::from_rgba(40, 20, soft.clone()).unwrap();
@@ -1074,8 +1133,13 @@ mod tests {
         assert_eq!((replaced.pixel(30, 10).unwrap(), replaced.pixel(8, 10).unwrap(), replaced.pixel(30, 1).unwrap()), ([0, 200, 0, 255], [0, 0, 0, 255], [255, 255, 255, 255]));
         // Red eye: strong red inside the box loses its red, other colors and the outside stay.
         let mut eyes = Bitmap::from_rgba(4, 1, vec![220, 30, 40, 255, 200, 180, 170, 255, 220, 30, 40, 255, 0, 0, 0, 0]).unwrap();
-        assert_eq!(eyes.remove_red_eye(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 2.0, y: 1.0 }), 1);
+        assert_eq!(eyes.remove_red_eye(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 2.0, y: 1.0 }, 0.5, 1.0), 1);
         assert_eq!((eyes.pixel(0, 0).unwrap(), eyes.pixel(1, 0).unwrap(), eyes.pixel(2, 0).unwrap()), ([35, 30, 40, 255], [200, 180, 170, 255], [220, 30, 40, 255]));
+        // At half strength half of the red goes; with no tolerance a pinkish red is not taken for an eye.
+        let mut half = Bitmap::from_rgba(2, 1, vec![220, 30, 40, 255, 200, 120, 120, 255]).unwrap();
+        assert_eq!(half.remove_red_eye(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 2.0, y: 1.0 }, 0.0, 0.5), 1);
+        assert_eq!((half.pixel(0, 0).unwrap()[0], half.pixel(1, 0).unwrap()[0]), (128, 200));
+        assert_eq!(half.remove_red_eye(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 2.0, y: 1.0 }, 1.0, 1.0), 2);
     }
 
     #[test]

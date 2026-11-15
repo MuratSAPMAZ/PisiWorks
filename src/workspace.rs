@@ -74,6 +74,9 @@ pub enum ColorTarget {
     PsEffect(usize),
     /// The color of the gradient stop picked in Photoshop Live Effects.
     GradientStop,
+    /// The colors of the Replace Color tool: the one to change, and what it becomes.
+    ReplaceFrom,
+    ReplaceTo,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,6 +102,8 @@ pub enum Combo {
     /// What an object is filled with: a color, a gradient or a pattern.
     FillKind,
     FillPattern,
+    ToneRange,
+    PolygonShape,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -167,6 +172,55 @@ impl NumericMode {
 }
 
 /// The Numeric Transform dialog while it is open.
+/// What Properties offers for the tool in hand, beyond the size of its brush.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ToolOptions {
+    /// Dodge and Burn: how far a pixel goes toward white or black, in percent, and the tones worked on most.
+    pub exposure: f32,
+    pub range: crate::bitmap::ToneRange,
+    /// Smudge: how strongly it rubs in, in percent, and whether the brush starts loaded with the stroke color.
+    pub pressure: f32,
+    pub smudge_color: bool,
+    /// Replace Color: the color to change, or none to take it from where the stroke starts; what it becomes; and how near a color must be.
+    pub replace_from: Option<Color>,
+    pub replace_to: Color,
+    pub replace_tolerance: f32,
+    /// Red Eye Removal: how readily a pixel counts as red, and how much red is taken away, in percent.
+    pub red_tolerance: f32,
+    pub red_strength: f32,
+    /// Polygon: a star instead, and the number of sides or points.
+    pub star: bool,
+    pub sides: f32,
+    /// Vector Path and Redraw Path: how closely the path follows the hand, from 1 to 10.
+    pub precision: f32,
+}
+
+impl Default for ToolOptions {
+    fn default() -> Self {
+        Self {
+            exposure: 50.0,
+            range: Default::default(),
+            pressure: 50.0,
+            smudge_color: false,
+            replace_from: None,
+            replace_to: Color::rgb(255, 0, 0),
+            replace_tolerance: 32.0,
+            red_tolerance: 50.0,
+            red_strength: 75.0,
+            star: false,
+            sides: 5.0,
+            precision: 5.0,
+        }
+    }
+}
+
+impl ToolOptions {
+    /// How far a fitted curve may stray from the points drawn, for the precision set.
+    pub fn fit_tolerance(&self) -> f32 {
+        (11.0 - self.precision.clamp(1.0, 10.0)) * 0.3
+    }
+}
+
 /// The Print dialog: where the page is to go, and how many times.
 #[derive(Clone, Debug)]
 pub struct PrintDialog {
@@ -250,6 +304,14 @@ pub enum FieldId {
     PrintCopies,
     /// How large a pattern fill is drawn, in percent.
     FillScale,
+    /// The numbers among the options of the tool in hand.
+    ToolExposure,
+    ToolPressure,
+    ReplaceTolerance,
+    RedTolerance,
+    RedStrength,
+    PolygonSides,
+    PathPrecision,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -440,6 +502,8 @@ pub struct Workspace {
     pub stroke_width: f32,
     pub brush_size: f32,
     pub freeform_size: f32,
+    /// The options of the retouching tools, as Properties shows them while the tool is in hand.
+    pub tool_options: ToolOptions,
     pub pixel_sel: Option<PixelSelection>,
     pub stamp: Option<Stamp>,
     pub crop_area: Option<Rect>,
@@ -732,6 +796,7 @@ impl Workspace {
             awaiting_answer: false,
             panel_drag: None,
             transform: None,
+            tool_options: ToolOptions::default(),
             transform_tool: Tool::Scale,
             group_tools: crate::menus::TOOL_GROUPS.iter().filter_map(|group| match group.first().map(|slot| slot.action) { Some(crate::menus::SlotAction::Select(tool)) => Some(tool), _ => None }).collect(),
             polygon_lasso: None,
@@ -3133,9 +3198,7 @@ impl Workspace {
             }
         }
         lines.extend(self.smart_lines.iter().map(|(horizontal, at)| (*horizontal, *at, SMART_GUIDE)));
-        if let Some(cuts) = self.nine_slice_lines() {
-            lines.extend(cuts.iter().enumerate().map(|(index, at)| (index >= 2, *at, 0x2060ff)));
-        }
+
         lines
     }
 
@@ -3316,7 +3379,8 @@ impl Workspace {
             let (a, b) = (*a, *b);
             let mut changed = 0;
             if let Some(object) = self.ed.object_mut(target) {
-                object.edit_pixels(None, |bitmap| changed = bitmap.remove_red_eye(a, b));
+                let (tolerance, strength) = (self.tool_options.red_tolerance / 100.0, self.tool_options.red_strength / 100.0);
+                object.edit_pixels(None, |bitmap| changed = bitmap.remove_red_eye(a, b, tolerance, strength));
             }
             if changed > 0 {
                 self.ed.commit(t("Red Eye Removal"));
@@ -4346,8 +4410,11 @@ impl Workspace {
             Tool::Polygon => {
                 let radius = (current.x - start.x).hypot(current.y - start.y);
                 let around = Rect { x: start.x - radius, y: start.y - radius, w: radius * 2.0, h: radius * 2.0 };
-                let d = AutoKind::Polygon.defaults();
-                self.new_object(t("Polygon"), Shape::Auto { kind: AutoKind::Polygon, a: d.a, b: d.b, count: d.count }, around, Vec::new())
+                // The sides, or the points of a star, come from the tool's options.
+                let kind = if self.tool_options.star { AutoKind::Star } else { AutoKind::Polygon };
+                let d = kind.defaults();
+                let count = self.tool_options.sides.round().clamp(3.0, 64.0) as u32;
+                self.new_object(kind.label(), Shape::Auto { kind, a: d.a, b: d.b, count }, around, Vec::new())
             }
             Tool::Hotspot => Object::new_web(self.ed.alloc_id(), WebKind::Hotspot, bounds),
             Tool::Slice => Object::new_web(self.ed.alloc_id(), WebKind::Slice, bounds),
@@ -4474,6 +4541,7 @@ impl Workspace {
     fn redraw(&mut self, stroke: Vec<Vec2>) {
         let Some(first) = stroke.first().copied() else { return };
         let reach = 8.0 / self.zoom;
+        let tolerance = self.tool_options.fit_tolerance();
         let done = self.paths_near(first, reach).into_iter().any(|id| {
             let Some(object) = self.ed.object_mut(id) else { return false };
             if !object.to_path() {
@@ -4484,7 +4552,7 @@ impl Workspace {
             let closed = dense.is_closed();
             let points = subdivide(&dense.points, closed, 3.0);
             let Some(redrawn) = crate::model::redraw_path(&points, closed, &stroke, reach) else { return false };
-            (object.points, object.handles) = crate::fit::fit_curves(&redrawn, closed, crate::fit::TOLERANCE);
+            (object.points, object.handles) = crate::fit::fit_curves(&redrawn, closed, tolerance);
             object.refit_to_points();
             true
         });
@@ -4541,16 +4609,20 @@ impl Workspace {
         let color = self.stroke.unwrap_or(Color::BLACK);
         if let Some(id) = target {
             let offset = self.stamp.and_then(|s| s.offset).unwrap_or_default();
-            // Replace Color changes the color the stroke starts on into the brush color.
+            let options = self.tool_options;
+            // With no color to change picked, Replace Color changes the one the stroke starts on.
             let under = points.first().and_then(|p| self.ed.object(id)?.pixel_at(*p)).and_then(|(x, y)| self.ed.object(id)?.bitmap()?.pixel(x, y)).unwrap_or([0; 4]);
             let (op, label) = match self.tool {
                 Tool::Eraser => (PixelStroke::Erase, t("Eraser")),
                 Tool::Blur => (PixelStroke::Blur, t("Blur")),
                 Tool::Sharpen => (PixelStroke::Sharpen, t("Sharpen")),
-                Tool::Dodge => (PixelStroke::Dodge, t("Dodge")),
-                Tool::Burn => (PixelStroke::Burn, t("Burn")),
-                Tool::Smudge => (PixelStroke::Smudge, t("Smudge")),
-                Tool::ReplaceColor => (PixelStroke::Replace(under, color), t("Replace Color")),
+                Tool::Dodge => (PixelStroke::Dodge(options.exposure / 100.0, options.range), t("Dodge")),
+                Tool::Burn => (PixelStroke::Burn(options.exposure / 100.0, options.range), t("Burn")),
+                Tool::Smudge => (PixelStroke::Smudge(options.pressure / 100.0, options.smudge_color.then_some(color)), t("Smudge")),
+                Tool::ReplaceColor => {
+                    let from = options.replace_from.map_or(under, |c| [c.r, c.g, c.b, 255]);
+                    (PixelStroke::Replace(from, options.replace_to, options.replace_tolerance.round().clamp(0.0, 255.0) as u8), t("Replace Color"))
+                }
                 Tool::Stamp => (PixelStroke::Clone(offset), t("Rubber Stamp")),
                 _ => (PixelStroke::Paint(color), name),
             };
@@ -4567,6 +4639,11 @@ impl Workspace {
         let bounds = Rect::of_points(&points);
         let mut object = self.new_object(name, Shape::Path { closed: false }, bounds, points);
         object.stroke = Some(Stroke { color, width });
+        // A Vector Path is smoothed into curves, as closely as its precision asks.
+        if self.tool == Tool::VectorPath {
+            (object.points, object.handles) = crate::fit::fit_curves(&object.points, false, self.tool_options.fit_tolerance());
+            object.refit_to_points();
+        }
         self.add_new(object, name);
     }
 
@@ -4854,6 +4931,13 @@ impl Workspace {
             },
             FieldId::StrokeWidth => number(vector.and_then(|o| o.stroke).map_or(self.stroke_width, |s| s.width)),
             FieldId::BrushSize => number(self.brush_size),
+            FieldId::ToolExposure => number(self.tool_options.exposure),
+            FieldId::ToolPressure => number(self.tool_options.pressure),
+            FieldId::ReplaceTolerance => number(self.tool_options.replace_tolerance),
+            FieldId::RedTolerance => number(self.tool_options.red_tolerance),
+            FieldId::RedStrength => number(self.tool_options.red_strength),
+            FieldId::PolygonSides => number(self.tool_options.sides),
+            FieldId::PathPrecision => number(self.tool_options.precision),
             FieldId::FreeformSize => number(self.freeform_size),
             FieldId::Url => match first.map(|o| &o.shape) {
                 Some(Shape::Web { url, .. }) => url.clone(),
@@ -5021,6 +5105,28 @@ impl Workspace {
             FieldId::BrushSize => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
                 self.brush_size = v.min(MAX_BRUSH_SIZE);
+            }
+            FieldId::ToolExposure | FieldId::ToolPressure | FieldId::RedTolerance | FieldId::RedStrength => {
+                let Some(v) = number.filter(|v| *v >= 0.0) else { return };
+                let v = v.min(100.0);
+                match field.id {
+                    FieldId::ToolExposure => self.tool_options.exposure = v.max(1.0),
+                    FieldId::ToolPressure => self.tool_options.pressure = v.max(1.0),
+                    FieldId::RedTolerance => self.tool_options.red_tolerance = v,
+                    _ => self.tool_options.red_strength = v,
+                }
+            }
+            FieldId::ReplaceTolerance => {
+                let Some(v) = number.filter(|v| *v >= 0.0) else { return };
+                self.tool_options.replace_tolerance = v.min(255.0);
+            }
+            FieldId::PolygonSides => {
+                let Some(v) = number.filter(|v| *v >= 3.0) else { return };
+                self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::PathPrecision => {
+                let Some(v) = number.filter(|v| *v >= 1.0) else { return };
+                self.tool_options.precision = v.round().min(10.0);
             }
             FieldId::FreeformSize => {
                 let Some(v) = number.filter(|v| *v >= 2.0) else { return };
@@ -5210,6 +5316,8 @@ impl Workspace {
             ColorTarget::Filter => self.edited_filter().and_then(|(_, filter)| filter.color.or(filter.kind.start_color())),
             ColorTarget::PsEffect(effect) => self.edited_filter().map(|(_, filter)| filter.ps_color(effect)),
             ColorTarget::GradientStop => self.picked_stop().map(|stop| Color { a: 255, ..stop.1 }),
+            ColorTarget::ReplaceFrom => self.tool_options.replace_from,
+            ColorTarget::ReplaceTo => Some(self.tool_options.replace_to),
         }
     }
 
@@ -5247,6 +5355,9 @@ impl Workspace {
                     self.edit_filter(true, |filter| filter.set_ps_color(effect, color));
                 }
             }
+            // "None" for the color to change means: the one the stroke starts on.
+            ColorTarget::ReplaceFrom => self.tool_options.replace_from = color,
+            ColorTarget::ReplaceTo => self.tool_options.replace_to = color.unwrap_or(self.tool_options.replace_to),
             ColorTarget::GradientStop => {
                 // The stop keeps how opaque it is; only its color changes.
                 if let Some(color) = color {

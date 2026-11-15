@@ -535,7 +535,17 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
     for (object, _, _) in shapes.iter().filter(|(_, kind, _)| *kind == WebKind::Slice) {
         let Some(area) = page.rect().intersect(object.bounds) else { continue };
         let crop = IntRect::from_xywh(area.x.round() as i32, area.y.round() as i32, area.w.round().max(1.0) as u32, area.h.round().max(1.0) as u32);
-        let Some(piece) = crop.and_then(|c| pixmap.clone_rect(c)) else { continue };
+        let Some(mut piece) = crop.and_then(|c| pixmap.clone_rect(c)) else { continue };
+        // A many-sided slice keeps only what lies inside its outline; the rest of its box is left clear.
+        if let Some(corners) = object.web_outline() {
+            let (left, top, columns) = (area.x.round(), area.y.round(), piece.width() as usize);
+            for (at, px) in piece.pixels_mut().iter_mut().enumerate() {
+                let p = Vec2 { x: left + (at % columns) as f32 + 0.5, y: top + (at / columns) as f32 + 0.5 };
+                if !crate::model::point_in_polygon(p, &corners) {
+                    *px = PremultipliedColorU8::TRANSPARENT;
+                }
+            }
+        }
         written += 1;
         save_pixmap(&piece, &path.with_file_name(format!("{stem}_slice{written}.{extension}")))?;
     }

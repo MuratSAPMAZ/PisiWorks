@@ -388,6 +388,14 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::ToneRange => crate::bitmap::ToneRange::ALL
+                .into_iter()
+                .map(|range| item(range.label().into(), self.tool_options.range == range, cx, Box::new(move |this, _, _| this.tool_options.range = range)))
+                .collect(),
+            Combo::PolygonShape => [(t("Polygon"), false), (t("Star"), true)]
+                .into_iter()
+                .map(|(name, star)| item(name.into(), self.tool_options.star == star, cx, Box::new(move |this, _, _| this.tool_options.star = star)))
+                .collect(),
             Combo::FillKind => {
                 let current = self.current_fill_style().map(|style| style.kind);
                 std::iter::once((t("Solid"), None))

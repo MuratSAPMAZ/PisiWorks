@@ -904,9 +904,36 @@ impl Workspace {
             Tool::Freeform => Some((t("Size:"), FieldId::FreeformSize)),
             _ => None,
         };
-        let brush_size = tool_size.map(|(name, id)| {
-            div().flex().items_center().gap_1().h(px(20.)).child(label(name)).child(self.field(id, 44., cx))
-        });
+        let option = |this: &Self, name: &'static str, id: FieldId, cx: &mut Context<Self>| div().flex().items_center().gap_1().h(px(20.)).child(label(name)).child(this.field(id, 40., cx));
+        let options = self.tool_options;
+        // The options of the tool in hand, one under the other beside the rest of Properties.
+        let mut rows: Vec<Div> = tool_size.map(|(name, id)| option(self, name, id, cx)).into_iter().collect();
+        match self.tool {
+            Tool::Dodge | Tool::Burn => {
+                rows.push(option(self, t("Exposure:"), FieldId::ToolExposure, cx));
+                rows.push(div().flex().items_center().gap_1().child(label(t("Range:"))).child(self.combo(Combo::ToneRange, options.range.label(), 100., cx).bg(rgb(PANEL_RAISED))));
+            }
+            Tool::Smudge => {
+                rows.push(option(self, t("Pressure:"), FieldId::ToolPressure, cx));
+                rows.push(self.check_box(t("Smudge color"), options.smudge_color, cx, |this| this.tool_options.smudge_color = !this.tool_options.smudge_color));
+            }
+            Tool::ReplaceColor => {
+                rows.push(div().flex().items_center().gap_1().child(label(t("From:"))).child(self.swatch(ColorTarget::ReplaceFrom, 18., cx)).child(label(t("To:"))).child(self.swatch(ColorTarget::ReplaceTo, 18., cx)));
+                rows.push(option(self, t("Tolerance:"), FieldId::ReplaceTolerance, cx));
+            }
+            Tool::RedEye => {
+                rows.push(option(self, t("Tolerance:"), FieldId::RedTolerance, cx));
+                rows.push(option(self, t("Strength:"), FieldId::RedStrength, cx));
+            }
+            Tool::Polygon => {
+                rows.push(div().flex().items_center().gap_1().child(label(t("Shape:"))).child(self.combo(Combo::PolygonShape, if options.star { t("Star") } else { t("Polygon") }, 90., cx).bg(rgb(PANEL_RAISED))));
+                rows.push(option(self, t("Sides:"), FieldId::PolygonSides, cx));
+            }
+            Tool::VectorPath | Tool::RedrawPath => rows.push(option(self, t("Precision:"), FieldId::PathPrecision, cx)),
+            Tool::ReshapeArea => rows.push(option(self, t("Size:"), FieldId::FreeformSize, cx)),
+            _ => {}
+        }
+        let brush_size = (!rows.is_empty()).then(|| div().flex().flex_col().flex_none().gap_1().children(rows));
         let Some(first) = selected.first().copied() else {
             let page = self.ed.doc.page();
             let button = |this: &Self, text: &'static str, cmd: Cmd, cx: &mut Context<Self>| {

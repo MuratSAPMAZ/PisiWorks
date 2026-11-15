@@ -177,6 +177,8 @@ pub struct Scene {
     guide_lines: Vec<(bool, f32, u32)>,
     /// The handles of the selected object's gradient: where it starts and where it ends.
     fill_handles: Option<(Vec2, Vec2)>,
+    /// The cuts of 9-slice scaling: the box of the selection, and where the two upright and two level cuts are.
+    nine_cuts: Option<(Rect, [f32; 4])>,
     stroke: Option<Color>,
     fill: Option<Color>,
     textures: Textures,
@@ -338,6 +340,7 @@ impl Scene {
             show_grid: w.show_grid,
             guide_lines: w.guide_lines(),
             fill_handles: w.fill_handles(),
+            nine_cuts: w.ed.selection_bounds().zip(w.nine_slice_lines()),
             stroke: w.stroke,
             fill: w.fill,
             textures: w.textures.clone(),
@@ -428,6 +431,19 @@ impl Scene {
                     let knob = |at: Point<Pixels>| Bounds { origin: point(at.x - px(4.), at.y - px(4.)), size: size(px(8.), px(8.)) };
                     window.paint_quad(fill(knob(from), rgb(0xffffff)).corner_radii(px(4.)).border_widths(1.).border_color(rgb(0x000000)));
                     window.paint_quad(fill(knob(to), rgb(0xffffff)).border_widths(1.).border_color(rgb(0x000000)));
+                }
+                // The cuts of 9-slice scaling run across the selection only.
+                if let Some((bounds, cuts)) = self.nine_cuts {
+                    let area = screen_rect(map, bounds);
+                    for (index, at) in cuts.iter().enumerate() {
+                        let on_screen = map.to_screen(Vec2 { x: *at, y: *at });
+                        let line = if index < 2 {
+                            Bounds { origin: point(on_screen.x, area.origin.y), size: size(px(1.), area.size.height) }
+                        } else {
+                            Bounds { origin: point(area.origin.x, on_screen.y), size: size(area.size.width, px(1.)) }
+                        };
+                        window.paint_quad(fill(line, rgb(0x2060ff)));
+                    }
                 }
                 for (horizontal, at, color) in &self.guide_lines {
                     let on_screen = map.to_screen(Vec2 { x: *at, y: *at });

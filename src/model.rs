@@ -639,11 +639,13 @@ pub enum PixelStroke {
     /// Copies pixels from this document-space offset.
     Clone(Vec2),
     Sharpen,
-    Dodge,
-    Burn,
-    Smudge,
-    /// Replaces the first color, within a tolerance, with the second.
-    Replace([u8; 4], Color),
+    /// Lightens: the exposure from 0 to 1, and the tones worked on most.
+    Dodge(f32, crate::bitmap::ToneRange),
+    Burn(f32, crate::bitmap::ToneRange),
+    /// Smudges: the pressure from 0 to 1, and the color the brush starts loaded with, if any.
+    Smudge(f32, Option<Color>),
+    /// Replaces the first color, within the tolerance, with the second.
+    Replace([u8; 4], Color, u8),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -774,7 +776,11 @@ impl Object {
         let b = self.bounds;
         match form {
             WebForm::Rectangle => None,
-            WebForm::Circle => Some((0..48).map(|step| step as f32 / 48.0 * std::f32::consts::TAU).map(|turn| v2(b.x + b.w / 2.0 * (1.0 + turn.cos()), b.y + b.h / 2.0 * (1.0 + turn.sin()))).collect()),
+            // Always a circle, as HTML can only describe one: the largest that fits the box, in its middle.
+            WebForm::Circle => {
+                let (center, radius) = (b.center(), b.w.min(b.h) / 2.0);
+                Some((0..48).map(|step| step as f32 / 48.0 * std::f32::consts::TAU).map(|turn| v2(center.x + radius * turn.cos(), center.y + radius * turn.sin())).collect())
+            }
             WebForm::Polygon(corners) => Some(corners.iter().map(|p| v2(b.x + p.x * b.w, b.y + p.y * b.h)).collect()),
         }
     }
@@ -789,10 +795,56 @@ impl Object {
             let moved: Vec<Vec2> = self.points.iter().map(|p| map(*p)).collect();
             self.points = moved;
             self.refit_to_points();
-        } else {
-            // What cannot be reshaped is moved and sized by where its own corners go.
-            let (a, b) = (map(v2(self.bounds.x, self.bounds.y)), map(v2(self.bounds.right(), self.bounds.bottom())));
-            self.set_bounds(Rect::from_corners(a, b));
+            return;
+        }
+        let (a, b) = (map(v2(self.bounds.x, self.bounds.y)), map(v2(self.bounds.right(), self.bounds.bottom())));
+        let target = Rect::from_corners(a, b);
+        match &self.shape {
+            // A bitmap is redrawn pixel by pixel: each pixel of the new image is the one it came from.
+            Shape::Image { bitmap } if self.placement.is_none() => {
+                let (sx, sy) = self.pixel_scale().unwrap_or((1.0, 1.0));
+                let (width, height) = ((target.w * sx).round().max(1.0) as u32, (target.h * sy).round().max(1.0) as u32);
+                let old = self.bounds;
+                let mut rgba = vec![0u8; width as usize * height as usize * 4];
+                for (at, px) in rgba.chunks_exact_mut(4).enumerate() {
+                    let on_page = v2(target.x + ((at as u32 % width) as f32 + 0.5) / sx, target.y + ((at as u32 / width) as f32 + 0.5) / sy);
+                    let source = nine_slice_source(on_page, from, to, guides);
+                    let (x, y) = (((source.x - old.x) * sx).floor(), ((source.y - old.y) * sy).floor());
+                    if x >= 0.0 && y >= 0.0 {
+                        if let Some(color) = bitmap.pixel(x as u32, y as u32) {
+                            px.copy_from_slice(&color);
+                        }
+                    }
+                }
+                if let Some(redrawn) = Bitmap::from_rgba(width, height, rgba) {
+                    self.shape = Shape::Image { bitmap: Arc::new(redrawn) };
+                    self.bounds = target;
+                }
+            }
+            // A group is scaled member by member, so each keeps its own corners.
+            Shape::Group { .. } => {
+                let own = self.opacity;
+                let mut members = self.instance_parts();
+                for member in &mut members {
+                    // The members came out with the group's opacity on them; it stays the group's.
+                    if own > 0.0 {
+                        member.opacity /= own;
+                    }
+                    member.nine_slice(from, to, guides);
+                }
+                if let Some(bounds) = members.iter().map(|o| o.bounds).reduce(Rect::union) {
+                    self.shape = Shape::Group { objects: Arc::new(members) };
+                    self.placement = None;
+                    self.bounds = bounds;
+                }
+            }
+            // Text keeps its size and goes where its middle goes.
+            Shape::Text { .. } => {
+                let (center, moved) = (self.bounds.center(), map(self.bounds.center()));
+                self.translate(moved.x - center.x, moved.y - center.y);
+            }
+            // What is left is moved and sized by where its own corners go.
+            _ => self.set_bounds(target),
         }
     }
 
@@ -1333,10 +1385,10 @@ impl Object {
             PixelStroke::Blur => bitmap.blur_stroke(&mapped, pixel_width),
             PixelStroke::Clone(offset) => bitmap.clone_stroke(&mapped, pixel_width, v2(offset.x * sx, offset.y * sy)),
             PixelStroke::Sharpen => bitmap.sharpen_stroke(&mapped, pixel_width),
-            PixelStroke::Dodge => bitmap.tone_stroke(&mapped, pixel_width, true),
-            PixelStroke::Burn => bitmap.tone_stroke(&mapped, pixel_width, false),
-            PixelStroke::Smudge => bitmap.smudge_stroke(&mapped, pixel_width),
-            PixelStroke::Replace(from, to) => bitmap.replace_color_stroke(&mapped, pixel_width, from, to, crate::bitmap::FILL_TOLERANCE),
+            PixelStroke::Dodge(exposure, range) => bitmap.tone_stroke(&mapped, pixel_width, true, exposure, range),
+            PixelStroke::Burn(exposure, range) => bitmap.tone_stroke(&mapped, pixel_width, false, exposure, range),
+            PixelStroke::Smudge(pressure, color) => bitmap.smudge_stroke(&mapped, pixel_width, pressure, color),
+            PixelStroke::Replace(from, to, tolerance) => bitmap.replace_color_stroke(&mapped, pixel_width, from, to, tolerance),
         });
     }
 
@@ -1694,6 +1746,18 @@ pub fn subdivide(points: &[Vec2], closed: bool, max_len: f32) -> Vec<Vec2> {
         out.extend(points.last());
     }
     out
+}
+
+/// Where a point came from before its box was resized by 9-slice scaling: the way back from [`nine_slice_point`].
+pub fn nine_slice_source(p: Vec2, from: Rect, to: Rect, guides: [f32; 4]) -> Vec2 {
+    // The cuts keep their distance from the edges, so on the new box they are at other parts of its length.
+    let back = |near: f32, far: f32, old: f32, new: f32| {
+        let (low, high) = (near.min(far), near.max(far));
+        if new - low * old - (1.0 - high) * old <= 0.0 || new <= 0.0 { (near, far) } else { (low * old / new, 1.0 - (1.0 - high) * old / new) }
+    };
+    let (x0, x1) = back(guides[0], guides[1], from.w, to.w);
+    let (y0, y1) = back(guides[2], guides[3], from.h, to.h);
+    nine_slice_point(p, to, from, [x0, x1, y0, y1])
 }
 
 /// Where a point goes when its box is resized by 9-slice scaling: outside the cuts
@@ -3849,6 +3913,34 @@ mod tests {
         let outline = pill.outline();
         assert!(outline.iter().any(|p| (p.x - 10.0).abs() < 0.6 && p.y.abs() < 0.01), "the top side starts 10 in, as before");
         assert!(outline.iter().any(|p| (p.x - 170.0).abs() < 0.6 && p.y.abs() < 0.01), "and ends 10 from the new right edge");
+        // The way back takes each point to where it came from.
+        for x in [5.0, 29.0, 31.0, 90.0, 150.0, 175.0] {
+            let there = v2(x, 12.0);
+            let back = nine_slice_source(there, from, to, thirds);
+            let again = nine_slice_point(back, from, to, thirds);
+            assert!((again.x - x).abs() < 0.01 && (again.y - 12.0).abs() < 0.01, "{x}: {back:?} {again:?}");
+        }
+        // A bitmap keeps its ends pixel for pixel: red, 30 of blue, then green, made 180 wide.
+        let stripes: Vec<u8> = (0..90 * 30).flat_map(|i| match i % 90 { 0..=29 => [255, 0, 0, 255], 30..=59 => [0, 0, 255, 255], _ => [0, 255, 0, 255] }).collect();
+        let mut image = Object::new_bitmap(2, "b", Bitmap::from_rgba(90, 30, stripes).unwrap(), 0.0, 0.0);
+        image.nine_slice(from, to, thirds);
+        let wide = image.bitmap().unwrap();
+        assert_eq!((image.bounds, wide.width()), (to, 180));
+        assert_eq!((wide.pixel(29, 5), wide.pixel(30, 5), wide.pixel(149, 5), wide.pixel(150, 5)), (Some([255, 0, 0, 255]), Some([0, 0, 255, 255]), Some([0, 0, 255, 255]), Some([0, 255, 0, 255])));
+        // In a group each member is scaled in the group's box: the one at the right end moves, and keeps its size.
+        let mut e = Editor::new(Document::new(200, 100));
+        for (id, x) in [(10, 0.0), (11, 70.0)] {
+            e.add_object(rect(id, x, 0.0, 20.0, 30.0));
+        }
+        e.selection = vec![10, 11];
+        assert!(e.group_selected());
+        let mut group = e.selected()[0].clone();
+        group.nine_slice(from, to, thirds);
+        let parts = group.instance_parts();
+        assert_eq!((group.bounds, parts[0].bounds, parts[1].bounds), (to, Rect { x: 0.0, y: 0.0, w: 20.0, h: 30.0 }, Rect { x: 160.0, y: 0.0, w: 20.0, h: 30.0 }));
+        // Inside a polygon, and outside it.
+        let triangle = [v2(0.0, 0.0), v2(10.0, 0.0), v2(0.0, 10.0)];
+        assert!(point_in_polygon(v2(2.0, 2.0), &triangle) && !point_in_polygon(v2(8.0, 8.0), &triangle));
     }
 
     #[test]
