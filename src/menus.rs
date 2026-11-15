@@ -215,6 +215,8 @@ pub enum Cmd {
     TextSizeStep(bool),
     TextStyle(TextStyleCmd),
     TextAlign(crate::model::TextAlign),
+    Superselect,
+    Subselect,
 }
 
 /// The commands of the Text > Style menu.
@@ -550,8 +552,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
         &[
             cmd("Select All", "Ctrl+A", Cmd::SelectAll),
             cmd("Deselect", "Ctrl+D", Cmd::Deselect),
-            na("Superselect"),
-            na("Subselect"),
+            cmd("Superselect", "", Cmd::Superselect),
+            cmd("Subselect", "", Cmd::Subselect),
             Sep,
             cmd("Select Similar", "", Cmd::SelectSimilar),
             cmd("Select Inverse", "Ctrl+Shift+I", Cmd::SelectInverse),

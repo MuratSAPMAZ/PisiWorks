@@ -1621,6 +1621,18 @@ pub struct Page {
     /// The guides dragged out of the rulers.
     #[serde(default, skip_serializing_if = "Guides::is_empty")]
     pub guides: Guides,
+    /// The groups opened with Subselect, whose members lie loose on the page until
+    /// the selection leaves them. Never written to a file: groups are closed first.
+    #[serde(skip)]
+    pub open_groups: Vec<OpenGroup>,
+}
+
+/// A group whose members are being worked on one by one.
+#[derive(Clone, Debug, PartialEq)]
+pub struct OpenGroup {
+    /// The group without its members: its name, mask, filters and blend mode are put back when it closes.
+    pub shell: Object,
+    pub members: Vec<u64>,
 }
 
 /// The guides of a page: lines to line things up with, which are never part of the image.
@@ -1682,6 +1694,7 @@ impl Page {
             jpeg_mask_color: None,
             button_symbols: Vec::new(),
             guides: Guides::default(),
+            open_groups: Vec::new(),
         }
     }
 
@@ -2692,6 +2705,7 @@ impl Editor {
 
     pub fn set_active_page(&mut self, index: usize) {
         if index < self.doc.pages.len() {
+            self.close_groups();
             self.navigate(|doc| doc.active_page = index);
             self.selection.clear();
         }
@@ -2705,8 +2719,114 @@ impl Editor {
 
     pub fn set_active_state(&mut self, index: usize) {
         if index < self.doc.page().states.len() && index != self.doc.page().active_state {
+            self.close_groups();
             self.navigate(|doc| doc.page_mut().goto_state(index));
             self.selection.clear();
+        }
+    }
+
+    /// Fireworks' Subselect: the members of each selected group become the
+    /// selection, to be worked on one by one. The group is whole again as soon as
+    /// none of its members is selected. Returns false if no group was selected.
+    pub fn subselect(&mut self) -> bool {
+        let groups: Vec<u64> = self.selected().iter().filter(|o| matches!(o.shape, Shape::Group { .. })).map(|o| o.id).collect();
+        if groups.is_empty() {
+            return false;
+        }
+        let mut picked: Vec<u64> = self.selection.iter().copied().filter(|id| !groups.contains(id)).collect();
+        for id in groups {
+            let Some(group) = self.object(id).cloned() else { continue };
+            // The members come out where they show, with numbers of their own: copies of a group share theirs.
+            let mut members = group.instance_parts();
+            for member in &mut members {
+                member.id = self.alloc_id();
+            }
+            let ids: Vec<u64> = members.iter().map(|member| member.id).collect();
+            // What the members were given on the way out is not given again when they go back in.
+            let shell = Object { shape: Shape::Group { objects: Arc::new(Vec::new()) }, opacity: 1.0, placement: None, ..group };
+            let page = self.doc.page_mut();
+            for layer in &mut page.layers {
+                if let Some(at) = layer.objects.iter().position(|o| o.id == id) {
+                    layer.objects.splice(at..=at, members);
+                    break;
+                }
+            }
+            page.open_groups.push(OpenGroup { shell, members: ids.clone() });
+            picked.extend(ids);
+        }
+        self.selection = picked;
+        true
+    }
+
+    /// The open groups that have a selected member.
+    fn open_groups_selected(&self) -> Vec<usize> {
+        let open = &self.doc.page().open_groups;
+        (0..open.len()).filter(|index| open[*index].members.iter().any(|id| self.selection.contains(id))).collect()
+    }
+
+    pub fn can_superselect(&self) -> bool {
+        !self.open_groups_selected().is_empty()
+    }
+
+    /// Fireworks' Superselect: the whole group is selected in place of the members picked out of it.
+    pub fn superselect(&mut self) -> bool {
+        let open = self.open_groups_selected();
+        for index in open.iter().rev() {
+            self.close_group(*index, true);
+        }
+        !open.is_empty()
+    }
+
+    /// Puts an open group back together from the members that are still on the
+    /// page, where the lowest of them lies. With `select` the group takes their place in the selection.
+    fn close_group(&mut self, index: usize, select: bool) {
+        let page = self.doc.page_mut();
+        if index >= page.open_groups.len() {
+            return;
+        }
+        let OpenGroup { mut shell, members } = page.open_groups.remove(index);
+        let mut found = Vec::new();
+        let mut spot = None;
+        for (layer_index, layer) in page.layers.iter_mut().enumerate() {
+            let mut at = 0;
+            while at < layer.objects.len() {
+                if members.contains(&layer.objects[at].id) {
+                    spot.get_or_insert((layer_index, at));
+                    found.push(layer.objects.remove(at));
+                } else {
+                    at += 1;
+                }
+            }
+        }
+        let was_selected = self.selection.iter().any(|id| members.contains(id));
+        self.selection.retain(|id| !members.contains(id));
+        // A group whose members were all deleted is gone with them.
+        let (Some((layer, at)), Some(bounds)) = (spot, found.iter().map(|o| o.bounds).reduce(Rect::union)) else { return };
+        shell.bounds = bounds;
+        shell.shape = Shape::Group { objects: Arc::new(found) };
+        let id = shell.id;
+        let page = self.doc.page_mut();
+        let at = at.min(page.layers[layer].objects.len());
+        page.layers[layer].objects.insert(at, shell);
+        if select && was_selected {
+            self.selection.push(id);
+        }
+    }
+
+    /// Closes the open groups none of whose members is selected any more.
+    pub fn sync_open_groups(&mut self) {
+        let selected = self.open_groups_selected();
+        for index in (0..self.doc.page().open_groups.len()).rev() {
+            if !selected.contains(&index) {
+                self.close_group(index, false);
+            }
+        }
+    }
+
+    /// Closes every open group, as before saving or leaving the page. Selected members give way to their group.
+    pub fn close_groups(&mut self) {
+        for index in (0..self.doc.page().open_groups.len()).rev() {
+            self.close_group(index, true);
         }
     }
 
@@ -3310,6 +3430,90 @@ mod tests {
         hidden.selection = vec![all[0]];
         hidden.for_selected(|o| o.visible = false);
         assert!(!hidden.doc.page().smart_targets(&[all[2]]).0.contains(&10.0));
+    }
+
+    #[test]
+    fn subselect_opens_a_group_and_it_closes_when_the_selection_leaves() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[0], all[1]];
+        assert!(e.group_selected());
+        let group = e.selection[0];
+        e.for_selected(|o| o.name = "Pair".into());
+        assert!(!e.can_superselect());
+        // Subselect puts the two members on the page and selects them.
+        assert!(e.subselect());
+        let members = e.selection.clone();
+        assert_eq!((members.len(), ids(&e).len(), e.doc.page().open_groups.len()), (2, 3, 1));
+        assert!(e.object(group).is_none() && e.can_superselect());
+        assert_eq!(e.object(members[0]).unwrap().bounds, Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0 });
+        // One member alone is recolored and moved; the group stays open while it is selected.
+        e.selection = vec![members[1]];
+        e.for_selected(|o| {
+            o.fill = Some(Color::rgb(9, 9, 9));
+            o.translate(0.0, 30.0);
+        });
+        e.sync_open_groups();
+        assert_eq!(e.doc.page().open_groups.len(), 1);
+        // Selecting something else closes it: the group is back under its own name and number, with the change in it.
+        e.selection = vec![all[2]];
+        e.sync_open_groups();
+        assert!(e.doc.page().open_groups.is_empty());
+        let closed = e.object(group).expect("the group is back").clone();
+        assert_eq!((closed.name.as_str(), ids(&e)), ("Pair", vec![group, all[2]]));
+        assert_eq!(closed.bounds, Rect { x: 10.0, y: 10.0, w: 30.0, h: 50.0 });
+        let parts = closed.instance_parts();
+        assert_eq!((parts[1].fill, parts[1].bounds.y), (Some(Color::rgb(9, 9, 9)), 40.0));
+        // Superselect goes from a member back to the whole group at once.
+        e.selection = vec![group];
+        assert!(e.subselect());
+        e.selection.truncate(1);
+        assert!(e.superselect());
+        assert_eq!(e.selection, vec![group]);
+        assert!(e.doc.page().open_groups.is_empty() && !e.superselect());
+        // A member deleted while the group is open is gone from it; with all deleted, so is the group.
+        assert!(e.subselect());
+        e.selection.truncate(1);
+        e.delete_selected();
+        e.sync_open_groups();
+        assert_eq!(e.object(group).unwrap().instance_parts().len(), 1);
+        e.selection = vec![group];
+        assert!(e.subselect());
+        e.delete_selected();
+        e.sync_open_groups();
+        assert_eq!(ids(&e), vec![all[2]]);
+        // Nothing but a group can be subselected.
+        e.selection = vec![all[2]];
+        assert!(!e.subselect());
+    }
+
+    #[test]
+    fn an_open_group_is_closed_before_the_page_is_left_and_keeps_its_look() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[0], all[1]];
+        assert!(e.group_selected());
+        let group = e.selection[0];
+        // A half see-through group, twice as wide: its members come out as they show.
+        e.for_selected(|o| {
+            o.opacity = 0.5;
+            o.set_bounds(Rect { x: 10.0, y: 10.0, w: 60.0, h: 20.0 });
+        });
+        assert!(e.subselect());
+        let member = e.object(e.selection[0]).unwrap().clone();
+        assert_eq!((member.opacity, member.bounds), (0.5, Rect { x: 10.0, y: 10.0, w: 40.0, h: 20.0 }));
+        // Closed again, nothing is applied twice.
+        e.close_groups();
+        assert_eq!(e.selection, vec![group]);
+        let back = e.object(group).unwrap();
+        assert_eq!((back.opacity, back.bounds, back.instance_parts()[0].opacity), (1.0, Rect { x: 10.0, y: 10.0, w: 60.0, h: 20.0 }, 0.5));
+        // Going to another state closes it too, and it is not written to a file while open.
+        assert!(e.subselect());
+        e.doc.page_mut().add_state();
+        e.doc.page_mut().goto_state(0);
+        e.set_active_state(1);
+        e.set_active_state(0);
+        assert!(e.doc.page().open_groups.is_empty() && e.object(group).is_some());
     }
 
     #[test]

@@ -836,6 +836,7 @@ impl Workspace {
             cx.drop_image(image, Some(window));
         }
         self.ed.sync_mask_edit();
+        self.ed.sync_open_groups();
         // A page with blend modes is rendered whole, as it will export. It is rendered
         // again when the document changes, and on every frame of an edit in progress.
         let editing = self.drag.is_some() || self.transform.is_some() || self.text_edit.is_some() || self.field.is_some();
@@ -1962,6 +1963,8 @@ impl Workspace {
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
             Cmd::Guides(GuideCmd::Clear) => !self.ed.doc.page().guides.is_empty(),
+            Cmd::Subselect => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Group { .. })),
+            Cmd::Superselect => self.ed.can_superselect(),
             Cmd::Revert => (self.path.is_some() || self.source_image.is_some()) && self.ed.is_dirty(),
             Cmd::Clone | Cmd::FitSelection => has_selection,
             Cmd::PasteAttributes => has_selection && self.ed.has_clipboard(),
@@ -2194,6 +2197,16 @@ impl Workspace {
             Cmd::Group => {
                 if self.ed.group_selected() {
                     self.ed.commit(t("Group"));
+                }
+            }
+            Cmd::Subselect => {
+                if self.ed.subselect() {
+                    self.ed.commit(t("Subselect"));
+                }
+            }
+            Cmd::Superselect => {
+                if self.ed.superselect() {
+                    self.ed.commit(t("Superselect"));
                 }
             }
             Cmd::Ungroup => {
@@ -2576,6 +2589,7 @@ impl Workspace {
 
     fn write_document(&mut self, mut path: PathBuf) {
         self.ed.end_mask_edit();
+        self.ed.close_groups();
         // Saving under an image name writes a flattened copy, and the editable
         // document stays unsaved. JSON must never land in a file named .png.
         if path.extension().is_some_and(|e| !e.eq_ignore_ascii_case(FILE_EXTENSION) && !e.eq_ignore_ascii_case(LEGACY_EXTENSION)) {
@@ -2599,6 +2613,7 @@ impl Workspace {
 
     fn export_to(&mut self, path: &Path) {
         self.ed.end_mask_edit();
+        self.ed.close_groups();
         let page = &self.ed.export_page();
         self.status = match export_page(page, path).and_then(|()| export_web(page, path)) {
             Ok(0) => tf("Exported {}", &[&path.display()]),
@@ -3257,6 +3272,20 @@ impl Workspace {
     /// starts dragging it, and anywhere else it selects what is there. Shift adds a
     /// vertex to those picked, and Alt pulls a new pair of handles out of one.
     fn subselect_down(&mut self, p: Vec2, alt: bool, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
+        // A click on a group picks the member under the mouse out of it, as in Fireworks.
+        let hit = self.ed.doc.page().hit_test(p, self.tolerance());
+        if let Some(group) = hit.filter(|id| self.ed.object(*id).is_some_and(|o| matches!(o.shape, Shape::Group { .. }))) {
+            self.ed.selection = vec![group];
+            if self.ed.subselect() {
+                let member = self.ed.doc.page().hit_test(p, self.tolerance()).filter(|id| self.ed.is_selected(*id));
+                if let Some(member) = member {
+                    self.ed.selection = vec![member];
+                }
+                self.point_selection.clear();
+                self.ed.commit(t("Subselect"));
+                return;
+            }
+        }
         let reach = TRANSFORM_REACH / self.zoom;
         let near = |v: Vec2| ((v.x - p.x).powi(2) + (v.y - p.y).powi(2)).sqrt() <= reach;
         // Handles first: a short one sits almost on top of its vertex.
