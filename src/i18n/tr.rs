@@ -1066,4 +1066,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Steps: {}", "Adımlar: {}"),
     ("Rename...", "Yeniden Adlandır..."),
     ("No saved commands yet. Use Save Steps as Command in the History panel.", "Henüz kaydedilmiş komut yok. Geçmiş panelindeki Adımları Komut Olarak Kaydet'i kullanın."),
+    ("Horizontal left to right", "Soldan sağa yatay"),
+    ("Horizontal right to left", "Sağdan sola yatay"),
+    ("Vertical left to right", "Soldan sağa dikey"),
+    ("Vertical right to left", "Sağdan sola dikey"),
+    ("Centered Vertically", "Dikey Ortalanmış"),
+    ("Justified Vertically", "Dikey Yaslanmış"),
+    ("Stretched Vertically", "Dikey Uzatılmış"),
 ];

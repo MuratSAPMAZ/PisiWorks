@@ -104,6 +104,7 @@ pub enum Combo {
     /// Which look of the button being edited is on show.
     ButtonLook,
     BatchScale,
+    TextOrientation,
     Printer,
     PrintRange,
     /// What an object is filled with: a color, a gradient or a pattern.
@@ -1816,7 +1817,9 @@ impl Workspace {
                     crate::menus::TextStyleCmd::Underline => shown.underline,
                 }
             }
-            Cmd::TextAlign(align) => self.shown_text_style().align == align,
+            Cmd::TextAlign(align) => !self.shown_text_style().orientation.is_vertical() && self.shown_text_style().align == align,
+            Cmd::TextAlignDown(align) => self.shown_text_style().orientation.is_vertical() && self.shown_text_style().align == align,
+            Cmd::TextOrientation(orientation) => self.shown_text_style().orientation == orientation,
             Cmd::PathOrientation(orientation) => self.ed.has_text_on_path() && self.shown_text_style().on_path == orientation,
             Cmd::Guides(GuideCmd::Show) => self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
@@ -2555,6 +2558,7 @@ impl Workspace {
             | Cmd::FlipH | Cmd::FlipV => has_selection,
             Cmd::Filter(_) => self.ed.has_selected_bitmap(),
             Cmd::ConvertToSymbol | Cmd::Animate => has_selection,
+            Cmd::TextAlignDown(_) => self.shown_text_style().orientation.is_vertical(),
             Cmd::SaveSteps => !self.steps_to_save().is_empty(),
             Cmd::Ready(ready) => match ready {
                 crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia => has_selection,
@@ -2825,7 +2829,8 @@ impl Workspace {
                 crate::menus::TextStyleCmd::Italic => style.italic = !style.italic,
                 crate::menus::TextStyleCmd::Underline => style.underline = !style.underline,
             }),
-            Cmd::TextAlign(align) => self.change_text_style(|style| style.align = align),
+            Cmd::TextAlign(align) | Cmd::TextAlignDown(align) => self.change_text_style(|style| style.align = align),
+            Cmd::TextOrientation(orientation) => self.change_text_style(|style| style.orientation = orientation),
             Cmd::Guides(GuideCmd::Edit) => self.guides_dialog = true,
             Cmd::Guides(GuideCmd::Show) => self.show_guides = !self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides = !self.lock_guides,

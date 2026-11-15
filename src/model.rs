@@ -627,6 +627,40 @@ pub struct TextStyle {
     pub on_path: PathOrientation,
     #[serde(default)]
     pub path_offset: f32,
+    /// Which way the text runs.
+    #[serde(default)]
+    pub orientation: TextOrientation,
+}
+
+/// Which way a text runs, as Fireworks' text orientation button offers.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextOrientation {
+    /// Across, from the left.
+    #[default]
+    Horizontal,
+    /// Across, from the right: the first letter of a line is its right-most.
+    HorizontalRtl,
+    /// Down, in columns that follow one another to the right.
+    VerticalLtr,
+    /// Down, in columns that follow one another to the left.
+    VerticalRtl,
+}
+
+impl TextOrientation {
+    pub const ALL: [TextOrientation; 4] = [TextOrientation::Horizontal, TextOrientation::HorizontalRtl, TextOrientation::VerticalLtr, TextOrientation::VerticalRtl];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TextOrientation::Horizontal => t("Horizontal left to right"),
+            TextOrientation::HorizontalRtl => t("Horizontal right to left"),
+            TextOrientation::VerticalLtr => t("Vertical left to right"),
+            TextOrientation::VerticalRtl => t("Vertical right to left"),
+        }
+    }
+
+    pub fn is_vertical(self) -> bool {
+        matches!(self, TextOrientation::VerticalLtr | TextOrientation::VerticalRtl)
+    }
 }
 
 /// How the letters of text on a path stand.

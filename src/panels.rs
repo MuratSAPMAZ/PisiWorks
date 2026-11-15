@@ -391,6 +391,12 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::TextOrientation => crate::model::TextOrientation::ALL
+                .into_iter()
+                .map(|orientation| {
+                    item(orientation.label().into(), self.shown_text_style().orientation == orientation, cx, Box::new(move |this, window, cx| this.run(Cmd::TextOrientation(orientation), window, cx)))
+                })
+                .collect(),
             Combo::PathOrientation => crate::model::PathOrientation::ALL
                 .into_iter()
                 .map(|orientation| {

@@ -11,7 +11,7 @@ use tiny_skia::{
 
 use crate::i18n::{t, tf};
 use crate::bitmap::Bitmap;
-use crate::model::{Color, MaskKind, Object, ObjectMask, Page, Rect, Shape, TextAlign, TextStyle, Vec2, WebKind};
+use crate::model::{Color, MaskKind, Object, ObjectMask, Page, Rect, Shape, TextAlign, TextOrientation, TextStyle, Vec2, WebKind};
 
 pub const LINE_HEIGHT: f32 = 1.2;
 
@@ -113,7 +113,42 @@ pub fn glyph_outlines_on_path(content: &str, size: f32, style: &TextStyle, path:
 /// spread or stretched lines, and bold or italic made up for a font that has none.
 pub fn needs_outlines(style: &TextStyle) -> bool {
     let (heavy, slanted) = crate::fonts::made_up(&style.font, style.bold, style.italic);
-    matches!(style.align, TextAlign::Justify | TextAlign::Stretch) || heavy || slanted
+    matches!(style.align, TextAlign::Justify | TextAlign::Stretch) || heavy || slanted || style.orientation != TextOrientation::Horizontal
+}
+
+/// How far down a letter of vertical text is from the one above it: the height of the font.
+fn vertical_step(size: f32, style: &TextStyle) -> f32 {
+    match styled_font(style) {
+        Some(f) => {
+            let scaled = f.as_scaled(em_scale(f, size));
+            scaled.ascent() - scaled.descent()
+        }
+        None => size * LINE_HEIGHT,
+    }
+}
+
+/// Where the caret stands after the last letter of a text laid out in `frame`.
+pub fn caret_place(content: &str, size: f32, style: &TextStyle, frame: Rect) -> Vec2 {
+    let last = content.rsplit('\n').next().unwrap_or("");
+    let rows = content.split('\n').count();
+    let line_height = size * LINE_HEIGHT;
+    if style.orientation.is_vertical() {
+        let step = vertical_step(size, style);
+        let own = last.chars().count() as f32 * step;
+        let top = match style.align {
+            TextAlign::Center => ((frame.h - own) / 2.0).max(0.0),
+            TextAlign::Right => (frame.h - own).max(0.0),
+            _ => 0.0,
+        };
+        // The last column is the left-most when the columns run to the left.
+        let left = if style.orientation == TextOrientation::VerticalRtl { frame.x } else { frame.x + (rows - 1) as f32 * line_height };
+        return Vec2 { x: left + line_height / 2.0, y: frame.y + top + own };
+    }
+    let width = if last.is_empty() { 0.0 } else { line_width(last, size, style) };
+    let start = line_start(frame.w, width, style.align);
+    // Text that runs from the right grows at its left end.
+    let across = if style.orientation == TextOrientation::HorizontalRtl { start } else { start + width };
+    Vec2 { x: frame.x + across, y: frame.y + (rows as f32 - 1.0) * line_height }
 }
 
 /// Whether bold has to be made up for this style, by thickening the letters.
@@ -134,6 +169,11 @@ fn line_fit(line: &str, width: f32, box_width: f32, last: bool, align: TextAlign
 /// Returns the width and height of multi-line text at `size` pixels, in a style.
 pub fn measure_styled(content: &str, size: f32, style: &TextStyle) -> (f32, f32) {
     let line_count = content.split('\n').count() as f32;
+    if style.orientation.is_vertical() {
+        // Each line is a column as wide as a line is high; the box is as tall as the longest column.
+        let longest = content.split('\n').map(|line| line.chars().count()).max().unwrap_or(0) as f32;
+        return (line_count * size * LINE_HEIGHT, (longest * vertical_step(size, style)).max(size * 0.5));
+    }
     let width = content.split('\n').map(|line| line_width(line, size, style)).fold(0.0, f32::max);
     (width.max(size * 0.5), line_count * size * LINE_HEIGHT)
 }
@@ -178,19 +218,63 @@ fn sk_paint(color: Color, opacity: f32) -> Paint<'static> {
 /// The outline of every character that draws something, as closed rings in document
 /// space. Text is laid out exactly as [`draw_text`] paints it.
 pub fn glyph_outlines(content: &str, size: f32, origin: Vec2, style: &TextStyle) -> Vec<Vec<Vec<Vec2>>> {
-    use ab_glyph::OutlineCurve;
     let Some(font) = styled_font(style) else { return Vec::new() };
     let box_width = measure_styled(content, size, style).0;
     let scale = em_scale(font, size);
     let scaled = font.as_scaled(scale);
     let line_height = size * LINE_HEIGHT;
     let lead = (line_height - (scaled.ascent() - scaled.descent())) / 2.0;
-    let far = |a: Vec2, b: Vec2| (a.x - b.x).abs() + (a.y - b.y).abs() > 0.01;
     let mut glyphs = Vec::new();
     // An italic the font does not have is made by leaning the letters over.
     let lean = if crate::fonts::made_up(&style.font, style.bold, style.italic).1 { 0.2 } else { 0.0 };
     let rows = content.split('\n').count();
+    if style.orientation.is_vertical() {
+        // Letters stand upright one under another; a line of the text is a column, and
+        // the alignments work down the column as they work along a line.
+        let (_, box_height) = measure_styled(content, size, style);
+        let step = vertical_step(size, style);
+        for (column, line) in content.split('\n').enumerate() {
+            let count = line.chars().count();
+            let own = count as f32 * step;
+            let last = column + 1 == rows;
+            let (gap, stretch) = match style.align {
+                TextAlign::Justify if !last && count > 1 && own < box_height => ((box_height - own) / (count - 1) as f32, 1.0),
+                TextAlign::Stretch if own > 0.0 => (0.0, box_height / own),
+                _ => (0.0, 1.0),
+            };
+            let top = origin.y
+                + match style.align {
+                    TextAlign::Center => ((box_height - own) / 2.0).max(0.0),
+                    TextAlign::Right => (box_height - own).max(0.0),
+                    _ => 0.0,
+                };
+            let place_of = if style.orientation == TextOrientation::VerticalRtl { rows - 1 - column } else { column };
+            let left = origin.x + place_of as f32 * line_height;
+            for (index, ch) in line.chars().enumerate() {
+                let id = scaled.glyph_id(ch);
+                let across = left + (line_height - scaled.h_advance(id)) / 2.0;
+                let baseline = top + index as f32 * (step * stretch + gap) + scaled.ascent() * stretch;
+                let place = |p: &ab_glyph::Point| {
+                    let up = p.y * scaled.v_scale_factor();
+                    Vec2 { x: across + p.x * scaled.h_scale_factor() + up * lean, y: baseline - up * stretch }
+                };
+                let rings = glyph_rings(font, id, place);
+                if !rings.is_empty() {
+                    glyphs.push(rings);
+                }
+            }
+        }
+        return glyphs;
+    }
     for (row, line) in content.split('\n').enumerate() {
+        // Text that runs from the right is set with its letters in the opposite order.
+        let turned: String;
+        let line = if style.orientation == TextOrientation::HorizontalRtl {
+            turned = line.chars().rev().collect();
+            turned.as_str()
+        } else {
+            line
+        };
         let width = line_width(line, size, style);
         let (wider, stretch) = line_fit(line, width, box_width, row + 1 == rows, style.align);
         let start = origin.x + line_start(box_width, width, style.align);
@@ -204,52 +288,59 @@ pub fn glyph_outlines(content: &str, size: f32, origin: Vec2, style: &TextStyle)
         }
         for ch in line.chars() {
             let id = scaled.glyph_id(ch);
-            if let Some(outline) = font.outline(id) {
-                // Font outlines have y pointing up.
-                let place = |p: &ab_glyph::Point| {
-                    let up = p.y * scaled.v_scale_factor();
-                    Vec2 { x: start + (caret + p.x * scaled.h_scale_factor() + up * lean) * stretch, y: baseline - up }
-                };
-                let mut rings: Vec<Vec<Vec2>> = Vec::new();
-                for curve in &outline.curves {
-                    let controls: Vec<Vec2> = match curve {
-                        OutlineCurve::Line(a, b) => vec![place(a), place(b)],
-                        OutlineCurve::Quad(a, b, c) => vec![place(a), place(b), place(c)],
-                        OutlineCurve::Cubic(a, b, c, d) => vec![place(a), place(b), place(c), place(d)],
-                    };
-                    let (start, end) = (controls[0], controls[controls.len() - 1]);
-                    // A curve that does not start where the last one ended opens a new ring.
-                    if rings.last().and_then(|ring| ring.last()).is_none_or(|last| far(*last, start)) {
-                        rings.push(vec![start]);
-                    }
-                    let Some(ring) = rings.last_mut() else { continue };
-                    let length: f32 = controls.windows(2).map(|w| ((w[0].x - w[1].x).powi(2) + (w[0].y - w[1].y).powi(2)).sqrt()).sum();
-                    let steps = if controls.len() == 2 { 1 } else { (length.ceil() as usize).clamp(2, 16) };
-                    for step in 1..steps {
-                        let t = step as f32 / steps as f32;
-                        // De Casteljau: works for a quadratic and a cubic alike.
-                        let mut level = controls.clone();
-                        while level.len() > 1 {
-                            level = level.windows(2).map(|w| Vec2 { x: w[0].x + (w[1].x - w[0].x) * t, y: w[0].y + (w[1].y - w[0].y) * t }).collect();
-                        }
-                        ring.push(level[0]);
-                    }
-                    ring.push(end);
-                }
-                for ring in &mut rings {
-                    if ring.len() > 1 && !far(ring[0], ring[ring.len() - 1]) {
-                        ring.pop();
-                    }
-                }
-                rings.retain(|ring| ring.len() >= 3);
-                if !rings.is_empty() {
-                    glyphs.push(rings);
-                }
+            // Font outlines have y pointing up.
+            let place = |p: &ab_glyph::Point| {
+                let up = p.y * scaled.v_scale_factor();
+                Vec2 { x: start + (caret + p.x * scaled.h_scale_factor() + up * lean) * stretch, y: baseline - up }
+            };
+            let rings = glyph_rings(font, id, place);
+            if !rings.is_empty() {
+                glyphs.push(rings);
             }
             caret += scaled.h_advance(id) + if ch == ' ' { wider } else { 0.0 };
         }
     }
     glyphs
+}
+
+/// The outline of one letter as closed rings, each point put where `place` says.
+fn glyph_rings(font: &FontVec, id: ab_glyph::GlyphId, place: impl Fn(&ab_glyph::Point) -> Vec2) -> Vec<Vec<Vec2>> {
+    use ab_glyph::OutlineCurve;
+    let far = |a: Vec2, b: Vec2| (a.x - b.x).abs() + (a.y - b.y).abs() > 0.01;
+    let Some(outline) = font.outline(id) else { return Vec::new() };
+    let mut rings: Vec<Vec<Vec2>> = Vec::new();
+    for curve in &outline.curves {
+        let controls: Vec<Vec2> = match curve {
+            OutlineCurve::Line(a, b) => vec![place(a), place(b)],
+            OutlineCurve::Quad(a, b, c) => vec![place(a), place(b), place(c)],
+            OutlineCurve::Cubic(a, b, c, d) => vec![place(a), place(b), place(c), place(d)],
+        };
+        let (start, end) = (controls[0], controls[controls.len() - 1]);
+        // A curve that does not start where the last one ended opens a new ring.
+        if rings.last().and_then(|ring| ring.last()).is_none_or(|last| far(*last, start)) {
+            rings.push(vec![start]);
+        }
+        let Some(ring) = rings.last_mut() else { continue };
+        let length: f32 = controls.windows(2).map(|w| ((w[0].x - w[1].x).powi(2) + (w[0].y - w[1].y).powi(2)).sqrt()).sum();
+        let steps = if controls.len() == 2 { 1 } else { (length.ceil() as usize).clamp(2, 16) };
+        for step in 1..steps {
+            let t = step as f32 / steps as f32;
+            // De Casteljau: works for a quadratic and a cubic alike.
+            let mut level = controls.clone();
+            while level.len() > 1 {
+                level = level.windows(2).map(|w| Vec2 { x: w[0].x + (w[1].x - w[0].x) * t, y: w[0].y + (w[1].y - w[0].y) * t }).collect();
+            }
+            ring.push(level[0]);
+        }
+        ring.push(end);
+    }
+    for ring in &mut rings {
+        if ring.len() > 1 && !far(ring[0], ring[ring.len() - 1]) {
+            ring.pop();
+        }
+    }
+    rings.retain(|ring| ring.len() >= 3);
+    rings
 }
 
 fn sk_path(points: &[Vec2], closed: bool) -> Option<tiny_skia::Path> {
@@ -1179,6 +1270,34 @@ mod tests {
             glyphs.iter().flatten().flatten().filter(|p| p.y >= row_top && p.y < row_top + 20.0 * LINE_HEIGHT).map(|p| p.x).fold(0.0, f32::max)
         };
         let two_lines = "H H\nHHHHHH\nH H";
+        // Vertical text: a line is a column, and the letters stand one under another.
+        let down = TextStyle { orientation: TextOrientation::VerticalLtr, ..TextStyle::default() };
+        assert!(needs_outlines(&down));
+        let (w, h) = measure_styled("HHH\nH", 20.0, &down);
+        let (across, _) = measure_styled("HHH\nH", 20.0, &TextStyle::default());
+        assert_eq!(w, 2.0 * 20.0 * LINE_HEIGHT);
+        assert!(h > across, "three letters down are taller than three across are wide");
+        let letters = glyph_outlines("HHH\nH", 20.0, Vec2 { x: 0.0, y: 0.0 }, &down);
+        let middle = |glyph: &Vec<Vec<Vec2>>| Rect::of_points(&glyph.concat()).center();
+        let places: Vec<Vec2> = letters.iter().map(middle).collect();
+        assert_eq!(places.len(), 4);
+        assert!((places[0].x - places[1].x).abs() < 0.01 && places[1].y > places[0].y + 15.0 && places[2].y > places[1].y + 15.0);
+        assert!(places[3].x > places[0].x + 20.0 && (places[3].y - places[0].y).abs() < 0.01, "the second line is a column to the right");
+        // Running to the left, the first column is the right-most.
+        let leftward = glyph_outlines("HHH\nH", 20.0, Vec2 { x: 0.0, y: 0.0 }, &TextStyle { orientation: TextOrientation::VerticalRtl, ..TextStyle::default() });
+        assert!(middle(&leftward[3]).x + 20.0 < middle(&leftward[0]).x);
+        // Bottom alignment puts the short column at the foot of the box.
+        let foot = glyph_outlines("HHH\nH", 20.0, Vec2 { x: 0.0, y: 0.0 }, &TextStyle { align: TextAlign::Right, ..down.clone() });
+        assert!((middle(&foot[3]).y - middle(&foot[2]).y).abs() < 0.01);
+        // The caret stands under the last letter of the last column.
+        let caret = caret_place("HHH\nH", 20.0, &down, Rect { x: 0.0, y: 0.0, w, h });
+        assert!(caret.x > 20.0 * LINE_HEIGHT && caret.y > 15.0 && caret.y < h / 2.0);
+        // From the right, the letters of a line come in the opposite order.
+        let rtl = TextStyle { orientation: TextOrientation::HorizontalRtl, ..TextStyle::default() };
+        let forward = glyph_outlines("Hi", 20.0, Vec2 { x: 0.0, y: 0.0 }, &TextStyle::default());
+        let turned = glyph_outlines("Hi", 20.0, Vec2 { x: 0.0, y: 0.0 }, &rtl);
+        let wide = |glyph: &Vec<Vec<Vec2>>| Rect::of_points(&glyph.concat()).w;
+        assert!(wide(&forward[0]) > wide(&forward[1]) && wide(&turned[0]) < wide(&turned[1]));
         let justified = TextStyle { align: TextAlign::Justify, ..TextStyle::default() };
         let full = measure_styled(two_lines, 20.0, &plain).0;
         assert!(widest(two_lines, &plain, 0.0) < full * 0.6);

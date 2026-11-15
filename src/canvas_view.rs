@@ -298,15 +298,9 @@ impl Scene {
         }
         let caret = w.text_edit.and_then(|id| w.ed.object(id)).and_then(|o| match &o.shape {
             Shape::Text { content, size, style } => {
-                let last = content.rsplit('\n').next().unwrap_or("");
-                let lines = content.split('\n').count() as f32;
-                // The caret stands after the last line, wherever its alignment puts that.
-                let frame_width = o.placement.map_or(o.bounds, |p| p.frame).w;
-                let last_width = if last.is_empty() { 0.0 } else { crate::export::line_width(last, *size, style) };
-                let width = crate::export::line_start(frame_width, last_width, style.align) + last_width;
                 // The caret is found in the upright frame, then follows the text's transform.
                 let frame = o.placement.map_or(o.bounds, |p| p.frame);
-                let at = Vec2 { x: frame.x + width, y: frame.y + (lines - 1.0) * size * LINE_HEIGHT };
+                let at = crate::export::caret_place(content, *size, style, frame);
                 Some((o.placement.map_or(at, |p| p.warp.apply(at)), *size))
             }
             _ => None,

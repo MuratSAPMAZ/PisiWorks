@@ -183,3 +183,7 @@ Bir sembol kopyasına **çift tıklayınca** sembol olduğu yerde açılır: par
 **Dosya > Toplu İşleme** birçok dosyayı tek seferde ölçekler, dönüştürür ve yeniden adlandırır: dosyaları ekleyin, ölçeği seçin (boyuta, alana sığacak şekilde, yüzdeye), isterseniz bu belgenin En İyileştir ayarlarını kullanın, önek ya da sonek verin ve çıktı klasörünü seçin. Bir sonuç var olan bir dosyanın yerini alacaksa eskisi önce `Original Files` klasörüne kopyalanır.
 
 **Komutlar** menüsünde hazır komutlar vardır: Yaratıcı (Gri Tonlamaya Dönüştür, Sepya Tonuna Dönüştür) ve Belge (Katmanlara Dağıt, Diğer Katmanları Gizle, Diğer Katmanları Kilitle, Tüm Durumları Ters Çevir, Durum Aralığını Ters Çevir). **Geçmiş** panelindeki **Adımları Komut Olarak Kaydet**, belgeyi değiştiren menü komutlarını bir ad altında saklar; kaydedilen komutlar menünün altında görünür ve **Kaydedilmiş Komutları Yönet** ile yeniden adlandırılır ya da silinir. Fareyle yapılan adımlar (çizim, sürükleme) kaydedilmez. **Komut Dosyasını Çalıştır** böyle bir dosyayı (her satırda `Menü > Komut`) çalıştırır; Fireworks'ün JSF dosyalarını çalıştırmaz.
+
+## Metin yönü
+
+Metin seçiliyken Özellikler'deki yön listesi dört seçenek sunar: **Soldan sağa yatay**, **Sağdan sola yatay** (satırın harfleri ters sırada dizilir), **Soldan sağa dikey** ve **Sağdan sola dikey**. Dikey metinde her satır bir sütundur ve harfler dik durarak alt alta dizilir. Hizalama düğmeleri dikey metinde sütun boyunca çalışır; **Metin > Hizala** menüsündeki Üst, Dikey Ortalanmış, Alt, Dikey Yaslanmış ve Dikey Uzatılmış aynı işi görür.
