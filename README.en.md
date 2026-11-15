@@ -25,11 +25,15 @@
 
 > **PisiWorks is developed by Murat SAPMAZ** as an independent free-software project for schools in Turkey and for Pardus users. Its foundation is [Emberframe](https://github.com/gregstein/emberframe) by [Med Amine Belbachir](https://medamineweb.com/): without it this project could not have existed so soon, and we thank him. About a third of today's code comes from Emberframe and two thirds were written for PisiWorks; [what was done is listed below](#what-was-done-in-pisiworks).
 
+## Purpose
+
+**This project has no commercial purpose.** PisiWorks and PisiSahne are free of charge and will stay so: they are not sold, show no advertising, ask for no donations and collect no data. Their one purpose is that teachers and students on Pardus, in schools whose curriculum still teaches Fireworks and Flash, can do the lesson on their own computers. They do not aim to take the place of a product of Adobe's, but to let the lesson go on where those tools do not run.
+
 ## Why PisiWorks
 
 Adobe stopped developing Fireworks in 2013, but the program that mixed vector shapes, bitmap editing, states and web export in one window is still taught in schools. PisiWorks aims to offer the same way of working on the [Pardus](https://www.pardus.org.tr/) operating system, in Turkish, as free software.
 
-It is deliberately a look-alike: the same docked layout, tool groups, panels and light gray interface, and in Turkish the menus and command names are those of the Turkish edition of Fireworks. It is published under its own name, every icon is newly drawn, and it contains no Adobe code or artwork.
+It is deliberately a look-alike: the same docked layout, tool groups, panels and light gray interface, and in Turkish the short menu and command names are kept the same as the terms of the Turkish edition of Fireworks, so that a step in a teacher's notes is the step on the student's screen. Messages, descriptions and documents were written for this project. It is published under its own name, every icon is newly drawn, and it contains no Adobe code or artwork.
 
 ## Features
 
@@ -217,4 +221,4 @@ The program has not been tested side by side with Adobe Fireworks itself; the pi
 
 **License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. Where the code comes from, the licenses of the libraries compiled into it ([list](docs/THIRD-PARTY.md)) and how it stands toward Adobe are set out in the [license and copyright statement](docs/lisans-ve-telif.md) (in Turkish). The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
 
-Adobe and Fireworks are trademarks of Adobe Inc. PisiWorks contains no code or artwork of Adobe's.
+Adobe, Fireworks, Flash, Photoshop and ActionScript are trademarks of Adobe Inc. PisiWorks and PisiSahne contain no code, artwork or documents of Adobe's; they are not affiliated with Adobe and are not endorsed by it. These names are used only to say what the programs resemble and which files they can open.

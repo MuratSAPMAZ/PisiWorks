@@ -6,10 +6,23 @@ Bu bir hukuki görüş değildir; bir hukukçu tarafından gözden geçirilmedi.
 
 Sürüm: PisiWorks ve PisiSahne 0.1.0, Kasım 2026. İki program aynı kaynak koddan derlenir, aynı lisansı taşır ve tek bir `.deb` paketiyle kurulur; aşağıda "PisiWorks" için söylenen her şey, ayrıca belirtilmedikçe PisiSahne için de geçerlidir. Depo: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks)
 
+## Amaç
+
+PisiWorks ve PisiSahne **ticari bir amaç taşımaz.** Tek amaçları, müfredatında hâlâ Fireworks ve Flash anlatılan okullarda, Pardus kullanan öğretmen ve öğrencilerin dersi kendi bilgisayarlarında işleyebilmesidir.
+
+- Programlar ücretsizdir ve ücretsiz kalacaktır. Satılmaz; ücretli sürümü, aboneliği, lisans anahtarı, uygulama içi satın alması yoktur.
+- Reklam göstermez, bağış istemez, kullanıcıdan ya da bilgisayarından veri toplamaz, kendiliğinden internete bağlanmaz.
+- Gelir amacı güdülmez. Gönüllü bir çalışmadır.
+- Adobe'nin bir ürününün yerine pazarda yer almayı amaçlamaz. Fireworks 2013'ten beri geliştirilmiyor; Flash Player 2020'de sonlandırıldı. İkisi de Pardus'ta hiç çalışmadı. Bu programlar, o araçların çalışmadığı bir yerde dersin sürebilmesi içindir.
+- Benzerlik bu amaca hizmet ettiği kadardır: öğretmenin ders notundaki adım, öğrencinin ekranındaki adımla aynı olsun diye. Bunun ötesinde Adobe'ye ait hiçbir şey alınmadı.
+
+Kaynak kodunun MIT lisansıyla açık olması da aynı amaçtandır: okullar, Pardus ekibi ve isteyen herkes programı inceleyebilsin, değiştirebilsin ve dağıtabilsin. MIT lisansı başkalarının ticari kullanımına da izin verir; bu, lisansın bir özelliğidir, projenin bir hedefi değildir.
+
 ## 1. Özet
 
 | Soru | Cevap |
 |---|---|
+| Amaç | Eğitim. Ticari amaç yoktur; programlar ücretsizdir, reklam ve veri toplama içermez (bkz. Amaç) |
 | İki programın lisansı | MIT (Debian'daki adıyla Expat). Tam metin: [`LICENSE`](../LICENSE) |
 | Telif sahipleri | Med Amine Belbachir (Emberframe, 2026) ve Murat SAPMAZ (PisiWorks için yazılanlar, 2026) |
 | Kaynağı | MIT lisanslı [Emberframe](https://github.com/gregstein/emberframe) projesinin çatalı |
@@ -107,7 +120,17 @@ PisiWorks, Adobe Fireworks'ün; PisiSahne de Adobe Flash'ın çalışma biçimin
 **Yapılanlar:**
 
 - **Benzer çalışma alanı.** Pencere düzeni, araç grupları, paneller ve menü yapısı Fireworks kullanıcısının tanıyacağı biçimdedir. Bu düzen Emberframe'den gelir.
-- **Türkçe terimler.** Menü ve komut adları ("Seçimi Canlandır", "Sembole Dönüştür", "Geçiş Yumuşatma" gibi), öğretmenlerin ders notlarıyla uyuşsun diye Türkçe Fireworks'ün arayüzündeki terimlerle aynı tutuldu. Bunun için geliştirme sırasında Türkçe Fireworks kurulumundaki arayüz metinlerine bakıldı. Alınan şey kısa, işlevsel komut adlarıdır; yardım metni, açıklama ya da belge kopyalanmadı. Çeviri tablosu `src/i18n/tr.rs` dosyasında açıkça görülebilir.
+- **Türkçe terimler.** Kısa menü ve komut adları ("Seçimi Canlandır", "Sembole Dönüştür", "Geçiş Yumuşatma" gibi), öğretmenlerin ders notlarıyla uyuşsun diye Türkçe Fireworks'ün arayüzündeki terimlerle aynı tutuldu. Bunun için geliştirme sırasında Türkçe Fireworks kurulumundaki arayüz metinlerine bakıldı. Alınan şey kısa, işlevsel komut adlarıdır; yardım metni, açıklama ya da belge kopyalanmadı. Çeviri tablosu `src/i18n/tr.rs` dosyasında açıkça görülebilir.
+
+  Örtüşmeyi tahmine bırakmamak için ölçtük (Kasım 2026, `packaging/terim-olcumu.py`). Programın 1488 Türkçe metninden 581'i (yüzde 39) Türkçe Fireworks'ün arayüz metinlerinden biriyle aynıdır:
+
+  | Aynı olan metinler | Sayı |
+  |---|---|
+  | Tek sözcük ("Dosya", "Katman", "Kırp") | 294 |
+  | İki ya da üç sözcük ("Sembole Dönüştür", "Seçim Çerçevesini Genişlet") | 287 |
+  | Dört ve daha çok sözcük | 0 |
+
+  Geri kalan 907 metin (yüzde 61) bu proje için yazıldı: iletiler, açıklamalar, ipuçları ve PisiSahne'nin, Davranışlar'ın, Kurallar'ın ve yazılı dilin bütün metinleri. İlk ölçümde dört ile altı sözcüklü 16 metin de aynı çıkmıştı ("Seçimi JPEG Maskesi Olarak Kaydet" gibi komut adları ve bir soru cümlesi); bunlar kendi sözlerimizle yeniden yazıldı, böylece aynı kalanların hepsi üç sözcüğü geçmeyen komut adlarıdır. Ölçüm harf büyüklüğüne, kısayol işaretine ve sondaki üç noktaya bakmaz; betik Adobe'ye ait hiçbir metin içermez, ölçen kişinin kendi elindeki dosyayla çalışır.
 - **Fireworks PNG dosyalarını okuma.** Fireworks'ün kendi PNG dosyalarındaki katmanlar okunabilir. Biçim Adobe tarafından yayımlanmadığı için okuyucu, Fireworks 8 ile yazılmış sekiz dosyanın yapısı incelenerek, yalnızca birlikte çalışabilirlik amacıyla yazıldı. O dosyalar depoya ya da pakete alınmadı; testlerde kullanılan örnek dosya program tarafından sıfırdan üretilir. Okuyucunun tamamı `src/fwpng.rs` dosyasındadır ve biçim hakkında öğrenilenler dosyanın başında yazılıdır. PisiWorks Fireworks PNG yazmaz.
 - **PisiSahne ve Flash.** PisiSahne'nin zaman çizelgesi, anahtar kareleri, hareket ve şekil ara doldurması, kılavuz ve maske katmanları, film klibi ve düğme sembolleri Flash'taki karşılıklarının davranışını örnek alır; kısayolları (F5, F6, F7, Enter, Ctrl+Enter) aynıdır. Bunların tamamı bu proje için yazıldı. Geliştirme sırasında elimizde bir Flash kurulumu yoktu: Flash'ın hiçbir dosyasına, arayüz metnine ya da örnek dosyasına bakılmadı. Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") bizim çevirimizdir. PisiSahne `.fla` ve `.swf` dosyalarını açmaz ve yazmaz; ActionScript çalıştırmaz. Animasyonları kendi `.sahne` biçiminde saklar ve yalnızca HTML5 sayfası olarak yayımlar.
 - **Yayımlanan HTML5 sayfaları.** PisiSahne'nin ürettiği sayfanın içindeki oynatıcı betik bu proje için yazıldı ve sayfayla birlikte gider. Kullanıcının yayımladığı animasyon kullanıcının kendi eseridir; betik için ayrı bir bildirim ya da lisans koşulu istenmez.
@@ -141,9 +164,13 @@ git ls-files | grep -iE '\.(png|jpg|svg|gif|ttf|otf|dll)$'
 
 # Çataldan bu yana yazılanları gösterir
 git diff 64dcd71 HEAD --stat -- src
+
+# Türkçe metinlerin başka bir programın arayüz metinleriyle örtüşmesini ölçer.
+# Karşılaştırılacak metinler ölçen kişinin kendi dosyasından gelir; depoda yoktur.
+python3 packaging/terim-olcumu.py KARSILASTIRILACAK_METINLER.txt --liste
 ```
 
-Kaynak koddan derleme ve testler README'de anlatılır; 318 otomatik testin 317'si her derlemede çalışır, biri yalnızca elde gerçek bir Fireworks dosyası varsa çalıştırılır.
+Kaynak koddan derleme ve testler README'de anlatılır; 349 otomatik test her derlemede çalışır; dördü yalnızca elle istenince çalışır (biri elde gerçek bir Fireworks dosyası varsa).
 
 ## 8. İnceleyenin görüşüne bırakılan noktalar
 
@@ -151,13 +178,15 @@ Bunlar bizim tek başımıza karar veremediğimiz ya da bir hukukçunun bakması
 
 1. **Görünüm benzerliği.** PisiWorks'ün çalışma alanı Fireworks'e, PisiSahne'ninki Flash'ın klasik çalışma alanına (zaman çizelgesi üstte, araçlar solda, Özellikler altta) bilerek benzer. PisiSahne, PisiWorks'ün renklerini ve simgelerini kullanır; Flash'ın görsellerinden hiçbiri alınmadı. Kod ve görseller Adobe'ye ait değildir, ancak bir programın genel görünümünün ne ölçüde korunduğu ülkeden ülkeye değişen bir hukuk konusudur. Fireworks 2013'ten beri geliştirilmiyor ve satılmıyor; bu durumu değiştirmez ama riski değerlendirirken bilinmelidir.
 2. **Sol üstteki "Pw" ve "Sh" işaretleri.** Uygulama çubuğunun başındaki iki harfli işaretler Emberframe'in "Ef" işaretinden uyarlandı ve Adobe ürünlerinin iki harfli işaretlerini andırır. PisiSahne'nin işareti, Adobe Photoshop'un kullandığı "Ps" ile karışmasın diye "Sh" seçildi. Uygulama simgesi bu yüzden daha önce değiştirildi (kedi başı); pencere içindeki işaret duruyor. Değiştirilmesi istenirse küçük bir iştir.
-3. **Türkçe terimlerin kaynağı.** Komut adları Türkçe Fireworks'tekilerle aynıdır. Tek tek komut adlarının telifle korunmadığını düşünüyoruz, ancak bu bir hukukçunun teyit etmesi gereken bir değerlendirmedir.
+3. **Türkçe terimlerin kaynağı.** Kısa komut adlarının 581'i Türkçe Fireworks'tekilerle aynıdır; hepsi bir ile üç sözcük arasındadır (ölçüm 5. bölümde). Tek tek komut adlarının telifle korunmadığını düşünüyoruz. Değerlendirilmesini istediğimiz soru şudur: bu adların tek tek değil, toplu olarak aynı olması bir derleme hakkı doğurur mu? Doğurduğu sonucuna varılırsa adlar değiştirilebilir; bunun bedeli, öğretmenlerin ders notlarıyla programın uyuşmamasıdır.
 4. **Fireworks PNG biçiminin incelenmesi.** Okuyucu, yasal olarak edinilmiş bir Fireworks kurulumunun örnek dosyaları incelenerek, birlikte çalışabilirlik için yazıldı. 5846 sayılı Kanun'un bilgisayar programlarına ilişkin hükümlerinin bu tür incelemeye ne ölçüde izin verdiği teyit edilmelidir. Gerekirse okuyucu tek dosya olduğu için kolayca çıkarılabilir.
 5. **"Pisi" ve "PisiSahne" adları.** PisiSahne adı bu projede konuldu; başka bir ürünle çakışıp çakışmadığı araştırılmadı.  Ad, Pardus geleneğine bir göndermedir. "PiSi" Pardus'un eski paket yöneticisinin adıdır ve "Pisi Linux" adında ayrı bir dağıtım vardır. Karışıklık ya da bir marka hakkı doğurup doğurmadığına Pardus ekibi karar vermelidir.
 6. **Emberframe yazarının ad ricası.** Yazar, çatalın "Emberframe" adını korumasını rica etti. Lisans buna zorlamaz; PisiWorks her yerde kaynağını ve yazarını belirtir. Kendisine henüz cevap verilmedi.
 7. **Telif satırındaki kişi.** PisiWorks için yazılanların telifi şimdilik Murat SAPMAZ adınadır. Proje bir kurum çatısı altına alınacaksa telif sahipliği ve katkı kuralları buna göre düzenlenmelidir.
 8. **Kitaplık sayısı.** 517 kitaplığın lisansları Cargo'nun bildirdiği bilgilere dayanır; her birinin kaynak kodu tek tek gözle denetlenmedi. Pardus depoları için gerekiyorsa bağımlılıkların ayrıca denetlenmesi ya da Debian'da paketlenmiş sürümlerine geçilmesi ayrı bir çalışmadır.
 9. **Garanti ve sorumluluk.** MIT lisansı programı garantisiz sunar. Okullarda kullanım için ayrı bir destek ya da sorumluluk taahhüdü yoktur.
+10. **Bakılan Fireworks kurulumunun lisans koşulları.** Terimler karşılaştırılırken ve PNG biçimi incelenirken bir Fireworks kurulumunun dosyalarına bakıldı. O kurulumun son kullanıcı lisans sözleşmesinin arayüz metinlerine ve örnek dosyalara bu amaçla bakmayı kısıtlayıp kısıtlamadığı incelenmedi. Bu telif değil sözleşme konusudur ve kurulumun sahibini ilgilendirir; yine de inceleyenin bilmesi için yazıyoruz. O dosyalar depoya ve pakete hiç girmedi.
+11. **Ticari amacın bulunmaması.** Proje gelir amacı taşımaz (bkz. Amaç). Bunun hukuki değerlendirmede ne ölçüde ağırlık taşıdığı, özellikle eğitim amaçlı kullanım ve marka hukuku bakımından, inceleyenin takdirindedir; biz bunu bir savunma olarak değil, durumun doğru anlaşılması için yazıyoruz.
 
 ## 9. İletişim
 

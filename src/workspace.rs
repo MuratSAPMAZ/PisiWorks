@@ -992,6 +992,7 @@ pub fn about_text() -> String {
         "github.com/gregstein/emberframe".to_string(),
         String::new(),
         t("Free software, MIT license.").to_string(),
+        t("For schools; free, with no commercial aim.").to_string(),
         t("Not affiliated with Adobe.").to_string(),
     ]
     .join("\n")
