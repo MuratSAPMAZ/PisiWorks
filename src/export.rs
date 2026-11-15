@@ -349,14 +349,25 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
             }).collect(),
         };
         // The shadow and the glow of Photoshop Live Effects are mixed into the page by their own
-        // blend modes, under the object. That can only be done when no other filter comes after.
-        let enabled: Vec<&crate::effects::LiveFilter> = object.filters.iter().filter(|f| f.enabled).collect();
-        let mut under = Vec::new();
-        for (place, filter) in enabled.iter().enumerate() {
-            if place + 1 == enabled.len() && filter.kind == crate::effects::FilterKind::PhotoshopEffects {
+        // blend modes, under the object, so they are kept on layers of their own. A filter that
+        // comes after works on the object and on each of those layers alike.
+        use crate::effects::FilterKind;
+        let mut under: Vec<(crate::effects::Layer, crate::blend::BlendMode)> = Vec::new();
+        for filter in object.filters.iter().filter(|f| f.enabled) {
+            if filter.kind == FilterKind::PhotoshopEffects && under.is_empty() {
                 (layer, under) = crate::pseffects::apply_apart(&layer, filter);
-            } else {
-                layer = crate::effects::apply(&layer, filter);
+                continue;
+            }
+            layer = crate::effects::apply(&layer, filter);
+            // A filter that draws around the object draws around the object only, not around its shadow as well.
+            let surrounds = matches!(
+                filter.kind,
+                FilterKind::DropShadow | FilterKind::SolidShadow | FilterKind::Glow | FilterKind::OuterBevel | FilterKind::RaisedEmboss | FilterKind::InsetEmboss | FilterKind::PhotoshopEffects
+            );
+            if !surrounds {
+                for (part, _) in &mut under {
+                    *part = crate::effects::apply(part, filter);
+                }
             }
         }
         let fill = |target: &mut Pixmap, layer: &crate::effects::Layer| {
@@ -914,13 +925,17 @@ mod tests {
         assert_eq!(shadow_at(&p), (0, 0, 0, 255));
         // The box itself is drawn over its shadow, untouched.
         assert_eq!(rgba(&render_page(&p).unwrap(), 15, 15), (0, 0, 255, 255));
-        // With another filter after it the shadow can no longer be told apart, and is laid on as it is.
+        // A filter after it works on the shadow as on the object, and the shadow is still mixed by its mode:
+        // inverted, the dark green shadow is a light magenta, which multiplied into red leaves red.
         p.layers[0].objects[1].filters.push(LiveFilter::new(FilterKind::Invert));
         p.layers[0].objects[1].filters[1].enabled = false;
-        assert_eq!(shadow_at(&p), (0, 0, 0, 255), "a filter that is off does not count");
+        assert_eq!(shadow_at(&p), (0, 0, 0, 255), "a filter that is off does nothing");
         p.layers[0].objects[1].filters[1].enabled = true;
-        let folded = shadow_at(&p);
-        assert!(folded.0 > 200 && folded.1 < 140 && folded.2 > 200, "{folded:?}");
+        assert_eq!(shadow_at(&p), (255, 0, 0, 255));
+        assert_eq!(rgba(&render_page(&p).unwrap(), 15, 15), (255, 255, 0, 255), "and the box is inverted too");
+        // A Fireworks shadow added after it falls from the object, not from the Photoshop shadow as well.
+        p.layers[0].objects[1].filters[1] = LiveFilter::new(FilterKind::DropShadow);
+        assert_eq!(rgba(&render_page(&p).unwrap(), 15, 15), (0, 0, 255, 255));
     }
 
     #[test]

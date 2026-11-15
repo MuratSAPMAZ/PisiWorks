@@ -1039,6 +1039,15 @@ impl Workspace {
         self.ed.selected().first().map_or_else(Vec::new, |o| o.filters.clone())
     }
 
+    /// The live filters as the list in Properties shows them: with Preview off in a
+    /// filter's dialog the object does not have that filter's new settings, but the list still names it.
+    pub fn listed_filters(&self) -> Vec<LiveFilter> {
+        match (&self.filter_dialog, &self.filter_draft) {
+            (Some((index, before)), Some(draft)) => crate::effects::placed(before, *index, draft.clone()),
+            _ => self.current_filters(),
+        }
+    }
+
     /// Changes the live filters of every selected object.
     pub fn change_filters(&mut self, change: impl Fn(&mut Vec<LiveFilter>)) {
         self.ed.for_selected(|o| change(&mut o.filters));

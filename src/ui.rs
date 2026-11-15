@@ -781,7 +781,7 @@ impl Workspace {
     /// that switches it off, its name, which opens its settings, and a button that removes it.
     fn filters_column(&self, cx: &mut Context<Self>) -> Div {
         let rows: Vec<AnyElement> = self
-            .current_filters()
+            .listed_filters()
             .into_iter()
             .enumerate()
             .map(|(index, filter)| {

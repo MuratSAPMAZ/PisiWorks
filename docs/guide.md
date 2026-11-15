@@ -61,7 +61,7 @@ Photoshop Live Effects is one filter holding Drop Shadow, Inner Shadow, Outer Gl
 
 A gradient is shown with its stops under it. Click under the gradient to add a stop, drag a stop to move it, and pull one away from the gradient to remove it. The stop that is picked shows its color, its place in percent and its opacity. Presets replaces the gradient with a ready-made one. The overlay, a gradient stroke and a gradient glow each have a gradient of their own; a gradient glow starts at the edge of the object, and Jitter scatters its colors.
 
-The drop shadow and the outer glow are mixed into what lies under the object by their own blend modes. This needs Photoshop Live Effects to be the last filter in the list; with another filter after it, they are laid on as they are.
+The drop shadow and the outer glow are mixed into what lies under the object by their own blend modes. A filter that comes after Photoshop Live Effects in the list works on them as it does on the object.
 
 ## Masks
 
@@ -118,7 +118,7 @@ With a text object selected, Properties shows its font and size, buttons for bol
 
 ## Guides
 
-Drag out of the ruler along the top or down the side to put a guide on the page. With the Pointer, drag a guide to move it, and drag it back onto a ruler to remove it. Objects being moved, drawn or resized snap to guides. View > Guides shows or hides them (Ctrl+;), locks them, turns snapping off, and clears them all.
+Drag out of the ruler along the top or down the side to put a guide on the page. With the Pointer, drag a guide to move it, and drag it back onto a ruler to remove it. Objects being moved, drawn or resized snap to guides. Double-click a guide to type its place. The Pen and points dragged with the Subselection tool snap to guides too. View > Guides shows or hides them (Ctrl+;), locks them, turns snapping off, and clears them all; Edit Guides there also sets their color.
 
 Smart guides appear while you move an object: a line shows where one of its edges or its middle lines up with another object or with the page, and the object snaps there. View > Smart Guides turns the lines or the snapping off. View > Slice Guides shows or hides the red lines along the edges of slices.
 
