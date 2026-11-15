@@ -195,8 +195,11 @@ fn mask_coverage(mask: &ObjectMask, width: u32, height: u32) -> Option<Vec<f32>>
     shape.blend = crate::blend::BlendMode::Normal;
     if mask.kind == MaskKind::PathOutline {
         // Only the outline counts: whatever the mask is filled or stroked with, its inside shows.
-        if let Some(path) = sk_path(&shape.outline(), true) {
-            drawn.fill_path(&path, &sk_paint(Color::WHITE, 1.0), FillRule::EvenOdd, Transform::identity(), None);
+        // A mask made of several objects shows what is inside any of them.
+        for part in shape.leaves() {
+            if let Some(path) = sk_path(&part.outline(), true) {
+                drawn.fill_path(&path, &sk_paint(Color::WHITE, 1.0), FillRule::EvenOdd, Transform::identity(), None);
+            }
         }
         return Some(drawn.pixels().iter().map(|px| px.alpha() as f32 / 255.0).collect());
     }
@@ -550,7 +553,7 @@ mod tests {
     fn masked(mask: Object, kind: MaskKind) -> Page {
         let mut p = page();
         let mut o = red_box(0.0, 40.0);
-        o.mask = Some(std::sync::Arc::new(ObjectMask { object: mask, kind, show_fill_stroke: false, enabled: true }));
+        o.mask = Some(std::sync::Arc::new(ObjectMask { object: mask, kind, show_fill_stroke: false, enabled: true, linked: true }));
         p.layers[0].objects.push(o);
         p
     }
@@ -595,7 +598,7 @@ mod tests {
         // The masked box is narrower than the mask, so the mask's fill shows beside it.
         let mut p = page();
         let mut inside = red_box(0.0, 10.0);
-        inside.mask = Some(std::sync::Arc::new(ObjectMask { object: frame, kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true }));
+        inside.mask = Some(std::sync::Arc::new(ObjectMask { object: frame, kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true, linked: true }));
         p.layers[0].objects.push(inside);
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 5, 10), (255, 0, 0, 255));

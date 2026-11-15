@@ -1684,11 +1684,7 @@ impl Workspace {
                     }
                 }
             }
-            Cmd::PasteAsMask => {
-                if self.ed.paste_as_mask() {
-                    self.ed.commit(t("Paste as Mask"));
-                }
-            }
+            Cmd::PasteAsMask => self.paste_as_mask_asking(window, cx),
             Cmd::PasteInside => {
                 if self.ed.paste_inside() {
                     self.ed.commit(t("Paste Inside"));
@@ -2354,6 +2350,57 @@ impl Workspace {
             object.to_path();
         }
         Some((id, index))
+    }
+
+    /// Paste as Mask, with the two questions Fireworks asks on the way: whether to
+    /// replace a mask that is already there or add to it, and whether vectors are to
+    /// become a bitmap mask or stay vectors.
+    fn paste_as_mask_asking(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let existing = self.ed.selected().iter().any(|o| o.mask.is_some());
+        let vectors = self.ed.clipboard_vectors();
+        cx.spawn_in(window, async move |this, cx| {
+            // Shows one question and waits for its answer: the number of the button, or None for Cancel.
+            let ask = async |question: String, first: &'static str, second: &'static str, cx: &mut gpui::AsyncWindowContext| {
+                let asked = this.update_in(cx, |this, window, cx| {
+                    this.awaiting_answer = true;
+                    window.prompt(PromptLevel::Info, &question, None, &[first, second, t("Cancel")], cx)
+                });
+                let answer = match asked {
+                    Ok(answer) => answer.await.ok(),
+                    Err(_) => None,
+                };
+                this.update(cx, |this, _| this.awaiting_answer = false).ok();
+                answer.filter(|choice| *choice < 2)
+            };
+            let mut add = false;
+            if existing {
+                let question = t("A mask already exists. Do you want to replace the mask or add to the existing mask?").to_string();
+                match ask(question, t("Replace"), t("Add"), cx).await {
+                    Some(choice) => add = choice == 1,
+                    None => return,
+                }
+            }
+            let mut as_bitmap = false;
+            if vectors > 0 {
+                let (question, keep) = if vectors == 1 {
+                    (t("You are pasting a vector as a mask. Do you want to make a bitmap mask or create a mask that will remain a vector object?"), t("Vector"))
+                } else {
+                    (t("You are pasting multiple objects as a mask. Do you want to make a bitmap mask or create a mask containing editable vectors?"), t("Vectors"))
+                };
+                match ask(question.to_string(), t("Bitmap"), keep, cx).await {
+                    Some(choice) => as_bitmap = choice == 0,
+                    None => return,
+                }
+            }
+            this.update_in(cx, |this, _, cx| {
+                if this.ed.paste_as_mask(as_bitmap, add) {
+                    this.ed.commit(t("Paste as Mask"));
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     /// Asks, as Fireworks does, whether a mask is to be applied to its object before it is removed.

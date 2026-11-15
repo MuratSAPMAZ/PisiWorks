@@ -468,6 +468,19 @@ pub const ENTRIES: &[(&str, &str)] = &[
         "Maskeyi uygulamak nesne ve maskeyi tek bir bitmap görüntüsüne dönüştürür.",
     ),
     ("Apply", "Uygula"),
+    (
+        "A mask already exists. Do you want to replace the mask or add to the existing mask?",
+        "Bir maske zaten var. Maskeyi değiştirmek veya varolan maskeye eklemek istiyor musunuz?",
+    ),
+    (
+        "You are pasting a vector as a mask. Do you want to make a bitmap mask or create a mask that will remain a vector object?",
+        "Bir vektörü maske olarak yapıştırıyorsunuz. Bitmap maskesi yapmak mı, yoksa vektör nesnesi olarak kalacak bir maske mi oluşturmak istiyorsunuz?",
+    ),
+    (
+        "You are pasting multiple objects as a mask. Do you want to make a bitmap mask or create a mask containing editable vectors?",
+        "Birden çok nesneyi maske olarak yapıştırıyorsunuz. Bitmap maskesi yapmak mı, yoksa düzenlenebilir vektörler içeren bir maske mi oluşturmak istiyorsunuz?",
+    ),
+    ("Vectors", "Vektörler"),
     ("Edit Mask", "Maskeyi Düzenle"),
     ("Editing the mask. Select something else to finish.", "Maske düzenleniyor. Bitirmek için başka bir şey seçin."),
     // Blend modes, in the words of the Fireworks list

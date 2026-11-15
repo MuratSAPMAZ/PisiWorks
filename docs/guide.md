@@ -54,6 +54,8 @@ A mask hides part of an object. Modify > Mask has the commands:
 
 A masked object shows Mask in Properties: Path Outline or Grayscale Appearance for a vector mask, with Show fill and stroke, and Grayscale Appearance or Alpha Channel for a bitmap mask. Edit Mask there, or a click on the mask's thumbnail in Layers, selects the mask itself so you can move, reshape or paint it with any tool. White paint reveals and black hides. Select something else to finish.
 
+In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
+
 ## Web areas
 
 Hotspot (J) and Slice (K) draw areas over the artwork. Move and resize them with the Pointer, and set a hotspot's link in Properties. Press 2 to hide or show them.

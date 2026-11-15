@@ -56,6 +56,8 @@ Maske, bir nesnenin bir bölümünü gizler. Komutlar Değiştir > Maske menüs�
 
 Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi için Yol anahattı veya Gri tonlama görünümü ile Dolgu ve konturu göster; bitmap maskesi için Gri tonlama görünümü veya Alfa kanalı. Oradaki Maskeyi Düzenle düğmesi ya da Katmanlar panelinde maskenin küçük resmine tıklamak maskenin kendisini seçer; maskeyi herhangi bir araçla taşıyabilir, yeniden biçimlendirebilir veya boyayabilirsiniz. Beyaz boya gösterir, siyah gizler. Bitirmek için başka bir şey seçin.
 
+Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
+
 ## Web alanları
 
 Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.

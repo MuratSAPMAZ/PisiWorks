@@ -416,6 +416,9 @@ pub struct ObjectMask {
     /// A disabled mask is kept but hides nothing.
     #[serde(default = "enabled")]
     pub enabled: bool,
+    /// A linked mask moves and transforms with its object. Unlinked, the object moves under it.
+    #[serde(default = "enabled")]
+    pub linked: bool,
 }
 
 fn enabled() -> bool {
@@ -427,7 +430,7 @@ impl ObjectMask {
     /// grayscale appearance, a vector by its outline unless `appearance` asks otherwise.
     pub fn new(object: Object, appearance: bool) -> Self {
         let kind = if object.is_image() || appearance { MaskKind::Grayscale } else { MaskKind::PathOutline };
-        Self { object, kind, show_fill_stroke: false, enabled: true }
+        Self { object, kind, show_fill_stroke: false, enabled: true, linked: true }
     }
 }
 
@@ -830,7 +833,7 @@ impl Object {
 
     /// Runs `change` on the object's mask, if it has one, so the mask follows the object.
     fn with_mask(&mut self, change: impl FnOnce(&mut Object)) {
-        if let Some(mask) = &mut self.mask {
+        if let Some(mask) = self.mask.as_mut().filter(|mask| mask.linked) {
             change(&mut Arc::make_mut(mask).object);
         }
     }
@@ -2634,14 +2637,49 @@ impl Editor {
 
     /// Fireworks' Paste as Mask: what is on the clipboard masks each selected object,
     /// a vector by its outline and a bitmap by how light it is.
-    pub fn paste_as_mask(&mut self) -> bool {
+    ///
+    /// With `as_bitmap` the clipboard is turned into one bitmap first. With `add`, an
+    /// object that already has a mask keeps it, and the new one is joined to it.
+    pub fn paste_as_mask(&mut self, as_bitmap: bool, add: bool) -> bool {
         let clipboard = self.clipboard.clone();
         if self.selection.is_empty() {
             return false;
         }
-        let Some(mask) = self.one_object(clipboard) else { return false };
-        self.for_selected(|o| o.mask = Some(Arc::new(ObjectMask::new(mask.clone(), false))));
+        let Some(mut mask) = self.one_object(clipboard) else { return false };
+        if as_bitmap && !mask.is_image() {
+            let Some((bitmap, bounds)) = crate::export::render_object(&mask) else { return false };
+            mask = Object::new_bitmap(self.alloc_id(), t("Mask"), bitmap, bounds.x, bounds.y);
+        }
+        let ids = self.selection.clone();
+        for id in ids {
+            let existing = self.object(id).and_then(|o| o.mask.clone()).filter(|_| add);
+            let new_mask = match existing {
+                Some(existing) => {
+                    let Some(joined) = self.group_of(vec![existing.object.clone(), mask.clone()]) else { continue };
+                    ObjectMask { object: joined, ..(*existing).clone() }
+                }
+                None => ObjectMask::new(mask.clone(), false),
+            };
+            if let Some(object) = self.object_mut(id) {
+                object.mask = Some(Arc::new(new_mask));
+            }
+        }
         true
+    }
+
+    /// How many objects on the clipboard are vectors, which Paste as Mask asks about.
+    pub fn clipboard_vectors(&self) -> usize {
+        self.clipboard.iter().filter(|o| !o.is_image()).count()
+    }
+
+    /// Links the masks of the selected objects to them, or lets them go.
+    pub fn toggle_mask_links(&mut self) {
+        self.for_selected(|o| {
+            if let Some(mask) = &mut o.mask {
+                let mask = Arc::make_mut(mask);
+                mask.linked = !mask.linked;
+            }
+        });
     }
 
     /// Fireworks' Paste Inside: what is on the clipboard is pasted and shows only inside
@@ -2653,7 +2691,7 @@ impl Editor {
             object.id = self.alloc_id();
         }
         let Some(mut inside) = self.one_object(pasted) else { return false };
-        inside.mask = Some(Arc::new(ObjectMask { object: frame.clone(), kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true }));
+        inside.mask = Some(Arc::new(ObjectMask { object: frame.clone(), kind: MaskKind::PathOutline, show_fill_stroke: true, enabled: true, linked: true }));
         self.selection = vec![frame.id];
         self.replace_selected(vec![inside]);
         true
@@ -3927,9 +3965,32 @@ mod tests {
         e.copy();
         // The copied box, as a mask on the other one, works by its outline.
         e.selection = vec![1];
-        assert!(e.paste_as_mask());
+        assert_eq!(e.clipboard_vectors(), 1);
+        assert!(e.paste_as_mask(false, false));
         let mask = e.selected()[0].mask.clone().unwrap();
         assert_eq!((mask.kind, mask.show_fill_stroke), (MaskKind::PathOutline, false));
+        // Added to the mask that is there, the two are one mask; replaced, only the new one is left.
+        assert!(e.paste_as_mask(false, true));
+        let joined = e.selected()[0].mask.clone().unwrap();
+        assert!(matches!(&joined.object.shape, Shape::Group { objects } if objects.len() == 2));
+        assert_eq!(joined.kind, MaskKind::PathOutline);
+        // As a bitmap, the copied box is a picture of itself.
+        assert!(e.paste_as_mask(true, false));
+        let bitmap = e.selected()[0].mask.clone().unwrap();
+        assert!(bitmap.object.is_image() && bitmap.kind == MaskKind::Grayscale);
+        assert!(e.paste_as_mask(false, false));
+        // An unlinked mask stays where it is when its object moves.
+        e.toggle_mask_links();
+        e.for_selected(|o| o.translate(5.0, 0.0));
+        assert_eq!(e.selected()[0].mask.as_ref().unwrap().object.bounds.x, 20.0);
+        e.toggle_mask_links();
+        e.for_selected(|o| o.translate(-5.0, 0.0));
+        assert_eq!(e.selected()[0].mask.as_ref().unwrap().object.bounds.x, 15.0);
+        e.for_selected(|o| {
+            if let Some(mask) = &mut o.mask {
+                Arc::make_mut(mask).object.translate(5.0, 0.0);
+            }
+        });
         // Pasted inside box 1, a copy of box 2 takes its place, masked by box 1 which stays in view.
         assert!(e.paste_inside());
         let inside = e.selected()[0].clone();

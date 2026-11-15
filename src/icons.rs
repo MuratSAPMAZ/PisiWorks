@@ -307,6 +307,7 @@ fn plain(name: &str) -> Option<&'static str> {
         "chevron-down" => r#"<path fill="black" stroke="none" d="M3 5.500h10L8 11z"/>"#,
         "triangle-open" => r#"<path fill="black" stroke="none" d="M3 5h10l-5 7z"/>"#,
         "triangle-closed" => r#"<path fill="black" stroke="none" d="M5 3l7 5-7 5z"/>"#,
+        "link" => r#"<path d="M6.300 9.700l3.400-3.400M7.200 5L8.700 3.500a2.700 2.700 0 013.800 3.800L11 8.800M8.800 11L7.300 12.500a2.700 2.700 0 01-3.800-3.800L5 7.200"/>"#,
         "check" => r#"<path d="M3 8.500l3.500 3.500L13 4.500" stroke-width="1.800"/>"#,
         "duplicate" => r#"<rect x="2.500" y="2.500" width="8" height="8"/><path d="M13.500 5.500v8h-8"/>"#,
         "play" => r#"<path fill="black" d="M4.500 2.500l9 5.500-9 5.500z"/>"#,

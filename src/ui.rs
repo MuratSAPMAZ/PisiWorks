@@ -1227,13 +1227,36 @@ impl Workspace {
             )
             // A masked object shows its mask beside it, as the Layers panel of Fireworks does.
             .when_some(object.mask.clone(), |d, mask| {
+                let editing = self.ed.doc.page().objects().any(|o| o.mask_of == Some(id));
+                // The link between the object and its mask: a click joins them or lets the mask go.
                 d.child(
+                    div()
+                        .size(px(13.))
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .occlude()
+                        .on_mouse_down(
+                            MouseButton::Left,
+                            cx.listener(move |this, _, _, cx| {
+                                this.finish_pending();
+                                this.ed.selection = vec![id];
+                                this.ed.toggle_mask_links();
+                                this.ed.commit(t("Mask"));
+                                cx.notify();
+                            }),
+                        )
+                        .when(mask.linked, |d| d.child(icon("link", 11., TEXT))),
+                )
+                .child(
                     div()
                         .size(px(17.))
                         .flex_none()
                         .bg(rgb(INPUT))
                         .border_1()
-                        .border_color(rgb(if mask.enabled { LIST_BORDER } else { WINDOW_CLOSE_HOVER }))
+                        .border_color(rgb(if editing { SELECTION } else if mask.enabled { LIST_BORDER } else { WINDOW_CLOSE_HOVER }))
+                        .when(editing, |d| d.border_2())
                         // A click on the mask starts editing it.
                         .occlude()
                         .on_mouse_down(
@@ -1299,7 +1322,10 @@ impl Workspace {
         );
         if !web_collapsed {
             for (li, object) in web_objects.iter().rev() {
-                rows.push(self.layer_object_row(*li, object, &textures, cx));
+                // The stand-in for a mask being edited is not a row of its own: its mask is marked instead.
+                if object.mask_of.is_none() {
+                    rows.push(self.layer_object_row(*li, object, &textures, cx));
+                }
             }
         }
         for (li, layer) in page.layers.iter().enumerate().rev() {
@@ -1357,7 +1383,9 @@ impl Workspace {
             );
             if !collapsed {
                 for object in layer.objects.iter().rev().filter(|o| !o.is_web()) {
-                    rows.push(self.layer_object_row(li, object, &textures, cx));
+                    if object.mask_of.is_none() {
+                        rows.push(self.layer_object_row(li, object, &textures, cx));
+                    }
                 }
             }
         }
