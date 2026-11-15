@@ -30,6 +30,8 @@
 
 > **Created by [Med Amine Belbachir](https://medamineweb.com/)**, who started this project to bring the Fireworks workflow back as free, native software.
 
+> **This repository is PisiWorks**, a fork of [Emberframe](https://github.com/gregstein/emberframe) for the [Pardus](https://www.pardus.org.tr/) operating system, with a Turkish interface, for schools that still teach Fireworks. Emberframe's code is the foundation; see [What PisiWorks adds to Emberframe](#what-pisiworks-adds-to-emberframe) for what was built on it. The rest of this page is still Emberframe's own description.
+
 ## Why Emberframe
 
 Adobe stopped developing Fireworks in 2013, and many designers still miss how it mixed vector shapes, bitmap editing, states and web export in one window. Emberframe brings that way of working back as a native Rust app you can read, build and change.
@@ -79,13 +81,41 @@ Then open [`examples/solstice-landing.pisi`](examples/solstice-landing.pisi) wit
 cargo test
 ```
 
+## What PisiWorks adds to Emberframe
+
+PisiWorks was forked from Emberframe 0.1 and keeps it as its foundation: the window layout, the menus, tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from Emberframe. About 94% of Emberframe's lines are still in place.
+
+| | Emberframe 0.1 | PisiWorks |
+|---|---|---|
+| Source code | 12,286 lines in 16 files | 25,179 lines in 25 files |
+| Tests | 141 | 271 |
+
+What was added on top:
+
+| Area | Added in PisiWorks |
+|---|---|
+| **Linux and Pardus** | Builds and runs on Linux, a fix for the crash when typing Turkish letters through an input method, a font chosen from those installed, and a plain message when the graphics driver is missing |
+| **Turkish** | The whole interface in Turkish, with the terms of the Turkish edition of Fireworks, a language menu, and tests that fail when a text has no translation |
+| **Vectors** | Bezier curves, full point and handle editing with the Pen and Subselection tools, and curve fitting after path operations |
+| **Transforming** | Scale, Skew and Distort with a movable center point, and Numeric Transform |
+| **Appearance** | 45 blend modes, masks with all their commands, 29 live filters including Levels and Curves, and Photoshop Live Effects with ten effects and a gradient editor |
+| **Bitmaps** | Moving selected pixels, Feather, Select Similar and Inverse, the marquee commands, Flatten Selection, Merge Down and Flatten Layers |
+| **Text** | Fonts, bold, italic, underline and alignment |
+| **Layout** | Guides, smart guides, slice guides, and Subselect and Superselect for groups |
+| **Export** | Selective JPEG quality and smoothing, with a JPEG encoder of its own |
+| **Other** | Printing and Page Setup, dragging from the library panels onto the canvas, the `.pisi` file extension (`.ember` files still open), and more than thirty menu commands that were greyed out |
+
+The figures are from November 2026 and will drift as work goes on. PisiWorks is released under the same MIT license as Emberframe, and the license keeps its author's copyright notice.
+
 ## Not in this version
 
-Emberframe is at version 0.1, so some things are still missing:
+Some things are still missing:
 
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
 - Layers inside Fireworks PNG files. Only the flat image is read.
-- macOS and Linux builds.
+- Preferences, Keyboard Shortcuts, Batch Process, the button editor, animation symbols, text on a path and spell checking, which appear greyed out.
+- Gradient and pattern fills for objects.
+- Packages for Pardus, and macOS builds.
 
 Issues and pull requests are welcome, especially for the items above.
 
