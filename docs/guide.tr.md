@@ -264,6 +264,8 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 İlk onu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son beşi izleyenle ilgilidir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
 
+*Akıcılık.* Yayımlanan filmde davranışların ve kuralların hareket ettirdiği her şey, filmin kare hızı ne olursa olsun, ekranın tazeleme hızında (çoğu ekranda saniyede 60 kez) çizilir; bu yüzden yürüyen, düşen, kayan nesneler akıcıdır. Anahtar karelerle ve ara doldurmayla yapılan çizimler ise filmin kendi kare hızında değişir: onları akıcılaştırmak için kare hızını (zaman çizelgesinin altındaki **kare/sn** kutusu) 30'a çıkarın. Program içinde Enter ile oynatırken her şey filmin kare hızındadır.
+
 *İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
 
 **Kurallar: filmden oyuna.** Bu da PisiSahne'nin kendi özelliğidir. Bir kural *şu olunca şunu yap* der; iki yarısı da listeden seçilir, sayılardan başka hiçbir şey yazılmaz. **Kurallar > Kurallar ve Sayılar** her kuralı bir cümle olarak gösterir; birine tıklayınca parçalarına ayrılır.

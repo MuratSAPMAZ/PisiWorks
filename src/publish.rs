@@ -395,6 +395,10 @@ var actors = {}, keys = {}, mouse = null, grips = [], dragging = null;
 // For the rules: the numbers as they stand, whether everything has been stopped, how long the film
 // has run, and what each rule last saw, so that it is followed when a thing happens and not while it lasts.
 var numbers = {}, frozen = false, ticks = 0, seen = {};
+// The film's frames go at the film's own rate, but what behaviors and rules move is moved every time the
+// screen is drawn, which is smoother. pace is how much of a film frame has gone by since the last drawing,
+// owed how much of one is still to be shown, and last when the screen was last drawn.
+var pace = 1, owed = 0, last = 0;
 // The copies rules have made, each with the scene it was made in; and what is solid on this frame.
 var clones = [], made = 0, walls = [];
 // The steps that wait their turn: each with the frame it is to go on at.
@@ -478,7 +482,7 @@ function moved(key, b) {
       m.dx += wrapped(box[0] + p * Math.cos(turn) * t, box[2], movie.width) - box[0];
       m.dy += wrapped(box[1] - p * Math.sin(turn) * t, box[3], movie.height) - box[1];
     }
-    else if (k === "shake") { m.dx += p * Math.sin(a.n * 12.9898); m.dy += p * Math.cos(a.n * 78.233); }
+    else if (k === "shake") { var beat = Math.floor(a.n); m.dx += p * Math.sin(beat * 12.9898); m.dy += p * Math.cos(beat * 78.233); }
     else if (k === "pulse") m.scale *= 1 + p / 100 * (1 - Math.cos(TAU * t / span(q))) / 2;
     else if (k === "blink") { var one = Math.abs(span(p)); if (((t % one) + one) % one >= one / 2) m.alpha = 0; }
     else if (k === "fade") m.alpha *= (1 + Math.cos(TAU * t / span(p))) / 2;
@@ -490,8 +494,8 @@ function moved(key, b) {
 // keys walk it, the ground pulls it down and Up or Space makes it jump.
 function step(key, b) {
   // An object a rule has made faster does everything faster: its own time runs quicker.
-  var a = actor(key), dt = a.rate / movie.fps, box = b.box;
-  a.n += a.rate;
+  var a = actor(key), dt = a.rate * pace / movie.fps, box = b.box;
+  a.n += a.rate * pace;
   // What is to disappear after a while is gone when its time is up; a copy is gone for good.
   if (b.l.some(function (l) { return l[0] === "expire" && a.n / movie.fps >= l[1]; })) {
     a.hidden = true;
@@ -652,7 +656,7 @@ function take(step, who, players) {
       var pull = p.b.l.filter(function (l) { return l[0] === "gravity"; })[0];
       if (pull && x > 0) { a.vy = -Math.sqrt(2 * Math.max(pull[1], 1) * x); a.ground = false; }
     }
-    else if (k === "flash") a.flash = ticks + Math.round(movie.fps * 1.2);
+    else if (k === "flash") a.flash = ticks + movie.fps * 1.2;
     else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
     else if (k === "remove") {
       // A copy is gone for good; anything else stays hidden until the film starts again.
@@ -705,7 +709,7 @@ function advance(job) {
     var step = at.s[at.i], k = step[0];
     at.i += 1;
     if (k === "wait") {
-      waiting.push({ at: ticks + Math.max(1, Math.round(amount(step[2], job.who, cast()) * movie.fps)), job: job });
+      waiting.push({ at: ticks + Math.max(0.01, amount(step[2], job.who, cast()) * movie.fps), job: job });
       return;
     }
     if (k === "repeat") {
@@ -783,7 +787,7 @@ function judge() {
 }
 // Starts the film again from the beginning, with every number as it started.
 function restart() {
-  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null; clones = []; waiting = [];
+  actors = {}; clipFrames = {}; seen = {}; ticks = 0; owed = 0; frozen = false; dragging = null; clones = []; waiting = [];
   startNumbers();
   var same = scene === 0;
   go(0, 0, true);
@@ -848,12 +852,15 @@ function draw() {
     stage.drawImage(images[picture[0]], picture[1], picture[2]);
   });
 }
-function tick() {
+function tick(now) {
+  // How long since the screen was last drawn, as a part of a film frame. A long gap, as when the page was
+  // out of sight, counts for no more than a twentieth of a second, so that nothing leaps.
+  var gone = last ? Math.min((now - last) / 1000, 0.05) : 1 / 60;
+  last = now;
+  pace = gone * movie.fps;
   // "Stop everything" holds the film as it is until it is started again.
   if (frozen) { draw(); return; }
-  ticks += 1;
-  // Every movie clip on the stage goes on by a frame of its own, whether or not the scene is playing.
-  ops().forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
+  ticks += pace;
   // What is solid, where it stands now.
   walls = [];
   ops().forEach(function (op) {
@@ -864,11 +871,18 @@ function tick() {
   });
   // So does every object with behaviors.
   ops().forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });
-  if (playing) {
-    frame += 1;
-    if (frame >= movie.scenes[scene].length) { scene = (scene + 1) % movie.scenes.length; frame = 0; }
-    depth = 0;
-    enter();
+  // The film itself goes on by whole frames, at its own rate: its drawings, and those of its movie clips,
+  // which go on by a frame of their own whether or not the scene is playing.
+  owed += pace;
+  while (owed >= 1) {
+    owed -= 1;
+    ops().forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
+    if (playing) {
+      frame += 1;
+      if (frame >= movie.scenes[scene].length) { scene = (scene + 1) % movie.scenes.length; frame = 0; }
+      depth = 0;
+      enter();
+    }
   }
   // The steps whose wait is over go on from where they stopped.
   var due = waiting.filter(function (w) { return w.at <= ticks; });
@@ -884,7 +898,11 @@ function start() {
   happen("start", function () { return true; });
   happen("scene-start", function () { return true; });
   draw();
-  setInterval(tick, 1000 / movie.fps);
+  // Drawn as often as the screen is, where the browser can say when that is.
+  if (window.requestAnimationFrame) {
+    var again = function (now) { tick(now); window.requestAnimationFrame(again); };
+    window.requestAnimationFrame(again);
+  } else setInterval(function () { tick(Date.now()); }, 1000 / 60);
 }
 // Where the mouse is on the stage.
 function pointOf(event) {

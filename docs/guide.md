@@ -262,6 +262,8 @@ The **One after another** example shows all of this in eight seconds: a car driv
 
 The first ten show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last five have to do with the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
 
+*Smoothness.* In the published film everything that behaviors and rules move is drawn as often as the screen is (sixty times a second on most screens), whatever the film's frame rate; so what walks, falls and drifts moves smoothly. Drawings made with keyframes and tweens change at the film's own rate: to smooth those, raise the frame rate (the **fps** box under the timeline) to 30. Played inside the program with Enter, everything goes at the film's rate.
+
 *A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
 
 **Rules: from a film to a game.** Also PisiSahne's own. A rule says *when this happens, do that*, and both halves are picked from lists: nothing is typed but numbers. **Rules > Rules and Numbers** shows every rule as a sentence; click one to take it apart.
