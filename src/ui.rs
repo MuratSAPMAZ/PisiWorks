@@ -1219,7 +1219,9 @@ impl Workspace {
                 .child(this.field(hex, 66., cx))
         };
         shell
-            .child(div().w(px(110.)).overflow_hidden().flex().flex_col().gap_1().child(div().font_weight(FontWeight::BOLD).text_color(rgb(TEXT)).child(title)).when(single, |d| d.child(label(first.name.clone()))))
+            .child(div().w(px(110.)).overflow_hidden().flex().flex_col().gap_1().child(div().font_weight(FontWeight::BOLD).text_color(rgb(TEXT)).child(title))
+                    // The object's name, to type over, as Fireworks has it here: it is what rules and the written language know the object by.
+                    .when(single, |d| d.child(div().flex().items_center().gap_1().child(label(t("Name:"))).child(self.field(FieldId::RenameObject(first.id), 74., cx)))))
             .child(
                 div()
                     .flex()

@@ -268,7 +268,7 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Kurallar: filmden oyuna.** Bu da PisiSahne'nin kendi özelliğidir. Bir kural *şu olunca şunu yap* der; iki yarısı da listeden seçilir, sayılardan başka hiçbir şey yazılmaz. **Kurallar > Kurallar ve Sayılar** her kuralı bir cümle olarak gösterir; birine tıklayınca parçalarına ayrılır.
 
-- *Önce adlar.* Kural bir nesneyi Özellikler'deki adıyla tanır. Elmaya "Elma", sepete "Sepet" adını verin. Aynı adı taşıyan nesneler kurallarını paylaşır: "Elma" hakkındaki bir kural bütün elmalar için geçerlidir.
+- *Önce adlar.* Kural bir nesneyi adıyla tanır. Ad, nesne seçiliyken **Özellikler** panelinin solundaki **Ad** kutusuna yazılır (Enter ile alınır); çizilen her şekil için aynıdır: otomatik şekil, elle çizim, grup. Bir sembolün sahnedeki kopyası seçiliyken açılan **Sembol Özellikleri** panelinde de aynı **Ad** kutusu vardır; orada yazan ad kopyanın adıdır, **Sembol** kutusundaki ise kitaplıktaki sembolün adıdır ve kurallar ona bakmaz. Yeni çizilen şekil türünün adını taşır ("Elips", "Çark"); kural yazmadan önce ona kendi adını verin. Elmaya "Elma", sepete "Sepet" adını verin. Aynı adı taşıyan nesneler kurallarını paylaşır: "Elma" hakkındaki bir kural bütün elmalar için geçerlidir.
 - *Yeni Kural* olayları listeler:
 
 | Olay | Ne zaman olur |

@@ -303,9 +303,11 @@ impl ScriptEdit {
             let mut fitting: Vec<&String> = names.objects.iter().chain(&names.numbers).chain(&names.commands).chain(&names.sounds).filter(|name| name.to_lowercase().starts_with(&partial) && **name != word).collect();
             fitting.sort();
             fitting.dedup();
-            // Inside a sentence the names come first; at its start, the sentences.
+            // Inside a sentence the names come first, and so they do while the first word is still the
+            // beginning of a name and not yet one; once it is a name, the sentences about it come first.
             let offered = fitting.into_iter().map(|name| Offer::Name(name.clone()));
-            if typed.contains(' ') {
+            let nothing_yet = number.is_none() && command.is_none() && object.is_none() && sound.is_none() && key.is_none();
+            if typed.contains(' ') || nothing_yet {
                 found.splice(0..0, offered);
             } else {
                 found.extend(offered);

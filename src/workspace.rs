@@ -7940,6 +7940,13 @@ impl Workspace {
                 if let Some(object) = self.ed.object_mut(id) {
                     object.name = text.to_string();
                 }
+                // In an animation the object is on other keyframes too: it has one name on all of them.
+                let name = text.to_string();
+                self.ed.doc.page_mut().edit_timeline(|timeline| {
+                    for object in timeline.layers.iter_mut().flatten().flat_map(|span| span.objects.iter_mut()).filter(|o| o.id == id) {
+                        object.name = name.clone();
+                    }
+                });
                 self.ed.commit(t("Rename Object"));
             }
             FieldId::RenameSymbol(id) if !cleared => {

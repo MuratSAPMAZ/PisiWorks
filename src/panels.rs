@@ -951,7 +951,10 @@ impl Workspace {
             .filter(|o| matches!(o.shape, Shape::Instance { symbol: placed, .. } if placed == symbol))
             .count();
         let kind = self.ed.doc.symbols.iter().find(|s| s.id == symbol).map_or(SymbolKind::Graphic, |s| s.kind);
+        // The copy on the stage has a name of its own, apart from the symbol's: the one rules know it by.
+        let copy = selected.iter().find(|o| matches!(o.shape, Shape::Instance { .. })).map(|o| o.id);
         shell
+            .when_some(copy.filter(|_| selected.len() == 1), |d, id| d.child(labelled_row(t("Name:"), 30., self.field(FieldId::RenameObject(id), 110., cx))))
             .child(labelled_row(t("Symbol:"), 46., self.field(FieldId::RenameSymbol(symbol), 150., cx)))
             .child(labelled_row(t("Type:"), 30., self.combo(Combo::SymbolKind(symbol), kind.label(), 90., cx).bg(rgb(PANEL_RAISED))))
             .child(div().h(px(22.)).flex().items_center().child(label(tf(if copies == 1 { "{} copy in this document" } else { "{} copies in this document" }, &[&copies]))))

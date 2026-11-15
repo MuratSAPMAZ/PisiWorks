@@ -266,7 +266,7 @@ The first ten show when you play inside the program (Enter): the film then plays
 
 **Rules: from a film to a game.** Also PisiSahne's own. A rule says *when this happens, do that*, and both halves are picked from lists: nothing is typed but numbers. **Rules > Rules and Numbers** shows every rule as a sentence; click one to take it apart.
 
-- *Names first.* A rule knows an object by the name it has in Properties. Name the apple "Apple" and the basket "Basket". Objects with the same name share their rules: one rule about "Apple" holds for every apple.
+- *Names first.* A rule knows an object by its name. The name is typed into the **Name** box at the left of the **Properties** panel while the object is selected (Enter takes it); it is the same for anything drawn: an Auto Shape, a shape drawn by hand, a group. With a copy of a symbol selected, the **Symbol Properties** panel that opens has the same **Name** box; the name there is the copy's, while the one in the **Symbol** box is that of the symbol in the library, which rules do not go by. A shape just drawn has the name of its kind ("Ellipse", "Gear"); give it a name of its own before writing a rule. Name the apple "Apple" and the basket "Basket". Objects with the same name share their rules: one rule about "Apple" holds for every apple.
 - *New Rule* lists the events:
 
 | Event | Happens |
