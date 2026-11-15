@@ -233,7 +233,9 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
                 let behaving = (!object.behaviors.is_empty() || ruled.contains(object.name.as_str())).then(|| {
                     let (p, b) = (object.pivot_point().unwrap_or(object.bounds.center()), object.bounds);
                     let list: Vec<String> = object.behaviors.iter().map(|behavior| behavior.text()).collect();
-                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}],\"n\":{}}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","), serde_json::to_string(&object.name).unwrap_or_default())
+                    // An ellipse that has not been turned or slanted is known to be round, so that touching goes by its outline.
+                    let round = matches!(object.shape, Shape::Ellipse) && object.placement.is_none();
+                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}],\"n\":{},\"r\":{}}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","), serde_json::to_string(&object.name).unwrap_or_default(), round as u8)
                 });
                 // A text that shows a number is written by the script, so that it can change.
                 let counting = match &object.shape {
@@ -355,10 +357,12 @@ const PAGE: &str = r#"<!doctype html>
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).
 // What is drawn is a picture of the stage ("i"), a movie clip ("c"), a button ("b") or an object
 // with behaviors ("m"); the last three may carry behaviors: the point to turn around (p), the
-// object's box (box), the list (l) of [kind, first number, second number] and the object's name (n).
+// object's box (box), the list (l) of [kind, first number, second number], the object's name (n)
+// and whether it is round (r).
 // A text that shows a number ("t") is written here, with the number in place of its {name}.
 // rules: what makes the film a game. Each has an event (e): [kind, first name, second name, number]
-// and steps (s): [kind, name, first number, second number]. numbers: the numbers by name, as they start.
+// what must also be so (c): [number, how, value] or nothing; and steps (s): [kind, name, first number,
+// second number, second name]. numbers: the numbers by name, as they start.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
@@ -377,6 +381,8 @@ var actors = {}, keys = {}, mouse = null, grips = [], dragging = null;
 // For the rules: the numbers as they stand, whether everything has been stopped, how long the film
 // has run, and what each rule last saw, so that it is followed when a thing happens and not while it lasts.
 var numbers = {}, frozen = false, ticks = 0, seen = {};
+// The copies rules have made, each with the scene it was made in; and what is solid on this frame.
+var clones = [], made = 0, walls = [];
 var sounds = movie.sounds.map(function (source) { return new Audio(source); });
 var images = movie.pictures.map(function (source) {
   var image = new Image();
@@ -415,7 +421,22 @@ function enter() {
 // The behaviors an op carries, and the number its object is known by.
 function behaviorsOf(op) { return op[0] === "m" || op[0] === "t" ? op[3] : op[0] === "c" ? op[5] : op[0] === "b" ? op[7] : null; }
 function keyOf(op) { return op[0] === "m" ? op[2] : op[0] === "t" ? op[1] : op[4]; }
-function actor(key) { return actors[key] || (actors[key] = { n: 0, x: 0, y: 0, vy: 0, ground: false }); }
+function actor(key) { return actors[key] || (actors[key] = { n: 0, x: 0, y: 0, vy: 0, ground: false, rate: 1 }); }
+// What is on the stage now: the frame's own, and the copies made in this scene.
+function ops() {
+  var list = movie.scenes[scene][frame].o;
+  if (!clones.length) return list;
+  return list.concat(clones.filter(function (c) { return c.scene === scene; }).map(function (c) { return c.op; }));
+}
+// The solid thing an object's box is inside of, if there is one.
+function blocked(key, box, a) {
+  var x = box[0] + a.x, y = box[1] + a.y;
+  for (var i = 0; i < walls.length; i += 1) {
+    var w = walls[i].box;
+    if (walls[i].key !== key && x < w[0] + w[2] && w[0] < x + box[2] && y < w[1] + w[3] && w[1] < y + box[3]) return w;
+  }
+  return null;
+}
 function span(seconds) { return Math.abs(seconds) < 0.01 ? 0.01 : seconds; }
 function wrapped(at, size, room) { var m = room + size; return (((at + size) % m) + m) % m - size; }
 function has(b, kind) { return b.l.some(function (l) { return l[0] === kind; }); }
@@ -446,10 +467,11 @@ function moved(key, b) {
 // One frame's worth of what the viewer does to an object: the mouse draws it on, the arrow
 // keys walk it, the ground pulls it down and Up or Space makes it jump.
 function step(key, b) {
-  var a = actor(key), dt = 1 / movie.fps, box = b.box;
-  a.n += 1;
+  // An object a rule has made faster does everything faster: its own time runs quicker.
+  var a = actor(key), dt = a.rate / movie.fps, box = b.box;
+  a.n += a.rate;
   if (dragging && dragging.key === key) return;
-  var falls = has(b, "gravity");
+  var falls = has(b, "gravity"), fromX = a.x, fromY = a.y;
   b.l.forEach(function (l) {
     var k = l[0], p = l[1], q = l[2];
     if (k === "mouse" && mouse) {
@@ -471,6 +493,17 @@ function step(key, b) {
       if (a.y >= floor) { a.y = floor; a.vy = 0; a.ground = true; } else a.ground = false;
     }
   });
+  // What is solid stops it: first sideways, then up or down, where it lands on top or bumps its head.
+  if (walls.length && (a.x !== fromX || a.y !== fromY)) {
+    var toX = a.x, toY = a.y, w;
+    a.y = fromY;
+    if ((w = blocked(key, box, a))) a.x = toX > fromX ? w[0] - box[2] - box[0] : toX < fromX ? w[0] + w[2] - box[0] : fromX;
+    a.y = toY;
+    if ((w = blocked(key, box, a))) {
+      if (toY > fromY) { a.y = w[1] - box[3] - box[1]; a.ground = true; } else a.y = w[1] + w[3] - box[1];
+      a.vy = 0;
+    }
+  }
 }
 // Sets the stage to draw an object as its behaviors have it.
 function place(m, b) {
@@ -480,13 +513,30 @@ function place(m, b) {
 // The named objects of the frame on show that are not hidden, each with its box as it stands now.
 function cast() {
   var list = [];
-  movie.scenes[scene][frame].o.forEach(function (op) {
+  ops().forEach(function (op) {
     var b = behaviorsOf(op);
     if (!b || !b.n || actor(keyOf(op)).hidden) return;
     var m = moved(keyOf(op), b);
     list.push({ key: keyOf(op), name: b.n, b: b, box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
   });
   return list;
+}
+// Whether two objects touch. Boxes that lie against each other touch, so that what stands on a
+// thing touches it; a round object is taken by its outline and not by the corners of its box.
+function meets(p, q) {
+  var a = p.box, b = q.box;
+  if (!(a[0] <= b[0] + b[2] + 1 && b[0] <= a[0] + a[2] + 1 && a[1] <= b[1] + b[3] + 1 && b[1] <= a[1] + a[3] + 1)) return false;
+  if (!p.b.r && !q.b.r) return true;
+  var ax = a[0] + a[2] / 2, ay = a[1] + a[3] / 2, bx = b[0] + b[2] / 2, by = b[1] + b[3] / 2, dx, dy;
+  if (p.b.r && q.b.r) {
+    dx = (ax - bx) / (a[2] / 2 + b[2] / 2 + 1); dy = (ay - by) / (a[3] / 2 + b[3] / 2 + 1);
+    return dx * dx + dy * dy <= 1;
+  }
+  // One is round: the point of the other's box nearest to its middle must be inside it.
+  var round = p.b.r ? a : b, box = p.b.r ? b : a, cx = round[0] + round[2] / 2, cy = round[1] + round[3] / 2;
+  dx = (Math.max(box[0], Math.min(cx, box[0] + box[2])) - cx) / (round[2] / 2 + 1);
+  dy = (Math.max(box[1], Math.min(cy, box[1] + box[3])) - cy) / (round[3] / 2 + 1);
+  return dx * dx + dy * dy <= 1;
 }
 function startNumbers() {
   numbers = {};
@@ -496,10 +546,27 @@ function startNumbers() {
 // "hide Apple" after "Apple touches Basket" hides that apple and not every apple.
 function take(step, who, players) {
   var k = step[0], name = step[1], x = step[2], y = step[3];
-  var them = players.filter(function (p) { return p.name === name && (who[name] === undefined || who[name] === p.key); });
+  var meant = function (p, name) { return p.name === name && (who[name] === undefined || who[name] === p.key); };
+  var them = players.filter(function (p) { return meant(p, name); });
   if (k === "show") {
-    // What is hidden is not among the players: it is looked for on the frame itself.
-    movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (b && b.n === name) actor(keyOf(op)).hidden = false; });
+    // What is hidden is not among the players: it is looked for on the stage itself.
+    ops().forEach(function (op) { var b = behaviorsOf(op); if (b && b.n === name) actor(keyOf(op)).hidden = false; });
+  }
+  if (k === "spawn" && clones.length < 300) {
+    // The copy is made from the object as it was drawn, hidden or not, and put where the other object is now.
+    var source = null;
+    movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (!source && b && b.n === name && (op[0] === "m" || op[0] === "c")) source = op; });
+    var at = players.filter(function (p) { return meant(p, step[4]); })[0];
+    if (source) {
+      var sb = behaviorsOf(source), ox = 0, oy = 0;
+      if (at) { ox = at.box[0] + at.box[2] / 2 - (sb.box[0] + sb.box[2] / 2); oy = at.box[1] + at.box[3] / 2 - (sb.box[1] + sb.box[3] / 2); }
+      var nb = { p: [sb.p[0] + ox, sb.p[1] + oy], box: [sb.box[0] + ox, sb.box[1] + oy, sb.box[2], sb.box[3]], l: sb.l, n: sb.n, r: sb.r };
+      made += 1;
+      var copy = source[0] === "m"
+        ? ["m", [source[1][0], source[1][1] + ox, source[1][2] + oy], "k" + made, nb]
+        : ["c", source[1], [source[2][0], source[2][1], source[2][2], source[2][3], source[2][4] + ox, source[2][5] + oy], source[3], "k" + made, nb];
+      clones.push({ scene: scene, op: copy });
+    }
   }
   them.forEach(function (p) {
     var a = actor(p.key), box = p.b.box;
@@ -509,7 +576,14 @@ function take(step, who, players) {
     else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
     else if (k === "hide") a.hidden = true;
     else if (k === "jump") { a.vy = -x; a.ground = false; }
+    else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
+    else if (k === "remove") {
+      // A copy is gone for good; anything else stays hidden until the film starts again.
+      a.hidden = true;
+      clones = clones.filter(function (c) { return keyOf(c.op) !== p.key; });
+    }
   });
+  if (k === "rnd") numbers[name] = Math.floor(Math.min(x, y) + Math.random() * (Math.abs(y - x) + 1));
   if (k === "add") numbers[name] = (numbers[name] || 0) + x;
   else if (k === "set") numbers[name] = x;
   else if (k === "stop") playing = false;
@@ -523,6 +597,7 @@ function take(step, who, players) {
   else if (k === "restart") restart();
 }
 function follow(rule, who) {
+  if (rule.c && !holds(numbers[rule.c[0]] || 0, rule.c[1], rule.c[2])) return;
   var players = cast();
   rule.s.forEach(function (step) { take(step, who || {}, players); });
 }
@@ -558,8 +633,7 @@ function judge() {
         if (p.name !== e[1]) return;
         players.forEach(function (q) {
           if (q.name !== e[2] || q.key === p.key) return;
-          var meet = p.box[0] < q.box[0] + q.box[2] && q.box[0] < p.box[0] + p.box[2] && p.box[1] < q.box[1] + q.box[3] && q.box[1] < p.box[1] + p.box[3];
-          if (came("t" + index + ":" + p.key + ":" + q.key, meet)) { var who = {}; who[q.name] = q.key; who[p.name] = p.key; follow(rule, who); }
+          if (came("t" + index + ":" + p.key + ":" + q.key, meets(p, q))) { var who = {}; who[q.name] = q.key; who[p.name] = p.key; follow(rule, who); }
         });
       });
     }
@@ -567,7 +641,7 @@ function judge() {
 }
 // Starts the film again from the beginning, with every number as it started.
 function restart() {
-  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null;
+  actors = {}; clipFrames = {}; seen = {}; ticks = 0; frozen = false; dragging = null; clones = [];
   startNumbers();
   go(0, 0, true);
   happen("start", function () { return true; });
@@ -590,7 +664,7 @@ function draw() {
   if (movie.background) { stage.fillStyle = movie.background; stage.fillRect(0, 0, movie.width, movie.height); }
   buttons = [];
   grips = [];
-  movie.scenes[scene][frame].o.forEach(function (op) {
+  ops().forEach(function (op) {
     if (op[0] === "i") {
       stage.setTransform(1, 0, 0, 1, 0, 0);
       stage.globalAlpha = 1;
@@ -633,9 +707,17 @@ function tick() {
   if (frozen) { draw(); return; }
   ticks += 1;
   // Every movie clip on the stage goes on by a frame of its own, whether or not the scene is playing.
-  movie.scenes[scene][frame].o.forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
+  ops().forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
+  // What is solid, where it stands now.
+  walls = [];
+  ops().forEach(function (op) {
+    var b = behaviorsOf(op);
+    if (!b || !has(b, "solid") || actor(keyOf(op)).hidden) return;
+    var m = moved(keyOf(op), b);
+    walls.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+  });
   // So does every object with behaviors.
-  movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });
+  ops().forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });
   if (playing) {
     frame += 1;
     if (frame >= movie.scenes[scene].length) { scene = (scene + 1) % movie.scenes.length; frame = 0; }

@@ -26,10 +26,12 @@ pub enum BehaviorKind {
     ArrowKeys,
     Gravity,
     Draggable,
+    /// Other objects cannot pass through it: what walks or falls stops at it, and stands on it.
+    Solid,
 }
 
 /// Every kind, in the order the menu lists them: first those that move by themselves, then those the viewer moves.
-pub const KINDS: [BehaviorKind; 13] = [
+pub const KINDS: [BehaviorKind; 14] = [
     BehaviorKind::Spin,
     BehaviorKind::Bounce,
     BehaviorKind::BackAndForth,
@@ -43,6 +45,7 @@ pub const KINDS: [BehaviorKind; 13] = [
     BehaviorKind::ArrowKeys,
     BehaviorKind::Gravity,
     BehaviorKind::Draggable,
+    BehaviorKind::Solid,
 ];
 
 impl BehaviorKind {
@@ -62,6 +65,7 @@ impl BehaviorKind {
             BehaviorKind::ArrowKeys => "Walk with the Arrow Keys",
             BehaviorKind::Gravity => "Fall and Jump",
             BehaviorKind::Draggable => "Can Be Dragged",
+            BehaviorKind::Solid => "Is Solid",
         }
     }
 
@@ -81,6 +85,7 @@ impl BehaviorKind {
             BehaviorKind::ArrowKeys => "keys",
             BehaviorKind::Gravity => "gravity",
             BehaviorKind::Draggable => "drag",
+            BehaviorKind::Solid => "solid",
         }
     }
 
@@ -99,13 +104,13 @@ impl BehaviorKind {
             BehaviorKind::FollowMouse => (("Speed (pixels a second):", 200.0), None),
             BehaviorKind::ArrowKeys => (("Speed (pixels a second):", 160.0), None),
             BehaviorKind::Gravity => (("Pull (pixels a second, each second):", 900.0), Some(("Jump speed (pixels a second):", 420.0))),
-            BehaviorKind::Draggable => (("", 0.0), None),
+            BehaviorKind::Draggable | BehaviorKind::Solid => (("", 0.0), None),
         }
     }
 
     /// Whether the kind waits for the viewer's mouse or keyboard, and so shows only in the published film.
     pub const fn interactive(self) -> bool {
-        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable)
+        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Solid)
     }
 }
 
@@ -182,7 +187,7 @@ pub fn moved(behaviors: &[Behavior], tick: usize, fps: f32, bounds: Rect, stage:
                 }
             }
             BehaviorKind::Fade => moved.alpha *= (1.0 + (TAU * t / span(a)).cos()) / 2.0,
-            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable => {}
+            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Solid => {}
         }
     }
     moved

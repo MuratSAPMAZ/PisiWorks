@@ -47,6 +47,8 @@ pub enum Pick {
     Key,
     Edge,
     Compare,
+    /// One of the three ways of "only if".
+    Condition,
     Variable,
     Sound,
 }
@@ -135,17 +137,29 @@ pub enum StepKind {
     NextScene,
     /// Plays the sound called `a`.
     Sound,
+    /// Makes a copy of the object `a` where the object `b` is. The copy has the name and the behaviors of the first.
+    Spawn,
+    /// Takes the object away for good: a copy is gone, anything else is hidden until the film starts again.
+    Remove,
+    /// Makes everything the object does by itself faster by `x` percent; a negative number slows it.
+    Faster,
+    /// Makes the number `a` a whole number picked at random from `x` to `y`.
+    RandomNumber,
     /// Stops the film and everything that moves in it.
     StopAll,
     /// Starts the film again from the beginning, with every number as it started.
     Restart,
 }
 
-pub const STEPS: [StepKind; 18] = [
+pub const STEPS: [StepKind; 22] = [
     StepKind::Add,
     StepKind::Set,
+    StepKind::RandomNumber,
     StepKind::Hide,
     StepKind::Show,
+    StepKind::Spawn,
+    StepKind::Remove,
+    StepKind::Faster,
     StepKind::Move,
     StepKind::GoTo,
     StepKind::Random,
@@ -181,6 +195,10 @@ impl StepKind {
             StepKind::GotoScene => "Go to a scene",
             StepKind::NextScene => "Go to the next scene",
             StepKind::Sound => "Play a sound",
+            StepKind::Spawn => "Make a copy of an object",
+            StepKind::Remove => "Remove an object",
+            StepKind::Faster => "Make an object faster",
+            StepKind::RandomNumber => "Set a number at random",
             StepKind::StopAll => "Stop everything",
             StepKind::Restart => "Start again",
         }
@@ -204,24 +222,31 @@ impl StepKind {
             StepKind::GotoScene => "scene",
             StepKind::NextScene => "next",
             StepKind::Sound => "sound",
+            StepKind::Spawn => "spawn",
+            StepKind::Remove => "remove",
+            StepKind::Faster => "faster",
+            StepKind::RandomNumber => "rnd",
             StepKind::StopAll => "halt",
             StepKind::Restart => "restart",
         }
     }
 
-    /// What the kind's name is chosen from, and what its two numbers are called and start as, if it has them.
-    pub const fn needs(self) -> (Option<Pick>, Option<(&'static str, f32)>, Option<(&'static str, f32)>) {
+    /// What the kind's first and second names are chosen from, and what its two numbers are called and start as, if it has them.
+    pub const fn needs(self) -> (Option<Pick>, Option<Pick>, Option<(&'static str, f32)>, Option<(&'static str, f32)>) {
         match self {
-            StepKind::Move => (Some(Pick::Object), Some(("Rightwards:", 10.0)), Some(("Down:", 0.0))),
-            StepKind::GoTo => (Some(Pick::Object), Some(("X:", 0.0)), Some(("Y:", 0.0))),
-            StepKind::Random | StepKind::RandomTop | StepKind::Show | StepKind::Hide => (Some(Pick::Object), None, None),
-            StepKind::Jump => (Some(Pick::Object), Some(("Speed:", 400.0)), None),
-            StepKind::Add => (Some(Pick::Variable), Some(("By:", 1.0)), None),
-            StepKind::Set => (Some(Pick::Variable), Some(("Value:", 0.0)), None),
-            StepKind::GotoFrame | StepKind::GotoFrameStop => (None, Some(("Frame:", 1.0)), None),
-            StepKind::GotoScene => (None, Some(("Scene:", 1.0)), None),
-            StepKind::Sound => (Some(Pick::Sound), None, None),
-            StepKind::StopFilm | StepKind::PlayFilm | StepKind::NextScene | StepKind::StopAll | StepKind::Restart => (None, None, None),
+            StepKind::Move => (Some(Pick::Object), None, Some(("Rightwards:", 10.0)), Some(("Down:", 0.0))),
+            StepKind::GoTo => (Some(Pick::Object), None, Some(("X:", 0.0)), Some(("Y:", 0.0))),
+            StepKind::Random | StepKind::RandomTop | StepKind::Show | StepKind::Hide | StepKind::Remove => (Some(Pick::Object), None, None, None),
+            StepKind::Spawn => (Some(Pick::Object), Some(Pick::Object), None, None),
+            StepKind::Jump => (Some(Pick::Object), None, Some(("Speed:", 400.0)), None),
+            StepKind::Faster => (Some(Pick::Object), None, Some(("Percent:", 10.0)), None),
+            StepKind::Add => (Some(Pick::Variable), None, Some(("By:", 1.0)), None),
+            StepKind::Set => (Some(Pick::Variable), None, Some(("Value:", 0.0)), None),
+            StepKind::RandomNumber => (Some(Pick::Variable), None, Some(("At least:", 1.0)), Some(("Up to:", 6.0))),
+            StepKind::GotoFrame | StepKind::GotoFrameStop => (None, None, Some(("Frame:", 1.0)), None),
+            StepKind::GotoScene => (None, None, Some(("Scene:", 1.0)), None),
+            StepKind::Sound => (Some(Pick::Sound), None, None, None),
+            StepKind::StopFilm | StepKind::PlayFilm | StepKind::NextScene | StepKind::StopAll | StepKind::Restart => (None, None, None, None),
         }
     }
 }
@@ -231,6 +256,9 @@ pub struct Step {
     pub kind: StepKind,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub a: String,
+    /// A second name, for the kinds that have one.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub b: String,
     #[serde(default)]
     pub x: f32,
     #[serde(default)]
@@ -240,9 +268,23 @@ pub struct Step {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Rule {
     pub event: Event,
+    /// What must also be so for the rule to be followed, if anything.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<Condition>,
     #[serde(default)]
     pub steps: Vec<Step>,
 }
+
+/// "Only if": a number held against a value, as [`COMPARES`] has the three ways.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Condition {
+    pub number: String,
+    pub how: String,
+    pub value: f32,
+}
+
+/// The three ways as "only if" says them: the word the script knows each by, and its name in English.
+pub const CONDITIONS: [(&str, &str); 3] = [("=", "is"), (">", "is more than"), ("<", "is less than")];
 
 /// A number the film keeps, such as a score: its name, and what it is when the film starts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -310,6 +352,7 @@ pub fn choice_name(pick: Pick, value: &str) -> String {
         Pick::Key => &KEYS,
         Pick::Edge => &EDGES,
         Pick::Compare => &COMPARES,
+        Pick::Condition => &CONDITIONS,
         Pick::Object | Pick::Variable | Pick::Sound => return value.to_string(),
     };
     list.iter().find(|(key, _)| *key == value).map_or_else(|| value.to_string(), |(_, name)| if name.len() == 1 { name.to_string() } else { t(name).to_string() })
@@ -354,8 +397,8 @@ fn quoted(text: &str) -> String {
 
 impl Step {
     pub fn new(kind: StepKind) -> Step {
-        let (_, x, y) = kind.needs();
-        Step { kind, a: String::new(), x: x.map_or(0.0, |x| x.1), y: y.map_or(0.0, |y| y.1) }
+        let (_, _, x, y) = kind.needs();
+        Step { kind, a: String::new(), b: String::new(), x: x.map_or(0.0, |x| x.1), y: y.map_or(0.0, |y| y.1) }
     }
 
     pub fn sentence(&self) -> String {
@@ -368,7 +411,13 @@ impl Step {
             StepKind::Show => tf("show {}", &[a]),
             StepKind::Hide => tf("hide {}", &[a]),
             StepKind::Jump => tf("make {} jump at {}", &[a, &x]),
-            StepKind::Add => tf("change {} by {}", &[a, &x]),
+            StepKind::Add if self.x < 0.0 => tf("decrease {} by {}", &[a, &plain(-self.x)]),
+            StepKind::Add => tf("increase {} by {}", &[a, &x]),
+            StepKind::Spawn => tf("make a copy of {} at {}", &[a, &self.b]),
+            StepKind::Remove => tf("remove {}", &[a]),
+            StepKind::Faster if self.x < 0.0 => tf("make {} slower by {} percent", &[a, &plain(-self.x)]),
+            StepKind::Faster => tf("make {} faster by {} percent", &[a, &x]),
+            StepKind::RandomNumber => tf("set {} at random from {} to {}", &[a, &x, &y]),
             StepKind::Set => tf("set {} to {}", &[a, &x]),
             StepKind::StopFilm => t("stop the film").to_string(),
             StepKind::PlayFilm => t("play the film").to_string(),
@@ -385,16 +434,28 @@ impl Step {
 
 impl Rule {
     pub fn new() -> Rule {
-        Rule { event: Event::new(EventKind::Start), steps: Vec::new() }
+        Rule { event: Event::new(EventKind::Start), when: None, steps: Vec::new() }
     }
 
-    /// The rule as one sentence: the event, then the steps.
+    /// The rule as one sentence: the event, what must also be so, then the steps.
     pub fn sentence(&self) -> String {
         let steps: Vec<String> = self.steps.iter().map(Step::sentence).collect();
+        let event = self.event.sentence();
+        let head = match &self.when {
+            None => event,
+            Some(only) => {
+                let value = plain(only.value);
+                match only.how.as_str() {
+                    ">" => tf("{}, if {} is more than {}", &[&event, &only.number, &value]),
+                    "<" => tf("{}, if {} is less than {}", &[&event, &only.number, &value]),
+                    _ => tf("{}, if {} is {}", &[&event, &only.number, &value]),
+                }
+            }
+        };
         if steps.is_empty() {
-            format!("{}: …", self.event.sentence())
+            format!("{head}: …")
         } else {
-            format!("{}: {}", self.event.sentence(), steps.join("; "))
+            format!("{head}: {}", steps.join("; "))
         }
     }
 
@@ -409,6 +470,7 @@ impl Rule {
             names.push(self.event.b.as_str());
         }
         names.extend(self.steps.iter().filter(|step| step.kind.needs().0 == Some(Pick::Object)).map(|step| step.a.as_str()));
+        names.extend(self.steps.iter().filter(|step| step.kind.needs().1 == Some(Pick::Object)).map(|step| step.b.as_str()));
         names.retain(|name| !name.is_empty());
         names
     }
@@ -420,10 +482,11 @@ impl Rule {
             .iter()
             .map(|step| {
                 let x = if step.kind == StepKind::Sound { sounds.iter().position(|name| *name == step.a).map_or(-1.0, |at| at as f32) } else { step.x };
-                format!("[\"{}\",{},{},{}]", step.kind.key(), quoted(&step.a), x, step.y)
+                format!("[\"{}\",{},{},{},{}]", step.kind.key(), quoted(&step.a), x, step.y, quoted(&step.b))
             })
             .collect();
-        format!("{{\"e\":{},\"s\":[{}]}}", self.event.text(), steps.join(","))
+        let only = self.when.as_ref().map_or_else(|| "null".to_string(), |only| format!("[{},{},{}]", quoted(&only.number), quoted(&only.how), only.value));
+        format!("{{\"e\":{},\"c\":{only},\"s\":[{}]}}", self.event.text(), steps.join(","))
     }
 }
 
@@ -445,7 +508,12 @@ mod tests {
     fn rule() -> Rule {
         Rule {
             event: Event { kind: EventKind::Touch, a: "Elma".into(), b: "Sepet".into(), n: 0.0 },
-            steps: vec![Step { kind: StepKind::Add, a: "Puan".into(), x: 1.0, y: 0.0 }, Step { kind: StepKind::RandomTop, a: "Elma".into(), x: 0.0, y: 0.0 }, Step { kind: StepKind::Sound, a: "zil".into(), x: 0.0, y: 0.0 }],
+            when: None,
+            steps: vec![
+                Step { kind: StepKind::Add, a: "Puan".into(), b: String::new(), x: 1.0, y: 0.0 },
+                Step { kind: StepKind::RandomTop, a: "Elma".into(), b: String::new(), x: 0.0, y: 0.0 },
+                Step { kind: StepKind::Sound, a: "zil".into(), b: String::new(), x: 0.0, y: 0.0 },
+            ],
         }
     }
 
@@ -453,7 +521,16 @@ mod tests {
     fn a_rule_reads_as_a_sentence_and_names_its_objects() {
         crate::i18n::set_language(crate::i18n::Language::English);
         let rule = rule();
-        assert_eq!(rule.sentence(), "When Elma touches Sepet: change Puan by 1; put Elma at the top, at random; play the sound zil");
+        assert_eq!(rule.sentence(), "When Elma touches Sepet: increase Puan by 1; put Elma at the top, at random; play the sound zil");
+        // "Only if" comes between the event and the steps; taking away reads as taking away; a copy is made at another object.
+        let fire = Rule {
+            event: Event { kind: EventKind::Key, a: " ".into(), b: String::new(), n: 0.0 },
+            when: Some(Condition { number: "Mermi".into(), how: ">".into(), value: 0.0 }),
+            steps: vec![Step { kind: StepKind::Spawn, a: "Ok".into(), b: "Gemi".into(), x: 0.0, y: 0.0 }, Step { kind: StepKind::Add, a: "Mermi".into(), b: String::new(), x: -1.0, y: 0.0 }],
+        };
+        assert_eq!(fire.sentence(), "When the Space key is pressed, if Mermi is more than 0: make a copy of Ok at Gemi; decrease Mermi by 1");
+        assert_eq!(fire.objects(), vec!["Ok", "Gemi"]);
+        assert_eq!(fire.text(&[]), "{\"e\":[\"key\",\" \",\"\",0],\"c\":[\"Mermi\",\">\",0],\"s\":[[\"spawn\",\"Ok\",0,0,\"Gemi\"],[\"add\",\"Mermi\",-1,0,\"\"]]}");
         assert_eq!(rule.objects(), vec!["Elma", "Sepet", "Elma"]);
         let key = Event { kind: EventKind::Key, a: " ".into(), b: String::new(), n: 0.0 };
         assert_eq!(key.sentence(), "When the Space key is pressed");
@@ -465,7 +542,7 @@ mod tests {
     #[test]
     fn the_page_gets_a_rule_with_its_sound_by_number() {
         let text = rule().text(&["davul".to_string(), "zil".to_string()]);
-        assert_eq!(text, "{\"e\":[\"touch\",\"Elma\",\"Sepet\",0],\"s\":[[\"add\",\"Puan\",1,0],[\"top\",\"Elma\",0,0],[\"sound\",\"zil\",1,0]]}");
+        assert_eq!(text, "{\"e\":[\"touch\",\"Elma\",\"Sepet\",0],\"c\":null,\"s\":[[\"add\",\"Puan\",1,0,\"\"],[\"top\",\"Elma\",0,0,\"\"],[\"sound\",\"zil\",1,0,\"\"]]}");
     }
 
     #[test]

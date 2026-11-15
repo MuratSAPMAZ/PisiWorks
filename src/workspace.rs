@@ -114,7 +114,10 @@ pub enum Combo {
     /// The kinds of step, to add one; the kind of a step of the rule on show; a step's name.
     RuleStepAdd,
     RuleStep(usize),
-    RuleStepPick(usize),
+    RuleStepPick(usize, bool),
+    /// "Only if": the number it is about, or none; and which way the number is held against the value.
+    RuleIf,
+    RuleIfHow,
     /// The action of the frame on show, or, with `true`, of the selected button.
     Action(bool),
     FrameSound,
@@ -434,6 +437,8 @@ pub enum FieldId {
     Twist(usize),
     /// Rules and Numbers: the number of the event on show; the first or the second number of one of its steps.
     RuleNumber,
+    /// The value "only if" holds its number against.
+    RuleIfValue,
     RuleStep(usize, bool),
     /// The name of a number the rules keep, or what it starts as.
     VariableName(usize),
@@ -3584,7 +3589,7 @@ impl Workspace {
 
     /// What a name in a rule can be chosen from: the value kept, and how the list shows it.
     pub fn rule_choices(&self, pick: crate::rules::Pick) -> Vec<(String, String)> {
-        use crate::rules::{choice_name, Pick, COMPARES, EDGES, KEYS};
+        use crate::rules::{choice_name, Pick, COMPARES, CONDITIONS, EDGES, KEYS};
         let listed = |list: &[(&str, &str)]| list.iter().map(|(key, _)| (key.to_string(), choice_name(pick, key))).collect();
         let own = |names: Vec<String>| names.into_iter().map(|name| (name.clone(), name)).collect();
         match pick {
@@ -3594,6 +3599,7 @@ impl Workspace {
             Pick::Key => listed(&KEYS),
             Pick::Edge => listed(&EDGES),
             Pick::Compare => listed(&COMPARES),
+            Pick::Condition => listed(&CONDITIONS),
         }
     }
 
@@ -3612,8 +3618,9 @@ impl Workspace {
     }
 
     fn fresh_step(&self, kind: crate::rules::StepKind) -> crate::rules::Step {
+        let (a, b, _, _) = kind.needs();
         let mut step = crate::rules::Step::new(kind);
-        step.a = self.first_choice(kind.needs().0, 0);
+        (step.a, step.b) = (self.first_choice(a, 0), self.first_choice(b, if a == b { 1 } else { 0 }));
         step
     }
 
@@ -3628,7 +3635,7 @@ impl Workspace {
     pub fn add_rule(&mut self, kind: crate::rules::EventKind) {
         self.commit_field();
         let event = self.fresh_event(kind);
-        self.ed.doc.rules.push(crate::rules::Rule { event, steps: Vec::new() });
+        self.ed.doc.rules.push(crate::rules::Rule { event, when: None, steps: Vec::new() });
         self.rule_picked = self.ed.doc.rules.len() - 1;
         self.ed.commit(t("New Rule"));
     }
@@ -7183,6 +7190,7 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::RuleNumber => self.ed.doc.rules.get(self.rule_picked).map_or_else(String::new, |rule| number(rule.event.n)),
+            FieldId::RuleIfValue => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.when.as_ref()).map_or_else(String::new, |only| number(only.value)),
             FieldId::RuleStep(which, second) => self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(which)).map_or_else(String::new, |step| number(if second { step.y } else { step.x })),
             FieldId::VariableName(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| v.name.clone()),
             FieldId::VariableStart(which) => self.ed.doc.variables.get(which).map_or_else(String::new, |v| number(v.start)),
@@ -7434,6 +7442,14 @@ impl Workspace {
                 let Some(v) = number else { return };
                 self.edit_rule(|rule| rule.event.n = v);
             }
+            FieldId::RuleIfValue => {
+                let Some(v) = number else { return };
+                self.edit_rule(|rule| {
+                    if let Some(only) = rule.when.as_mut() {
+                        only.value = v;
+                    }
+                });
+            }
             FieldId::RuleStep(which, second) => {
                 let Some(v) = number else { return };
                 self.edit_rule(|rule| {
@@ -7457,6 +7473,9 @@ impl Workspace {
                 for rule in &mut self.ed.doc.rules {
                     if rule.event.kind.needs().0 == Some(Pick::Variable) && rule.event.a == old {
                         rule.event.a = name.clone();
+                    }
+                    if let Some(only) = rule.when.as_mut().filter(|only| only.number == old) {
+                        only.number = name.clone();
                     }
                     for step in rule.steps.iter_mut().filter(|step| step.kind.needs().0 == Some(Pick::Variable) && step.a == old) {
                         step.a = name.clone();

@@ -257,8 +257,9 @@ The **One after another** example shows all of this in eight seconds: a car driv
 | Walk with the Arrow Keys | The viewer moves it with the arrow keys; it stays on the stage | Speed |
 | Fall and Jump | Falls to the bottom edge of the stage; Up or Space makes it jump | Pull, jump speed (0: no jumping) |
 | Can Be Dragged | The viewer drags it with the mouse | |
+| Is Solid | Nothing that walks or falls passes through it: it stops at its sides, stands on its top and bumps its head on its underside | |
 
-The first nine show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last four answer the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
+The first nine show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last five have to do with the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
 
 *A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
 
@@ -278,7 +279,11 @@ The first nine show when you play inside the program (Enter): the film then play
 | After so many seconds | Once |
 | When a number reaches a value | It becomes, goes above or goes below the value |
 
-- *Add a Step* lists what to do: change or set a number; hide, show or move an object, put it at a place, somewhere at random, or at the top at random; make it jump; play a sound; go to the next scene, to a scene or to a frame; stop or play the film; stop everything; start again. A rule can have several steps; they are done in order.
+- *Add a Step* lists what to do: change or set a number, or set it at random; hide, show or move an object, put it at a place, somewhere at random, or at the top at random; make a copy of an object where another is; remove an object; make an object faster or slower; make it jump; play a sound; go to the next scene, to a scene or to a frame; stop or play the film; stop everything; start again. A rule can have several steps; they are done in order.
+- *Only if.* Under the event, **Only if** can hold a number against a value: "When Hero touches Door, if Score is more than 2". The rule is then followed only when that is so as well.
+- *Copies.* **Make a copy of an object** makes another of the same name, with the same behaviors, where a second object is: a bullet where the ship is. Draw the one bullet, and hide it when the film starts; every shot is a copy. **Remove an object** takes a copy away for good, and hides anything else until the film starts again.
+- *Faster.* **Make an object faster** quickens everything the object does by itself: falling, going, turning. This is how a game gets harder as it goes.
+- *Touching.* Two objects touch when their boxes meet; an ellipse that has not been turned is taken by its outline. What stands on a solid object touches it.
 - *Which object?* When a rule says "When Apple touches Basket: hide Apple", it is the apple that touched that is hidden, not every apple.
 - *Numbers.* **New Number** makes a number with a name and a starting value: a score, lives, a clock. A text with the name in braces shows it in the film: type `Score: {Score}` with the Text tool.
 - *A thing happens once.* A rule is followed when something comes to be, not for as long as it lasts: an apple lying on the ground has touched it once.
@@ -290,17 +295,35 @@ The first nine show when you play inside the program (Enter): the film then play
 2. Draw an apple at the top and name it "Apple". Give it **Fall and Jump** with a small pull (70) and a jump speed of 0. Copy it for a second apple, higher up.
 3. In **Rules and Numbers** make two numbers: Score, starting as 0, and Lives, starting as 5. Type `Score: {Score}` and `Lives: {Lives}` on the stage.
 4. Rule: *When an object touches another*, Apple, Basket. Steps: *Change a number*, Score, by 1; *Put an object at the top, at random*, Apple.
-5. Rule: *When an object touches the edge of the stage*, Apple, the bottom edge. Steps: *Change a number*, Lives, by −1; *Put an object at the top, at random*, Apple.
+5. Rule: *When an object touches the edge of the stage*, Apple, the bottom edge. Steps: *Change a number*, Lives, by −1 (the sentence reads "decrease Lives by 1"); *Put an object at the top, at random*, Apple.
 6. Add a second scene saying "Game over", with a box named "Again". Give both scenes the frame action **Stop**.
 7. Rule: *When a number reaches a value*, Lives, goes below, 1. Step: *Go to a scene*, 2.
 8. Rule: *When an object is clicked*, Again. Step: *Start again*.
 9. Ctrl+Enter.
 
-**Lesson: hit the targets.** Three circles named "Target", each with a behavior of its own (Go Back and Forth, Go Up and Down, Keep Going). Numbers: Score 0 and Time 20. Rules: *When Target is clicked: change Score by 1; put Target somewhere at random*. *Every 1 seconds: change Time by −1*. *When Time goes below 1: go to scene 2*.
+**Lesson: hit the targets.** Three circles named "Target", each with a behavior of its own (Go Back and Forth, Go Up and Down, Keep Going). Numbers: Score 0 and Time 20. Rules: *When Target is clicked: increase Score by 1; put Target somewhere at random*. *Every 1 seconds: decrease Time by 1*. *When Time goes below 1: go to scene 2*.
 
-**Lesson: quiz.** One scene for each question, each with the frame action Stop. The answers are boxes with words on them; name the right one "Right answer" and the others "Wrong answer". Three rules do for any number of questions: *When Right answer is clicked: change Score by 1; go to the next scene*. *When Wrong answer is clicked: go to the next scene*. *When Again is clicked: start again*. The last scene shows `Score: {Score}`.
+**Lesson: quiz.** One scene for each question, each with the frame action Stop. The answers are boxes with words on them; name the right one "Right answer" and the others "Wrong answer". Three rules do for any number of questions: *When Right answer is clicked: increase Score by 1; go to the next scene*. *When Wrong answer is clicked: go to the next scene*. *When Again is clicked: start again*. The last scene shows `Score: {Score}`.
 
-What rules do not do yet: objects do not stand on one another or stop at walls (touching is known, but nothing is solid); a number is whole or decimal, there are no words to keep; and there is no "if" inside a rule. These are for the written language, the next step.
+**Lesson: a platform game** (the example **Game: platform**).
+
+1. Draw the ground and three platforms, each a rectangle, and give each **Is Solid**.
+2. Draw the hero, name it "Hero", and give it **Walk with the Arrow Keys** and **Fall and Jump**. Test it: it walks, jumps, lands on the platforms and bumps its head under them.
+3. Put a coin over each platform; name each "Coin". Rule: *When Hero touches Coin: increase Score by 1; remove Coin*.
+4. Draw an enemy on the ground, name it "Enemy" and give it **Go Back and Forth**. Rule: *When Hero touches Enemy: decrease Lives by 1; put Hero at 20, 262* (where the hero started; its X and Y are in Properties).
+5. Draw a door and name it "Door". Rule: *When Hero touches Door*, **Only if** Score is more than 2: *go to scene 2*.
+6. Rule: *When Lives goes below 1: go to scene 3*. Scene 2 says "Well done", scene 3 "Game over"; each has a box named "Again" and the frame action Stop.
+
+**Lesson: a space shooter** (the example **Game: space shooter**).
+
+1. Draw the ship at the bottom, name it "Ship", and give it **Walk with the Arrow Keys** and **Fall and Jump** with a jump speed of 0.
+2. Draw one bullet, name it "Bullet", and give it **Keep Going** with direction 90 (up). Rule: *When the film starts: hide Bullet*.
+3. Rule: *When the Space key is pressed: make a copy of Bullet at Ship*. Rule: *When Bullet touches the top edge of the stage: remove Bullet*.
+4. Draw four aliens, each named "Alien", each higher than the one before, and give each **Fall and Jump** with a small pull (22) and a jump speed of 0.
+5. Rule: *When Bullet touches Alien: increase Score by 1; remove Bullet; put Alien at the top, at random; make Alien faster by 6 percent*.
+6. Rule: *When Alien touches the bottom edge of the stage: decrease Lives by 1; put Alien at the top, at random*. Rule: *When Lives goes below 1: go to scene 2*.
+
+What rules do not do yet: a moving platform does not carry what stands on it; touching goes by boxes, except for ellipses; a number is whole or decimal, there are no words to keep; a rule has one "only if" and no "otherwise". Levels larger than the stage, a camera and a character with several animations belong to a game studio, not to rules.
 
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 
@@ -335,4 +358,4 @@ What rules do not do yet: objects do not stand on one another or stop at walls (
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has twelve ready films, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, three games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has fourteen ready films, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.

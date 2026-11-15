@@ -506,19 +506,59 @@ impl Workspace {
                 let now = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(index)).map(|step| step.kind);
                 crate::rules::STEPS.into_iter().map(|kind| item(t(kind.name()).into(), now == Some(kind), cx, Box::new(move |this, _, _| this.set_rule_step(index, kind)))).collect()
             }
-            Combo::RuleStepPick(index) => {
+            Combo::RuleStepPick(index, second) => {
                 let step = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.steps.get(index)).cloned();
                 step.as_ref()
-                    .and_then(|step| step.kind.needs().0)
+                    .and_then(|step| if second { step.kind.needs().1 } else { step.kind.needs().0 })
                     .map_or_else(Vec::new, |pick| self.rule_choices(pick))
                     .into_iter()
                     .map(|(value, name)| {
-                        let chosen = step.as_ref().is_some_and(|step| step.a == value);
+                        let chosen = step.as_ref().is_some_and(|step| if second { step.b == value } else { step.a == value });
                         item(name.into(), chosen, cx, Box::new(move |this, _, _| {
                             let value = value.clone();
                             this.edit_rule(|rule| {
                                 if let Some(step) = rule.steps.get_mut(index) {
-                                    step.a = value;
+                                    if second {
+                                        step.b = value;
+                                    } else {
+                                        step.a = value;
+                                    }
+                                }
+                            });
+                        }))
+                    })
+                    .collect()
+            }
+            Combo::RuleIf => {
+                // "Always", then every number: picking one makes the rule wait for it as well.
+                let now = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.when.as_ref()).map(|only| only.number.clone());
+                std::iter::once((None, t("always").to_string()))
+                    .chain(self.rule_choices(crate::rules::Pick::Variable).into_iter().map(|(value, name)| (Some(value), name)))
+                    .map(|(value, name)| {
+                        let chosen = now == value;
+                        item(name.into(), chosen, cx, Box::new(move |this, _, _| {
+                            let value = value.clone();
+                            this.edit_rule(|rule| {
+                                rule.when = value.map(|number| match rule.when.take() {
+                                    Some(only) => crate::rules::Condition { number, ..only },
+                                    None => crate::rules::Condition { number, how: ">".to_string(), value: 0.0 },
+                                });
+                            });
+                        }))
+                    })
+                    .collect()
+            }
+            Combo::RuleIfHow => {
+                let now = self.ed.doc.rules.get(self.rule_picked).and_then(|rule| rule.when.as_ref()).map(|only| only.how.clone());
+                self.rule_choices(crate::rules::Pick::Condition)
+                    .into_iter()
+                    .map(|(value, name)| {
+                        let chosen = now.as_deref() == Some(value.as_str());
+                        item(name.into(), chosen, cx, Box::new(move |this, _, _| {
+                            let value = value.clone();
+                            this.edit_rule(|rule| {
+                                if let Some(only) = rule.when.as_mut() {
+                                    only.how = value;
                                 }
                             });
                         }))
@@ -2233,8 +2273,19 @@ impl Workspace {
                     .when_some(n, |d, unit| d.child(self.field(FieldId::RuleNumber, 50., cx)).child(label(t(unit))))
                     .into_any_element(),
             );
+            // What must also be so: nothing ("always"), or a number held against a value.
+            rows.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(t("Only if:"))))
+                    .child(raised(self.combo(Combo::RuleIf, rule.when.as_ref().map_or_else(|| t("always").to_string(), |only| only.number.clone()), 120., cx)))
+                    .when_some(rule.when.as_ref(), |d, only| d.child(raised(self.combo(Combo::RuleIfHow, choice_name(Pick::Condition, &only.how), 130., cx))).child(self.field(FieldId::RuleIfValue, 50., cx)))
+                    .into_any_element(),
+            );
             for (index, step) in rule.steps.iter().enumerate() {
-                let (a, x, y) = step.kind.needs();
+                let (a, b, x, y) = step.kind.needs();
                 rows.push(
                     div()
                         .flex()
@@ -2242,7 +2293,8 @@ impl Workspace {
                         .gap_1()
                         .child(div().w(px(50.)).font_weight(FontWeight::BOLD).child(label(if index == 0 { t("Do:") } else { "" })))
                         .child(raised(self.combo(Combo::RuleStep(index), t(step.kind.name()), 230., cx)))
-                        .when_some(a, |d, pick| d.child(raised(self.combo(Combo::RuleStepPick(index), shown(pick, &step.a), 120., cx))))
+                        .when_some(a, |d, pick| d.child(raised(self.combo(Combo::RuleStepPick(index, false), shown(pick, &step.a), 120., cx))))
+                        .when_some(b, |d, pick| d.child(label(t("at:"))).child(raised(self.combo(Combo::RuleStepPick(index, true), shown(pick, &step.b), 120., cx))))
                         .when_some(x, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, false), 50., cx)))
                         .when_some(y, |d, (name, _)| d.child(label(t(name))).child(self.field(FieldId::RuleStep(index, true), 50., cx)))
                         .child(div().flex_1())

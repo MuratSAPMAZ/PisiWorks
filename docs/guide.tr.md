@@ -259,8 +259,9 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 | Ok Tuşlarıyla Yürü | İzleyen ok tuşlarıyla hareket ettirir; sahnenin dışına çıkmaz | Hız |
 | Düş ve Zıpla | Sahnenin alt kenarına düşer; Yukarı ok ya da Boşluk zıplatır | Çekim, zıplama hızı (0: zıplamaz) |
 | Sürüklenebilir | İzleyen fareyle sürükler | |
+| Katı | Yürüyen ya da düşen hiçbir şey içinden geçemez: yanında durur, üstünde ayakta kalır, altına başını çarpar | |
 
-İlk dokuzu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son dördü izleyene yanıt verir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
+İlk dokuzu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son beşi izleyenle ilgilidir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
 
 *İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
 
@@ -280,7 +281,11 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 | Şu kadar saniye sonra | Bir kez |
 | Bir sayı bir değere gelince | O değer olunca, onu geçince ya da altına inince |
 
-- *Eylem Ekle* yapılacakları listeler: sayıyı değiştir ya da ayarla; nesneyi gizle, göster, taşı, bir konuma, rastgele bir yere ya da üstte rastgele bir yere koy; nesneyi zıplat; ses çal; sonraki sahneye, bir sahneye ya da bir kareye git; filmi durdur ya da oynat; her şeyi durdur; baştan başla. Bir kuralın birkaç eylemi olabilir; sırayla yapılır.
+- *Eylem Ekle* yapılacakları listeler: sayıyı değiştir, ayarla ya da rastgele yap; nesneyi gizle, göster, taşı, bir konuma, rastgele bir yere ya da üstte rastgele bir yere koy; bir nesnenin kopyasını başka bir nesnenin yerinde oluştur; nesneyi sil; nesneyi hızlandır ya da yavaşlat; nesneyi zıplat; ses çal; sonraki sahneye, bir sahneye ya da bir kareye git; filmi durdur ya da oynat; her şeyi durdur; baştan başla. Bir kuralın birkaç eylemi olabilir; sırayla yapılır.
+- *Koşul.* Olayın altındaki **Koşul**, bir sayıyı bir değerle karşılaştırır: "Kahraman nesnesi Kapı nesnesine değince, Puan sayısı 2 değerinden büyükse". Kural ancak bu da doğruysa izlenir.
+- *Kopyalar.* **Nesnenin kopyasını oluştur**, aynı adda ve aynı davranışlarda bir nesneyi ikinci bir nesnenin olduğu yerde oluşturur: geminin olduğu yerde bir mermi. Tek bir mermi çizin ve film başlayınca gizleyin; her atış onun bir kopyasıdır. **Nesneyi sil** bir kopyayı tümüyle kaldırır; başka bir nesneyi film baştan başlayana kadar gizler.
+- *Hızlandırma.* **Nesneyi hızlandır**, nesnenin kendiliğinden yaptığı her şeyi çabuklaştırır: düşmeyi, gitmeyi, dönmeyi. Oyunun gittikçe zorlaşması böyle sağlanır.
+- *Değme.* İki nesne, kutuları buluşunca değmiş olur; döndürülmemiş bir elips kutusuyla değil, kendi çizgisiyle hesaba katılır. Katı bir nesnenin üstünde duran şey ona değiyordur.
 - *Hangi nesne?* "Elma nesnesi Sepet nesnesine değince: Elma nesnesini gizle" kuralında gizlenen, sepete değen elmadır; bütün elmalar değil.
 - *Sayılar.* **Yeni Sayı** adı ve başlangıç değeri olan bir sayı oluşturur: puan, can, süre. İçinde süslü ayraçla adı geçen bir yazı onu filmde gösterir: Metin aracıyla `Puan: {Puan}` yazın.
 - *Bir şey bir kez olur.* Kural bir şey olduğu anda izlenir, sürdüğü sürece değil: yerde duran elma yere bir kez değmiştir.
@@ -292,17 +297,35 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 2. Üste bir elma çizin, adını "Elma" yapın. Ona çekimi küçük (70), zıplama hızı 0 olan **Düş ve Zıpla** verin. İkinci elma için kopyalayıp daha yukarı koyun.
 3. **Kurallar ve Sayılar**'da iki sayı oluşturun: başlangıcı 0 olan Puan ve başlangıcı 5 olan Can. Sahneye `Puan: {Puan}` ve `Can: {Can}` yazın.
 4. Kural: *Bir nesne ötekine değince*, Elma, Sepet. Eylemler: *Sayıyı değiştir*, Puan, 1; *Nesneyi üstte rastgele bir yere koy*, Elma.
-5. Kural: *Bir nesne sahnenin kenarına değince*, Elma, alt kenarına. Eylemler: *Sayıyı değiştir*, Can, −1; *Nesneyi üstte rastgele bir yere koy*, Elma.
+5. Kural: *Bir nesne sahnenin kenarına değince*, Elma, alt kenarına. Eylemler: *Sayıyı değiştir*, Can, −1 (cümle "Can sayısını 1 azalt" diye okunur); *Nesneyi üstte rastgele bir yere koy*, Elma.
 6. "Oyun bitti" yazan ikinci bir sahne ekleyin; içine "Yeniden" adlı bir kutu koyun. İki sahnenin de kare eylemini **Durdur** yapın.
 7. Kural: *Bir sayı bir değere gelince*, Can, altına inince, 1. Eylem: *Sahneye git*, 2.
 8. Kural: *Bir nesneye tıklanınca*, Yeniden. Eylem: *Baştan başla*.
 9. Ctrl+Enter.
 
-**Ders: hedef vurma.** "Hedef" adlı üç daire; her birinin kendi davranışı var (Git Gel, İn Çık, Sürekli Git). Sayılar: Puan 0 ve Süre 20. Kurallar: *Hedef nesnesine tıklanınca: Puan sayısını 1 değiştir; Hedef nesnesini rastgele bir yere koy*. *Her 1 saniyede bir: Süre sayısını −1 değiştir*. *Süre sayısı 1 değerinin altına inince: 2. sahneye git*.
+**Ders: hedef vurma.** "Hedef" adlı üç daire; her birinin kendi davranışı var (Git Gel, İn Çık, Sürekli Git). Sayılar: Puan 0 ve Süre 20. Kurallar: *Hedef nesnesine tıklanınca: Puan sayısını 1 artır; Hedef nesnesini rastgele bir yere koy*. *Her 1 saniyede bir: Süre sayısını 1 azalt*. *Süre sayısı 1 değerinin altına inince: 2. sahneye git*.
 
-**Ders: bilgi yarışması.** Her soru için bir sahne; her birinin kare eylemi Durdur. Yanıtlar üzerinde yazı olan kutulardır; doğru olanın adını "Doğru", ötekilerin adını "Yanlış" yapın. Kaç soru olursa olsun üç kural yeter: *Doğru nesnesine tıklanınca: Puan sayısını 1 değiştir; sonraki sahneye git*. *Yanlış nesnesine tıklanınca: sonraki sahneye git*. *Yeniden nesnesine tıklanınca: baştan başla*. Son sahne `Puan: {Puan}` gösterir.
+**Ders: bilgi yarışması.** Her soru için bir sahne; her birinin kare eylemi Durdur. Yanıtlar üzerinde yazı olan kutulardır; doğru olanın adını "Doğru", ötekilerin adını "Yanlış" yapın. Kaç soru olursa olsun üç kural yeter: *Doğru nesnesine tıklanınca: Puan sayısını 1 artır; sonraki sahneye git*. *Yanlış nesnesine tıklanınca: sonraki sahneye git*. *Yeniden nesnesine tıklanınca: baştan başla*. Son sahne `Puan: {Puan}` gösterir.
 
-Kuralların henüz yapmadıkları: nesneler birbirinin üstünde durmaz, duvara takılmaz (değdiği bilinir ama hiçbir şey katı değildir); sayılar tam ya da ondalıklıdır, sözcük saklanmaz; bir kuralın içinde "eğer" yoktur. Bunlar bir sonraki basamağın, yazılı dilin işidir.
+**Ders: platform oyunu** (**Oyun: platform** örneği).
+
+1. Zemini ve üç platformu birer dikdörtgen olarak çizin; her birine **Katı** verin.
+2. Kahramanı çizin, adını "Kahraman" yapın, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin. Deneyin: yürür, zıplar, platformlara iner, altlarına başını çarpar.
+3. Her platformun üstüne bir altın koyun; hepsinin adı "Altın" olsun. Kural: *Kahraman nesnesi Altın nesnesine değince: Puan sayısını 1 artır; Altın nesnesini sil*.
+4. Zemine bir düşman çizin, adını "Düşman" yapın, ona **Git Gel** verin. Kural: *Kahraman nesnesi Düşman nesnesine değince: Can sayısını 1 azalt; Kahraman nesnesini 20, 262 konumuna koy* (kahramanın başladığı yer; X ve Y değerleri Özellikler'de yazar).
+5. Bir kapı çizin, adını "Kapı" yapın. Kural: *Kahraman nesnesi Kapı nesnesine değince*, **Koşul** Puan, büyükse, 2: *2. sahneye git*.
+6. Kural: *Can sayısı 1 değerinin altına inince: 3. sahneye git*. 2. sahnede "Aferin", 3. sahnede "Oyun bitti" yazar; ikisinde de "Yeniden" adlı bir kutu ve Durdur kare eylemi vardır.
+
+**Ders: uzay atışı** (**Oyun: uzay atışı** örneği).
+
+1. Gemiyi alta çizin, adını "Gemi" yapın, ona **Ok Tuşlarıyla Yürü** ve zıplama hızı 0 olan **Düş ve Zıpla** verin.
+2. Tek bir mermi çizin, adını "Mermi" yapın, ona yönü 90 (yukarı) olan **Sürekli Git** verin. Kural: *Film başlayınca: Mermi nesnesini gizle*.
+3. Kural: *Boşluk tuşuna basılınca: Mermi nesnesinin kopyasını Gemi nesnesinin yerinde oluştur*. Kural: *Mermi nesnesi sahnenin üst kenarına değince: Mermi nesnesini sil*.
+4. Dört uzaylı çizin; hepsinin adı "Uzaylı" olsun, her biri bir öncekinden daha yukarıda dursun. Her birine çekimi küçük (22), zıplama hızı 0 olan **Düş ve Zıpla** verin.
+5. Kural: *Mermi nesnesi Uzaylı nesnesine değince: Puan sayısını 1 artır; Mermi nesnesini sil; Uzaylı nesnesini üstte rastgele bir yere koy; Uzaylı nesnesini yüzde 6 hızlandır*.
+6. Kural: *Uzaylı nesnesi sahnenin alt kenarına değince: Can sayısını 1 azalt; Uzaylı nesnesini üstte rastgele bir yere koy*. Kural: *Can sayısı 1 değerinin altına inince: 2. sahneye git*.
+
+Kuralların henüz yapmadıkları: hareket eden platform üstündekini taşımaz; değme, elipsler dışında kutulara göre hesaplanır; sayılar tam ya da ondalıklıdır, sözcük saklanmaz; bir kuralın tek koşulu vardır, "değilse" yoktur. Sahneden büyük bölümler, kamera ve birkaç animasyonu olan karakter kuralların değil, bir oyun stüdyosunun işidir.
 
 **Eklem yerinden döndürmek.** Hareket ara doldurması, nesneyi Flash'taki gibi *dönüştürme noktasının* çevresinde döndürür. Bu nokta başlangıçta nesnenin ortasındadır. Taşımak için nesneyi seçin, **Ölçekle** aracını (Q) alın ve kutunun ortasındaki küçük kareyi nesnenin döneceği yere sürükleyin: bir kolun omuz ucuna, bir tekerleğin göbeğine, bir kapının menteşesine. Enter'a basın. Nokta bundan sonra nesneyle birlikte kalır; taşımada, döndürmede ve yeni anahtar karelerde de. Ara doldurma noktayı anahtar kareden anahtar kareye düz götürür, nesne onun çevresinde döner. Noktayı ilk anahtar karede, ötekileri eklemeden önce yerine koyun. Bir grup ya da resim için önce sembole dönüştürün (F8); Flash da her hareket ara doldurması için bunu ister.
 
@@ -337,4 +360,4 @@ Kuralların henüz yapmadıkları: nesneler birbirinin üstünde durmaz, duvara 
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on iki hazır film vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış üç oyun, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on dört hazır film vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış beş oyun, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
