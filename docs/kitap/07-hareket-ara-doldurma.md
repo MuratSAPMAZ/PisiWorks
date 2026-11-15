@@ -32,6 +32,8 @@ Sen iki anahtar kare verirsin: başlangıç ve bitiş. PisiSahne aradaki bütün
 1. Zaman çizelgesinde 6. kareye tıkla: top yolun ortasında ((2)). Onu oraya sen koymadın.
 2. [[Enter]]'a bas. Top artık kayarak gidiyor.
 
+![Aynı üç anahtar kare, bu kez aralarında ara doldurma var: top kayarak gider.](07-film.png "Oynayan film: kırmızı top yolun üstünde" 660){07-ara-doldurma.html 660x500}
+
 ![((1)) Mavi kareler ara doldurmayı gösterir. ((2)) 6. karede top yolun ortasında. ((3)) Ara doldurmanın ayarları burada belirir.](07-ara-doldurma.png "Zaman çizelgesinde mavi ara doldurma; top iki anahtar karenin ortasında; Yavaşlama ve Tur kutuları")
 
 !why Ne oldu?

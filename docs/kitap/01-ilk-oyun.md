@@ -3,7 +3,7 @@
 > On dakikada, tek satır kod yazmadan, ok tuşlarıyla yürüyen ve zıplayan bir kutu yapacaksın. Yanına bir de durmadan dönen bir kare koyacaksın.
 :: ⏱ 10 dakika | 🎯 İlk kez açanlar için | 🧰 Yalnızca PisiSahne
 
-![Bölümün sonunda elinde bu olacak. Mavi kutuyu ok tuşlarıyla sen yürütüyorsun; yeşil kare kendi kendine dönüyor.](01-sonuc.png "Tarayıcıda oynayan film: mavi kutu havada, yeşil kare dönmüş" 486)
+![Bölümün sonunda elinde bu olacak. Mavi kutuyu ok tuşlarıyla sen yürütüyorsun; yeşil kare kendi kendine dönüyor.](01-sonuc.png "Tarayıcıda oynayan film: mavi kutu havada, yeşil kare dönmüş" 486){01-ilk-oyun.html 660x500}
 
 !goal Bu bölümde öğreneceklerin
 PisiSahne penceresinin bölümlerini tanıyacak, bir şekil çizip ona renk verecek, *davranış* denen hazır hareketleri bir tıkla ekleyecek ve yaptığın filmi tarayıcıda deneyeceksin.

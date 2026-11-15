@@ -3,7 +3,7 @@
 > Bir oyunun aklında tutması gereken şeyler vardır: kaç puan aldın, kaç canın kaldı, kaç saniye geçti. Bunların hepsi birer sayıdır.
 :: ⏱ 20 dakika | 🎯 10. bölümü bitirenler için | 🧰 10. bölümdeki film
 
-![Elma yakala oyununda iki sayı var: Puan ve Can. Bu bölümde ikisini de kurmayı öğreneceksin.](11-film.png "Elma yakala oyunu: solda Puan: 0, sağda Can: 5" 640)
+![Elma yakala oyununda iki sayı var: Puan ve Can. Bu bölümde ikisini de kurmayı öğreneceksin.](11-film.png "Elma yakala oyunu: solda Puan: 0, sağda Can: 5" 640){15-elma.html 640x400}
 
 !goal Bu bölümde öğreneceklerin
 Bir **sayı** tanımlamayı, bir kuralla onu artırıp azaltmayı, ekranda göstermeyi ve sayı bir değere gelince bir şey yaptırmayı öğreneceksin.

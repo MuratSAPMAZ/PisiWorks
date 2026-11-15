@@ -3,7 +3,7 @@
 > Hızlanan, tuşu bırakınca yavaşlayarak duran bir araba. Tekerleri gittiği yol kadar döner; yol altından akar, tepeler uzakta ağır ağır kayar.
 :: ⏱ 45 dakika | 🎯 3. kısmı bitirenler için | 🧰 Örnekler > Araba sürmek
 
-![Bitmiş film. Araba ekranda yerinde durur; hareket eden dünyadır.](20-film.png "Araba sürmek: kırmızı araba, yol çizgileri, çalılar, tepeler, bulutlar ve güneş" 720)
+![Bitmiş film. Araba ekranda yerinde durur; hareket eden dünyadır.](20-film.png "Araba sürmek: kırmızı araba, yol çizgileri, çalılar, tepeler, bulutlar ve güneş" 720){20-araba.html 720x360}
 
 !goal Bu derste kullanacakların
 Dört yeni şey: **Teker Gibi Yuvarlan**, bir nesneyi ötekine **bağlamak**, hızlanıp yavaşlayan hareket ve **kamera**. Hepsi bu derste, tek bir arabada birleşiyor.

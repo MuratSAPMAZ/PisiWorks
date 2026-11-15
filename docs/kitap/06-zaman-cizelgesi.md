@@ -48,6 +48,8 @@ Bir **anahtar kare**, "bu karede nesneler tam olarak şöyle dursun" dediğin ka
 
 Top yarım saniye solda bekler, birden yukarı sıçrar, yarım saniye sonra sağa atlar. Kaymaz, **zıplar**: çünkü aradaki kareleri biz çizmedik. Çizgi filmlerin eski yöntemi budur: her kareyi tek tek çizmek.
 
+![Üç anahtar kare, aralarında hiçbir şey yok: top bir yerden öbürüne atlar.](06-film.png "Oynayan film: kırmızı top sahnede" 660){06-anahtar-kare.html 660x500}
+
 ### 5. Soğan zarı: bir önceki kareyi gör
 
 1. Zaman çizelgesinin altındaki {{Soğan Zarı}} kutusunu işaretle.

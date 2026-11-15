@@ -3,7 +3,7 @@
 > Zıplayan bir kahraman, toplanacak üç altın, nöbet tutan bir düşman ve yalnızca bütün altınlar toplanınca açılan bir kapı.
 :: ⏱ 50 dakika | 🎯 3. kısmı bitirenler için | 🧰 Örnekler > Oyun: platform
 
-![Bitmiş oyun.](17-film.png "Platform oyunu: kahraman, üç platform, altınlar, düşman ve kapı" 640)
+![Bitmiş oyun.](17-film.png "Platform oyunu: kahraman, üç platform, altınlar, düşman ve kapı" 640){17-platform.html 640x400}
 
 !goal Bu derste kullanacakların
 Katı zemin ve platformlar, toplanınca silinen nesneler, kahramanı başa döndürme, **koşullu** bir kural (kapı) ve iki ayrı bitiş sahnesi.

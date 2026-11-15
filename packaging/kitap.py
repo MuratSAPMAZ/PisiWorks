@@ -5,7 +5,9 @@
 
 The chapters are the files docs/kitap/NN-name.md, in the order of their names, and
 their pictures are in docs/kitap/img/. Each chapter becomes a page, and index.html
-lists them by part. With --tek the pictures are written into the pages themselves,
+lists them by part. The book is built twice over: once with pictures only, and once
+(the pages named -canli) with the films themselves, playing, where a picture has one:
+the films are in docs/kitap/film/, published from PisiSahne. With --tek the pictures are written into the pages themselves,
 so that a page is one file that can be sent or opened anywhere.
 
 A chapter is written in a small Markdown of its own:
@@ -19,6 +21,8 @@ A chapter is written in a small Markdown of its own:
     - A point             - [ ] A thing to try
     | a | b |             a table; its first row is the head
     ![Caption](name.png "what the picture shows" 600)
+    ![Caption](name.png "what it shows" 600){name.html 660x500}
+                          a picture that, in the live book, is the film itself
     !goal Title           a box, until the next empty line; also !why !stuck !teacher !note
     ```                   lines shown as they are written
 
@@ -66,6 +70,9 @@ ol.steps > li::before { content: counter(step); position: absolute; left: 0; top
 figure { margin: 16px 0 22px; }
 figure img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 8px rgba(28, 36, 56, .12); }
 figcaption { font-size: 15px; color: var(--dim); margin-top: 6px; }
+figure.live iframe { display: block; width: 100%; height: auto; border: 2px solid var(--blue); border-radius: 8px; background: #222; box-shadow: 0 2px 8px rgba(28, 36, 56, .12); }
+figure.live .play { display: block; color: var(--blue); font-weight: 700; }
+nav.top .switch { font-size: 14px; }
 .n { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--orange); color: #fff; font-size: 13px; font-weight: 700; vertical-align: 2px; }
 kbd { font: inherit; font-size: 15px; background: #f4f6fa; border: 1px solid var(--line); border-bottom-width: 3px; border-radius: 6px; padding: 0 7px; white-space: nowrap; }
 code { background: #eef2f7; padding: 1px 5px; border-radius: 4px; font: 15px "DejaVu Sans Mono", "Liberation Mono", monospace; }
@@ -100,8 +107,8 @@ def inline(text):
 
 
 class Chapter:
-    def __init__(self, path, embed):
-        self.path, self.embed = path, embed
+    def __init__(self, path, embed, live=False):
+        self.path, self.embed, self.live = path, embed, live
         self.part, self.title, self.lead = "", path.stem, ""
         self.body = self.read(path.read_text(encoding="utf-8").splitlines())
 
@@ -158,11 +165,17 @@ class Chapter:
                 out.append(f"<h2>{inline(line[3:])}</h2>")
             elif line.startswith("!["):
                 close()
-                found = re.match(r'!\[(.*)\]\((\S+)(?: "([^"]*)")?(?: (\d+))?\)$', line)
+                found = re.match(r'!\[(.*)\]\((\S+)(?: "([^"]*)")?(?: (\d+))?\)(?:\{(\S+) (\d+)x(\d+)\})?$', line)
                 if not found:
                     sys.exit(f"{self.path.name}: a picture is written wrongly: {line}")
-                caption, name, alt, width = found.groups()
+                caption, name, alt, width, film, wide, high = found.groups()
                 size = f' width="{width}"' if width else ""
+                if film and not (SOURCE / "film" / film).exists():
+                    sys.exit(f"{self.path.name}: there is no film {film}")
+                if film and self.live:
+                    # The film itself, in a frame of its own shape; a click gives it the keyboard.
+                    out.append(f'<figure class="live"><iframe src="film/{film}" title="{html.escape(alt or caption)}" style="aspect-ratio: {wide} / {high}; max-width: {wide}px" loading="lazy"></iframe><figcaption>{inline(caption)} <span class="play">▶ Bu bir resim değil, filmin kendisi: üstüne tıkla ve oyna.</span></figcaption></figure>')
+                    continue
                 out.append(f'<figure><img src="{self.picture(name)}" alt="{html.escape(alt or caption)}"{size}><figcaption>{inline(caption)}</figcaption></figure>')
             elif line.startswith("!") and line[1:].split(" ", 1)[0] in BOXES:
                 close()
@@ -226,34 +239,48 @@ def page(title, body):
     return f'<!doctype html>\n<html lang="tr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{html.escape(title)}</title>\n<style>{CSS}</style>\n</head>\n<body>\n<main>\n{body}\n</main>\n</body>\n</html>\n'
 
 
-def build(out, embed):
-    out.mkdir(parents=True, exist_ok=True)
+def edition(out, embed, live):
+    """One way of the book: with pictures only, or with the films playing. The pages of the second are named -canli."""
+    mark = "-canli" if live else ""
     files = sorted(SOURCE.glob("[0-9]*.md"))
-    chapters = [Chapter(file, embed) for file in files]
+    chapters = [Chapter(file, embed, live) for file in files]
+    other = "Resimli sürüm" if live else "Canlı örnekli sürüm"
+    switch = lambda stem: "" if embed else f'<a class="switch" href="{stem}{"" if live else "-canli"}.html">{other}</a>'
     for number, chapter in enumerate(chapters, 1):
         before = chapters[number - 2] if number > 1 else None
         after = chapters[number] if number < len(chapters) else None
-        link = lambda other, text: f'<a href="{other.path.stem}.html">{text}</a>' if other else "<span></span>"
-        top = f'<nav class="top"><a href="index.html">PisiSahne Kitabı</a><span>{html.escape(chapter.part)}</span></nav>'
+        link = lambda to, text: f'<a href="{to.path.stem}{mark}.html">{text}</a>' if to else "<span></span>"
+        top = f'<nav class="top"><a href="index{mark}.html">PisiSahne Kitabı</a><span>{html.escape(chapter.part)}</span>{switch(chapter.path.stem)}</nav>'
         bottom = '<nav class="bottom">' + link(before, f"← {html.escape(before.title)}" if before else "") + link(after, f"Sıradaki: {html.escape(after.title)} →" if after else "") + "</nav>"
         head = f'<p class="chapter">Bölüm {number}</p><h1>{inline(chapter.title)}</h1>' + (f'<p class="lead">{inline(chapter.lead)}</p>' if chapter.lead else "")
-        (out / f"{chapter.path.stem}.html").write_text(page(f"{chapter.title} – PisiSahne Kitabı", top + head + chapter.body + bottom), encoding="utf-8")
+        (out / f"{chapter.path.stem}{mark}.html").write_text(page(f"{chapter.title} – PisiSahne Kitabı", top + head + chapter.body + bottom), encoding="utf-8")
     # The contents: the chapters under their parts.
-    listing, part = ['<p class="chapter">PisiSahne</p><h1>PisiSahne Kitabı</h1><p class="lead">Animasyon ve oyun yapmayı adım adım, resimlerle anlatan kitap. Her bölüm bir ders saatine sığar ve bir önceki bölümün bıraktığı yerden devam eder.</p>', '<div class="parts">'], None
+    about = "Animasyon ve oyun yapmayı adım adım, resimlerle anlatan kitap. Her bölüm bir ders saatine sığar ve bir önceki bölümün bıraktığı yerden devam eder."
+    note = "Bu sürümde örnekler resim değil, filmin kendisidir: üstüne tıklayıp oynayabilirsin. Yazdırmak için resimli sürümü kullan." if live else "Bu sürümde örnekler resimdir; yazdırmaya uygundur. Canlı örnekli sürümde aynı örnekler oynanabilir."
+    listing, part = [f'<nav class="top"><span>PisiSahne</span>{switch("index")}</nav><h1>PisiSahne Kitabı</h1><p class="lead">{about}</p><div class="box note"><b>{"Canlı örnekli sürüm" if live else "Resimli sürüm"}</b><p>{note}</p></div>', '<div class="parts">'], None
     for number, chapter in enumerate(chapters, 1):
         if chapter.part != part:
             if part is not None:
                 listing.append("</ol>")
             part = chapter.part
             listing.append(f"<h2>{html.escape(part)}</h2><ol>")
-        listing.append(f'<li><a href="{chapter.path.stem}.html"><b>{number}. {html.escape(chapter.title)}</b></a><span>{inline(chapter.lead)}</span></li>')
+        listing.append(f'<li><a href="{chapter.path.stem}{mark}.html"><b>{number}. {html.escape(chapter.title)}</b></a><span>{inline(chapter.lead)}</span></li>')
     listing.append("</ol></div>")
-    (out / "index.html").write_text(page("PisiSahne Kitabı", "\n".join(listing)), encoding="utf-8")
+    (out / f"index{mark}.html").write_text(page("PisiSahne Kitabı", "\n".join(listing)), encoding="utf-8")
+    return len(chapters)
+
+
+def build(out, embed):
+    out.mkdir(parents=True, exist_ok=True)
+    count = edition(out, embed, False)
     if not embed:
-        (out / "img").mkdir(exist_ok=True)
-        for picture in (SOURCE / "img").glob("*.png"):
-            (out / "img" / picture.name).write_bytes(picture.read_bytes())
-    print(f"{len(chapters)} chapters in {out}")
+        # The live book stands beside the other and shares its pictures; a page that is one file has no films.
+        edition(out, embed, True)
+        for folder, kind in (("img", "*.png"), ("film", "*.html")):
+            (out / folder).mkdir(exist_ok=True)
+            for file in (SOURCE / folder).glob(kind):
+                (out / folder / file.name).write_bytes(file.read_bytes())
+    print(f"{count} chapters in {out}")
 
 
 if __name__ == "__main__":

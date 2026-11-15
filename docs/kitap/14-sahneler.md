@@ -3,7 +3,7 @@
 > Gerçek bir oyunun birden çok ekranı vardır: bir giriş ekranı, oyunun kendisi, bir "oyun bitti" ekranı. PisiSahne'de her ekran bir sahnedir.
 :: ⏱ 25 dakika | 🎯 12. bölümü bitirenler için | 🧰 Örnekler > Oyun: bilgi yarışması
 
-![Bilgi yarışmasının ilk sahnesi. Her soru ayrı bir sahne; son sahne sonucu gösterir.](14-soru.png "Bilgi yarışması: Örümceğin kaç bacağı vardır sorusu ve üç yanıt düğmesi" 670)
+![Bilgi yarışmasının ilk sahnesi. Her soru ayrı bir sahne; son sahne sonucu gösterir.](14-soru.png "Bilgi yarışması: Örümceğin kaç bacağı vardır sorusu ve üç yanıt düğmesi" 670){19-yarisma.html 640x400}
 
 !goal Bu bölümde öğreneceklerin
 Sahne eklemeyi, bir sahnede beklemeyi (**Durdur**), kuralla sahne değiştirmeyi ve oyunu baştan başlatmayı öğreneceksin. Bu bölümden sonra başı ve sonu olan tam bir oyun yapabilirsin.

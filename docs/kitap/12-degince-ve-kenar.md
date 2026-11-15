@@ -3,6 +3,8 @@
 > Oyunların çoğu iki şeyin birbirine değmesiyle ilgilidir: sepet elmayı yakalar, top duvara çarpar, kahraman düşmana dokunur. Bu bölümde değmeyi ve sahnenin kenarını olay olarak kullanacaksın.
 :: ⏱ 25 dakika | 🎯 11. bölümü bitirenler için | 🧰 Örnekler > Oyun: elma yakala
 
+![Bu bölümde kurallarını okuyacağın oyun.](15-film.png "Elma yakala oyunu" 640){15-elma.html 640x400}
+
 !goal Bu bölümde öğreneceklerin
 **Bir nesne ötekine değince** ve **bir nesne sahnenin kenarına değince** olaylarını, bir nesneyi yeniden yukarı göndermeyi ve hazır bir oyunun kurallarını okumayı öğreneceksin.
 

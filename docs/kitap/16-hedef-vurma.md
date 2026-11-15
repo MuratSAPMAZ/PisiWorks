@@ -3,7 +3,7 @@
 > Panayırdaki atış oyunu. Hedefler hareket eder, sen fareyle tıklarsın. Süre 20 saniye.
 :: ⏱ 35 dakika | 🎯 3. kısmı bitirenler için | 🧰 Örnekler > Oyun: hedef vurma
 
-![Bitmiş oyun.](16-film.png "Hedef vurma: dört hareketli hedef, puan ve geri sayan süre" 640)
+![Bitmiş oyun.](16-film.png "Hedef vurma: dört hareketli hedef, puan ve geri sayan süre" 640){16-hedef.html 640x400}
 
 !goal Bu derste kullanacakların
 Tıklama olayı, geri sayan bir saat (her saniyede bir), her hedefe ayrı bir davranış, rastgele yere koyma ve patlama kopyası.

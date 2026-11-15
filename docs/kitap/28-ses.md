@@ -20,7 +20,7 @@ Bir ses dosyasını filme eklemeyi, kuralla ses çalmayı, bir kareye ses bağla
 1. Zaman çizelgesinin altındaki {{Ses İçe Aktar…}} düğmesine tıkla.
 2. Bir ses dosyası seç. **MP3**, **OGG** ve **WAV** dosyaları kabul edilir.
 
-Ses filmin içine girer ve dosyanın adıyla anılır: `cin.wav` dosyası **cin** adında bir ses olur.
+Ses filmin içine girer ve dosyanın tam adıyla, uzantısı da içinde, anılır: `cin.wav` dosyası **cin.wav** adında bir ses olur. Kurallarda da bu adı kullanırsın: `cin.wav sesini çal`.
 
 !note Ses bulamadıysan
 Hazır oyun örnekleri beş ses taşır: **çın**, **vız**, **bum**, **eyvah** ve **zafer**. Bir oyun örneğini açıp üzerinde çalışırsan bu sesleri hemen kullanabilirsin.
@@ -30,7 +30,7 @@ Hazır oyun örnekleri beş ses taşır: **çın**, **vız**, **bum**, **eyvah**
 1. {{Kurallar > Kurallar ve Sayılar…}}'ı aç.
 2. Bir kuralın {{Eylem Ekle}} listesinden {{Ses çal}}'ı seç ve yanındaki listeden sesi seç.
 
-Yazarak: `çın sesini çal`
+Yazarak: `çın sesini çal` (hazır örneklerdeki ses), ya da kendi dosyan için `cin.wav sesini çal`
 
 ```
 Kahraman nesnesi Altın nesnesine değince:
@@ -63,7 +63,7 @@ Yayımlanan filmde ses her tarayıcıda çalar. Programın içinde [[Enter]] ile
 !stuck Takıldıysan
 - **Tarayıcıda ses çıkmıyor.** Tarayıcılar, sen sayfaya bir kez tıklamadan ses çalmaz. Filme bir kez tıkla.
 - **Ses listesi boş.** Henüz ses içe aktarmadın.
-- **"… adında bir ses yok" uyarısı.** Yazdığın ad, sesin adıyla aynı değil. Ad, dosya adının uzantısız hâlidir.
+- **"… adında bir ses yok" uyarısı.** Yazdığın ad, sesin adıyla aynı değil. İçe aktarılan sesin adı, dosya adının uzantısıyla birlikte tamamıdır (`cin.wav`). Kurallar penceresindeki ses listesinden seçersen yanlış yazma olasılığı kalmaz.
 - **Ses her sahnede yeniden başlıyor.** Kareye bağlı ses, o kareye her gelişte çalar. Arka plan müziğini yalnızca ilk sahnenin ilk karesine bağla.
 
 ## Sıra sende

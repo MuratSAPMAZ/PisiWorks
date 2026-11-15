@@ -3,7 +3,7 @@
 > Fare üstüne gelince renk değiştiren, basınca çöken gerçek bir düğme. Menüler, "Başla" ekranları ve sahneler arası geçişler için.
 :: ⏱ 25 dakika | 🎯 14. ve 26. bölümleri bitirenler için | 🧰 Örnekler > Düğmeli iki sahne
 
-![İki sahneli bir film: "İleri" düğmesi ikinci sahneye götürür.](27-dugme.png "Birinci sahne yazısı ve altında mavi İleri düğmesi" 670)
+![İki sahneli bir film: "İleri" düğmesi ikinci sahneye götürür.](27-dugme.png "Birinci sahne yazısı ve altında mavi İleri düğmesi" 670){27-dugmeler.html 480x300}
 
 !goal Bu bölümde öğreneceklerin
 Düğme sembolünün durumlarını, hazır düğmeleri kullanmayı, bir düğmeye **eylem** vermeyi ve kural yazmadan sahneler arasında gezinmeyi öğreneceksin.
@@ -16,6 +16,7 @@ Sıradan bir çizime tıklamayı kuralla yakalayabilirsin (10. bölüm). Düğme
 | Yukarıda | Fare uzaktayken: düğmenin normal hâli |
 | Üzerinde | Fare düğmenin üstündeyken |
 | Aşağıda | Düğmeye basılıyken |
+| Aşağıdayken Üzerinde | Seçili kalmış bir düğmenin üstüne gelinince; çoğu düğmede boş bırakılır |
 
 Her durum ayrı bir çizimdir. Genellikle aynı düğmenin biraz daha açık, biraz daha koyu ya da biraz küçültülmüş hâli.
 
@@ -45,7 +46,8 @@ Her durum ayrı bir çizimdir. Genellikle aynı düğmenin biraz daha açık, bi
 | Durdur | Filmi durdurur |
 | Oynat | Filmi oynatmaya devam eder |
 | Kareye git ve oynat / dur | Verdiğin kareye gider |
-| Sahneye git | Verdiğin sahneye geçer |
+| Sahneye Git | Verdiğin sahneye geçer |
+| Adrese Git | Verdiğin internet adresini açar |
 
 Bunun için kural yazmak gerekmez: eylem düğmenin kendisindedir.
 
@@ -63,9 +65,9 @@ Bunun için kural yazmak gerekmez: eylem düğmenin kendisindedir.
 ## Kendi düğmeni yapmak
 
 1. Düğmenin normal hâlini çiz: yuvarlak köşeli bir dikdörtgen ve üstünde bir yazı.
-2. İkisini seç, {{Değiştir > Sembol > Sembole Dönüştür}} ([[F8]]); tür: {{Düğme}}.
+2. İkisini seç, {{Değiştir > Sembol > Sembole Dönüştür}} ([[F8]]). Sonra alttaki {{Sembol Özellikleri}} sekmesinde {{Tür}} listesinden {{Düğme}}'yi seç.
 3. Düğmeye çift tıkla. Şu an **Yukarıda** durumundasın.
-4. Durum listesinden **Üzerinde**'yi seç. Boş gelir. {{Yukarıda Grafiğini Kopyala}} ile normal hâli getir, sonra rengini biraz aç.
+4. Durum listesinden **Üzerinde**'yi seç. Sahne boş gelir ve listenin yanında {{Yukarıda Grafiğini Kopyala}} düğmesi belirir: ona tıkla, normal hâl gelir; sonra rengini biraz aç.
 5. **Aşağıda** için aynısını yap; bu kez rengi koyulaştır ve düğmeyi bir iki piksel aşağı kaydır: basılmış gibi görünür.
 6. **◀** ile dön ve düğmeye bir eylem ver.
 

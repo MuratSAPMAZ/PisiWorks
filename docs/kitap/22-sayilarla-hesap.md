@@ -81,6 +81,8 @@ Koşulun başındaki ad bir sayının adı olmalıdır; işlem, "değerinden" s�
 3. {{Kurallar > Kuralları Yaz…}}'ı aç ve bölümün başındaki resimdeki metni yaz.
 4. {{Uygula ve Test Et}}. Kutuya tıkla: zar atılıyor, puan artıyor, kutu sağa kayıyor.
 
+![Kutuya her tıklayışta zar atılır, puan artar ve kutu 20 piksel sağa kayar.](22-film.png "Oynayan film: mavi kutu" 660){22-hesap.html 660x500}
+
 !stuck Takıldıysan
 - **"… adında bir sayı yok" diyor.** İşlemde kullandığın her adı önce `Sayılar:` altında tanımlamalısın.
 - **Ondalık sayı.** Nokta ile de virgül ile de yazabilirsin: `0.5` ve `0,5` aynıdır.

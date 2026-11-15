@@ -3,7 +3,7 @@
 > Aynı düşmandan yirmi tane lazım; ve hepsinin bacakları kıpırdasın istiyorsun. Sembol, bir çizimi bir kez yapıp her yerde kullanmanın yoludur. Film klibi, kendi küçük animasyonu olan semboldür.
 :: ⏱ 35 dakika | 🎯 7. bölümü bitirenler için | 🧰 Örnekler > Dönen dişliler
 
-![Dönen dişliler: sahnede iki dişli var; ikisi de aynı film klibinin kopyası.](26-disliler.png "Dönen dişliler örneği: büyük ve küçük iki dişli" 670)
+![Dönen dişliler: sahnede iki dişli var; ikisi de aynı film klibinin kopyası.](26-disliler.png "Dönen dişliler örneği: büyük ve küçük iki dişli" 670){26-disliler.html 480x300}
 
 !goal Bu bölümde öğreneceklerin
 Sembolün ne olduğunu, bir çizimi sembole dönüştürmeyi, film klibinin kendi zaman çizelgesini ve sembolü düzenleyip geri dönmeyi öğreneceksin.
@@ -46,8 +46,11 @@ Evet: **Dön** davranışı aynı işi tek tıkla yapar ve dişli için daha kol
 
 1. Yeni bir filmde basit bir kuş çiz: gövde için bir elips, kanat için bir üçgen ya da ince bir elips, gaga, göz.
 2. Hepsini seç.
-3. {{Değiştir > Sembol > Sembole Dönüştür}}'e tıkla ([[F8]]).
-4. Açılan pencerede ad olarak **Kuş** yaz, tür olarak {{Film Klibi}}'ni seç ve onayla.
+3. {{Değiştir > Sembol > Sembole Dönüştür}}'e tıkla ([[F8]]). Seçtiklerin tek bir nesneye dönüşür: bir sembolün kopyası. Pencere açılmaz; sembol önce **Grafik** türünde olur.
+4. Pencerenin altında, Özellikler'in yanındaki {{Sembol Özellikleri}} sekmesine tıkla.
+5. {{Sembol}} kutusuna ((1)) **Kuş** yaz ve [[Enter]]'a bas. {{Tür}} listesinden ((2)) {{Film Klibi}}'ni seç.
+
+![Sembol Özellikleri: ((1)) sembolün adı, ((2)) türü. Baştaki **Ad** kutusu ise bu kopyanın, kuralların tanıdığı adıdır.](26-tur.png "Sembol Özellikleri sekmesi; Sembol kutusu ve Tür listesi işaretli")
 
 ### 2. Klibin içinde kanadı oynat
 

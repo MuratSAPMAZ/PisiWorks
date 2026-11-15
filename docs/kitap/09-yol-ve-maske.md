@@ -28,6 +28,8 @@ Ok, dümdüz gitmek yerine kavisli çizgiyi izliyor ve gittiği yöne dönüyor.
 
 ![((1)) Üstte kılavuz katmanı, altında ona bağlı "Ok" katmanı (adı içeri girintili). ((2)) Ok, çizginin üstünde ve çizginin yönüne dönük.](09-kilavuz.png "Yol boyunca örneği: kılavuz katmanı, kavisli çizgi ve çizgi üstündeki ok")
 
+![Yayımlanan film: ok kavisi izler ve gittiği yöne döner. Kılavuz çizgisi filmde görünmez.](09-yol-film.png "Oynayan film: mavi ok kavisli bir yol izliyor" 520){09-yol.html 520x320}
+
 ### Kendin yap
 
 1. Yeni bir filmde bir ok çiz (sağdaki {{Otomatik Şekiller}} panelinden **Ok**'u sahneye sürükle).
@@ -48,7 +50,7 @@ Kılavuz katmanındaki çizgi bir raydır. Altındaki katmanın ara doldurulan n
 
 1. {{Örnekler > Spot ışığı}}'nı aç ve {{Filmi Test Et}}'e tıkla.
 
-![Yayımlanan film: parlak sarı yazı yalnızca dairenin olduğu yerde görünür. Daire soldan sağa kaydıkça yazı "aydınlanır".](09-maske-film.png "Koyu zeminde soluk PisiSahne yazısı; sol baştaki harf parlak sarı" 520)
+![Yayımlanan film: parlak sarı yazı yalnızca dairenin olduğu yerde görünür. Daire soldan sağa kaydıkça yazı "aydınlanır".](09-maske-film.png "Koyu zeminde soluk PisiSahne yazısı; sol baştaki harf parlak sarı" 520){09-maske.html 520x200}
 
 Sahnede ise şunu görürsün:
 

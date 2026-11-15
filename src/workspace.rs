@@ -1024,9 +1024,10 @@ pub const TIMELINE_CELL: f32 = 11.0;
 /// Where the PisiSahne book is, if it is there: beside the program as the package installs it, or, when the
 /// program is run from its sources, where `packaging/kitap.py` builds it.
 fn book_index() -> Option<std::path::PathBuf> {
-    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.parent()?.join("share/doc/pisiworks/kitap/index.html")));
-    let places = [beside, Some("/usr/share/doc/pisiworks/kitap/index.html".into()), Some(concat!(env!("CARGO_MANIFEST_DIR"), "/target/kitap/index.html").into())];
-    places.into_iter().flatten().find(|place| place.is_file())
+    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.parent()?.join("share/doc/pisiworks/kitap")));
+    let folders = [beside, Some("/usr/share/doc/pisiworks/kitap".into()), Some(concat!(env!("CARGO_MANIFEST_DIR"), "/target/kitap").into())];
+    // The book with its films playing is opened where it is there; the one with pictures only is a link away in it.
+    folders.into_iter().flatten().flat_map(|folder: std::path::PathBuf| [folder.join("index-canli.html"), folder.join("index.html")]).find(|place| place.is_file())
 }
 
 /// A way to put right at once what a piece of advice in Rules as Text is about.

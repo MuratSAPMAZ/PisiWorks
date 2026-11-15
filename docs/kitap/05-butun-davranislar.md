@@ -3,7 +3,7 @@
 > Davranışlar menüsündeki on dokuz hazır hareketi tek tek tanıyacak, hangisinin ne zaman işe yaradığını ve birbirleriyle nasıl birleştiğini göreceksin.
 :: ⏱ 25 dakika | 🎯 1. kısmı bitirenler için | 🧰 Örnekler > Davranışlar
 
-![Davranışlar örneği: sahnedeki her şey tek bir karede duruyor; hiçbirinin anahtar karesi yok, hepsi birer davranışla hareket ediyor.](05-film.png "Davranışlar örneğinin oynayan hâli: dönen güneş, zıplayan top, giden ok, yanıp sönen yazı" 560)
+![Davranışlar örneği: sahnedeki her şey tek bir karede duruyor; hiçbirinin anahtar karesi yok, hepsi birer davranışla hareket ediyor.](05-film.png "Davranışlar örneğinin oynayan hâli: dönen güneş, zıplayan top, giden ok, yanıp sönen yazı" 560){05-davranislar.html 560x300}
 
 !goal Bu bölümde öğreneceklerin
 Davranışların üç ailesini, her birinin sayılarını, davranışı kaldırmayı ve birkaç davranışı aynı nesnede birleştirmeyi öğreneceksin. Bu bölüm bir başvuru bölümüdür: ileride "şunu nasıl yapıyorduk?" dediğinde dönüp bakacağın yer burası.

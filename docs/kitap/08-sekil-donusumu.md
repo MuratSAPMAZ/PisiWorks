@@ -3,7 +3,7 @@
 > Bir kare yavaş yavaş daireye, daire yıldıza dönüşsün. Hareket ara doldurması nesneyi taşır; şekil ara doldurması nesnenin kendisini değiştirir.
 :: ⏱ 15 dakika | 🎯 7. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
 
-![Dört kare, tek dönüşüm.](08-donusum.png "Mavi karenin kırmızı daireye dönüşümünden dört kare")
+![Dört kare, tek dönüşüm.](08-donusum.png "Mavi karenin kırmızı daireye dönüşümünden dört kare"){08-donusum.html 660x500}
 
 !goal Bu bölümde öğreneceklerin
 **Boş anahtar kare** ([[F7]]) ile yeni bir şekil çizmeyi, iki şekil arasına **şekil ara doldurması** koymayı ve hareket ara doldurmasından farkını öğreneceksin.
@@ -46,9 +46,9 @@ Kare köşelerini yuvarlatarak daireye, mavi de mordan geçerek kırmızıya dö
 
 Karmaşık şekillerde PisiSahne hangi köşenin nereye gideceğini yanlış tahmin edebilir; şekil ortada buruşur. O zaman ona yol gösterirsin.
 
-1. İlk karedeyken {{Zaman Çizelgesi > Şekil İpucu Ekle}}'ye tıkla ([[Ctrl]]+[[Shift]]+[[H]]). Şeklin üstünde harfli bir işaret belirir.
-2. İşareti ilk şekilde bir köşeye sürükle.
-3. Son kareye git; aynı harfli işareti, o köşenin dönüşmesini istediğin yere sürükle.
+1. İlk karedeyken {{Zaman Çizelgesi > Şekil İpucu Ekle}}'ye tıkla ([[Ctrl]]+[[Shift]]+[[H]]). Şeklin köşesinde küçük, numaralı sarı bir işaret belirir; zaman çizelgesinin altındaki **İpucu** sayısı bir artar.
+2. İşareti ilk şekilde, izlemek istediğin köşeye sürükle.
+3. Son kareye git; orada aynı numaralı işaret yeşildir. Onu, o köşenin dönüşmesini istediğin yere sürükle.
 
 İlk karedeki işaret sarı, son karedeki yeşildir. Çoğu zaman bir iki ipucu yeter. Hepsini silmek için {{Zaman Çizelgesi > Tüm İpuçlarını Kaldır}}.
 

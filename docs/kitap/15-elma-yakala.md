@@ -3,7 +3,7 @@
 > İlk tam oyunun. Ağaçtan elmalar düşer, sen sepetle yakalarsın. Her elma bir puan; yere düşen her elma bir can götürür.
 :: ⏱ 40 dakika | 🎯 3. kısmı bitirenler için | 🧰 Örnekler > Oyun: elma yakala
 
-![Bitmiş oyun.](15-film.png "Elma yakala: sepet, düşen elma, puan ve can" 640)
+![Bitmiş oyun.](15-film.png "Elma yakala: sepet, düşen elma, puan ve can" 640){15-elma.html 640x400}
 
 !goal Bu derste kullanacakların
 Düş ve Zıpla (düşen elma), Ok Tuşlarıyla Yürü (sepet), değme ve kenar olayları, iki sayı, bir kopya ve iki sahne. Hepsini önceki bölümlerde gördün; burada birleştiriyoruz.

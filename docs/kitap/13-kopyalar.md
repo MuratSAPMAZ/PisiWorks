@@ -3,7 +3,7 @@
 > Bir uzay gemisi yüz mermi atabilir; ama sen yüz mermi çizmezsin. Bir tane çizersin, oyun gerektikçe onun kopyasını çıkarır.
 :: ⏱ 25 dakika | 🎯 12. bölümü bitirenler için | 🧰 Örnekler > Oyun: uzay atışı
 
-![Boşluk tuşuna her basışta geminin önünde yeni bir mermi belirir.](13-film.png "Uzay atışı oyunu: gemi, üstünde sarı bir mermi, yukarıda uzaylı" 640)
+![Boşluk tuşuna her basışta geminin önünde yeni bir mermi belirir.](13-film.png "Uzay atışı oyunu: gemi, üstünde sarı bir mermi, yukarıda uzaylı" 640){18-uzay.html 640x400}
 
 !goal Bu bölümde öğreneceklerin
 **Nesnenin kopyasını oluştur** eylemini, asıl nesneyi gizlemeyi, kopyaları silmeyi ve tuş olayını öğreneceksin.

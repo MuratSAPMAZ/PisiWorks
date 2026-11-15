@@ -3,7 +3,7 @@
 > Kutunun üstüne çıkabileceği platformlar ve sahnede durmadan seken bir top ekleyeceksin. Bunun için tek bir yeni davranış yeter: Katı.
 :: ⏱ 15 dakika | 🎯 1. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
 
-![Bölümün sonunda: kutu platformun üstünde duruyor, kırmızı top duvarlardan ve platformlardan sekiyor.](02-sonuc.png "Tarayıcıda oynayan film: mavi kutu turuncu platformun üstünde, kırmızı kare havada" 634)
+![Bölümün sonunda: kutu platformun üstünde duruyor, kırmızı top duvarlardan ve platformlardan sekiyor.](02-sonuc.png "Tarayıcıda oynayan film: mavi kutu turuncu platformun üstünde, kırmızı kare havada" 634){02-platformlar.html 660x500}
 
 !goal Bu bölümde öğreneceklerin
 Bir şekli **Katı** yaparak zemin ve platform kurmayı, **Kenarlardan Sek** ile kendi kendine dolaşan bir top yapmayı ve bir davranışın sayılarını değiştirmeyi öğreneceksin.

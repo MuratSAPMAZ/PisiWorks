@@ -3,7 +3,7 @@
 > Her sahnede bir soru ve üç yanıt. Doğru yanıt bir puan; sonda toplam puan. Soruları sen yazarsın: matematik, tarih, İngilizce, ne istersen.
 :: ⏱ 35 dakika | 🎯 14. bölümü bitirenler için | 🧰 Örnekler > Oyun: bilgi yarışması
 
-![Bitmiş oyun.](19-film.png "Bilgi yarışması: Soru 1, Örümceğin kaç bacağı vardır, üç yanıt kutusu" 640)
+![Bitmiş oyun.](19-film.png "Bilgi yarışması: Soru 1, Örümceğin kaç bacağı vardır, üç yanıt kutusu" 640){19-yarisma.html 640x400}
 
 !goal Bu derste kullanacakların
 Sahneler, Durdur kare eylemi, tıklama olayı ve "aynı ad, tek kural" fikri. Bu oyunun hiç klavye kullanmaması ve içeriğinin başka derslerden gelebilmesi onu sınıf için çok uygun yapar.

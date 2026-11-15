@@ -3,7 +3,7 @@
 > Davranış "hep şunu yap" der. Kural ise "şu olunca şunu yap" der. Oyunu oyun yapan budur. İlk kuralın: kutuya tıklanınca kutu dönsün.
 :: ⏱ 15 dakika | 🎯 3. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
 
-![Kutuya her tıkladığında kutu 45 derece döner.](10-film.png "Tarayıcıda 45 derece dönmüş mavi kutu" 400)
+![Kutuya her tıkladığında kutu 45 derece döner.](10-film.png "Tarayıcıda 45 derece dönmüş mavi kutu" 400){10-ilk-kural.html 660x500}
 
 !goal Bu bölümde öğreneceklerin
 Bir kuralın iki parçasını (**olay** ve **eylem**), Kurallar penceresini kullanmayı ve kuralın cümle olarak nasıl okunduğunu öğreneceksin. Hiçbir şey yazmayacaksın: her şey listelerden seçilir.

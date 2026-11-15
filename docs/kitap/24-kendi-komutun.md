@@ -77,6 +77,8 @@ Yıldız nesnesine tıklanınca:
 
 Yeni bir şey tanımlamadın; var olan komutu başka değerlerle kullandın.
 
+![Kutuya tıkla: önce yanıp söner, sonra sekiz adımda tam bir tur atar.](24-film.png "Oynayan film: mavi kutu" 660){24-komut.html 660x500}
+
 ## Metnin düzeni
 
 Uzun bir metinde şu sıra okumayı kolaylaştırır:

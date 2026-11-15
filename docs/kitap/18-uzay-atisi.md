@@ -3,7 +3,7 @@
 > Bir uzay gemisi, yukarıdan inen uzaylılar ve boşluk tuşuyla atılan mermiler. Her isabet uzaylıları biraz daha hızlandırır.
 :: ⏱ 45 dakika | 🎯 13. bölümü bitirenler için | 🧰 Örnekler > Oyun: uzay atışı
 
-![Bitmiş oyun.](18-film.png "Uzay atışı: gemi, mermi, uzaylı, gezegen ve yıldızlar" 640)
+![Bitmiş oyun.](18-film.png "Uzay atışı: gemi, mermi, uzaylı, gezegen ve yıldızlar" 640){18-uzay.html 640x400}
 
 !goal Bu derste kullanacakların
 Kopyalar (mermi ve patlama), tuş olayı, iki nesnenin değmesi (mermi ile uzaylı), kenar olayları ve kayan yıldızlardan bir arka plan.

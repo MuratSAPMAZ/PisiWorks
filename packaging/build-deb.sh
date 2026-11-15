@@ -49,6 +49,10 @@ done
 for picture in target/kitap/img/*.png; do
     install -Dm644 "$picture" "$stage/usr/share/doc/pisiworks/kitap/img/$(basename "$picture")"
 done
+# The films the live book plays in its pages.
+for film in target/kitap/film/*.html; do
+    install -Dm644 "$film" "$stage/usr/share/doc/pisiworks/kitap/film/$(basename "$film")"
+done
 install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/examples/solstice-landing.pisi"
 
 # The license, in the form Debian keeps it in.

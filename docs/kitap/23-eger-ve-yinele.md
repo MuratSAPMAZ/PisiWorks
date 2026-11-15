@@ -87,6 +87,8 @@ Tıklamaları say: puan 0 → 1 → 3 → 7 → 15. Dördüncü tıklamada kutu 
 2. {{Kuralları Yaz…}}'ı aç ve yukarıdaki metni, başında `Sayılar:` bölümüyle birlikte yaz.
 3. {{Uygula ve Test Et}}. Kutuya dört kez tıkla ve puanı izle.
 
+![Kutuya tıkla: ilk üç tıklamada adım adım döner, dördüncüde kaybolur.](23-film.png "Oynayan film: mavi kutu dönmüş" 660){23-eger.html 660x500}
+
 !stuck Takıldıysan
 - **"değilse" kırmızı.** `değilse:` kendi `eğer`'i ile aynı girintide olmalı ve hemen onun bloğundan sonra gelmeli.
 - **Yinelenen şeyler bir anda oluyor.** Araya `… saniye bekle` koy.
