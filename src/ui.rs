@@ -141,6 +141,8 @@ impl Workspace {
                     }))
                     .child(t(title))
                     .when(open, |d| {
+                        // The saved commands are files, so their part of the Commands menu is made as it is shown.
+                        let entries: &'static [Entry] = if *title == "Commands" { self.commands_menu(entries) } else { entries };
                         d.child(deferred(
                             self.menu_panel(entries, true, cx).absolute().top(px(MENU_BAR_HEIGHT)).left_0(),
                         ))
@@ -1320,7 +1322,15 @@ impl Workspace {
                     .child(name.clone())
             })
             .collect();
-        div().id("history").size_full().flex().flex_col().overflow_y_scroll().bg(rgb(LIST)).children(rows).into_any_element()
+        // Under the steps, as in Fireworks: the ones that were menu commands can be kept as a command.
+        let save = div().flex().flex_none().justify_end().p_1().child(self.text_button(t("Save Steps as Command..."), self.is_enabled(Cmd::SaveSteps), cx, |this, window, cx| this.run(Cmd::SaveSteps, window, cx)));
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(div().id("history").flex_1().min_h_0().flex().flex_col().overflow_y_scroll().bg(rgb(LIST)).children(rows))
+            .child(save)
+            .into_any_element()
     }
 
     pub(crate) fn align_body(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -1837,6 +1847,9 @@ impl Render for Workspace {
             .children(self.template_dialog_view(window, cx))
             .children(self.template_name_view(cx))
             .children(self.batch_dialog_view(cx))
+            .children(self.commands_dialog_view(cx))
+            .children(self.command_name_view(cx))
+            .children(self.reverse_dialog_view(cx))
             .children(self.animate_dialog_view(cx))
             .children(self.shortcuts_view(cx))
             .children(self.spell_dialog_view(cx))

@@ -3450,6 +3450,72 @@ impl Editor {
         }
     }
 
+    /// Fireworks' Distribute to Layers: each selected object goes to a new layer of its own, named after it.
+    pub fn distribute_to_layers(&mut self) -> usize {
+        let objects = self.selected_in_order();
+        if objects.len() < 2 {
+            return 0;
+        }
+        let ids: Vec<u64> = objects.iter().map(|o| o.id).collect();
+        let page = self.doc.page_mut();
+        for layer in &mut page.layers {
+            layer.objects.retain(|o| !ids.contains(&o.id));
+        }
+        let count = objects.len();
+        for object in objects {
+            let at = page.layers.len();
+            let mut layer = Layer::new(object.name.clone());
+            layer.objects.push(object);
+            page.layers.push(layer);
+            page.active_layer = at;
+            for state in page.inactive_states_mut() {
+                state.objects.insert(at.min(state.objects.len()), Vec::new());
+            }
+        }
+        count
+    }
+
+    /// Hides, or locks, every layer but the active one.
+    pub fn set_other_layers(&mut self, hide: bool) -> bool {
+        let page = self.doc.page_mut();
+        let active = page.active_layer;
+        let mut changed = false;
+        for (index, layer) in page.layers.iter_mut().enumerate() {
+            if index != active {
+                let flag = if hide { &mut layer.visible } else { &mut layer.locked };
+                changed |= *flag != !hide;
+                *flag = !hide;
+            }
+        }
+        changed
+    }
+
+    /// Reverses the order of the states from one to another, both counted from 0 and both included.
+    pub fn reverse_states(&mut self, from: usize, to: usize) -> bool {
+        self.leave_symbol();
+        self.close_groups();
+        let page = self.doc.page_mut();
+        let last = page.states.len() - 1;
+        let (from, to) = (from.min(to).min(last), from.max(to).min(last));
+        if from == to {
+            return false;
+        }
+        // The state on show keeps its objects in the layers: they go into the state for the turn, and come back out.
+        let active = page.active_state;
+        page.states[active].objects = page.layers.iter_mut().map(|l| if l.shared { Vec::new() } else { std::mem::take(&mut l.objects) }).collect();
+        page.states[from..=to].reverse();
+        let active = if (from..=to).contains(&active) { from + to - active } else { active };
+        let loaded = std::mem::take(&mut page.states[active].objects);
+        for (layer, objects) in page.layers.iter_mut().zip(loaded) {
+            if !layer.shared {
+                layer.objects = objects;
+            }
+        }
+        page.active_state = active;
+        self.selection.clear();
+        true
+    }
+
     /// Removes the active layer. The last remaining layer is kept.
     pub fn delete_layer(&mut self) -> bool {
         let page = self.doc.page_mut();
@@ -5096,6 +5162,33 @@ mod tests {
         e.delete_selected();
         assert!(e.leave_symbol());
         assert!(e.doc.symbols[0].objects.is_empty() && e.doc.page().objects().count() == 3);
+    }
+
+    #[test]
+    fn the_ready_document_commands_work_on_layers_and_states() {
+        let mut e = editor();
+        e.selection = vec![100, 102];
+        assert_eq!(e.distribute_to_layers(), 2);
+        let page = e.doc.page();
+        assert_eq!(page.layers.len(), 3);
+        assert_eq!(page.layers[0].objects.iter().map(|o| o.id).collect::<Vec<_>>(), [101]);
+        assert_eq!((page.layers[1].objects[0].id, page.layers[2].objects[0].id), (100, 102));
+        assert_eq!(page.layers[2].name, "r102");
+        assert!(e.set_other_layers(true) && !e.set_other_layers(true));
+        assert_eq!(e.doc.page().layers.iter().map(|l| l.visible).collect::<Vec<_>>(), [false, false, true]);
+        assert!(e.set_other_layers(false));
+        assert_eq!(e.doc.page().layers.iter().map(|l| l.locked).collect::<Vec<_>>(), [true, true, false]);
+        // Three states: the first has the three objects, the others are empty. Turned round, the last has them.
+        e.doc.page_mut().add_state();
+        e.doc.page_mut().add_state();
+        e.set_active_state(0);
+        assert_eq!(e.doc.page().objects().count(), 3);
+        assert!(e.reverse_states(0, 2) && !e.reverse_states(1, 1));
+        let page = e.doc.page();
+        assert_eq!(page.active_state, 2);
+        assert_eq!(page.objects().count(), 3);
+        assert_eq!(page.at_state(0).objects().count(), 0);
+        assert_eq!(page.states.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["State 3", "State 2", "State 1"]);
     }
 
     #[test]

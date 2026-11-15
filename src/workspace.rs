@@ -389,6 +389,9 @@ pub enum FieldId {
     SpellChange,
     NewSymbolName,
     TemplateName,
+    CommandName,
+    /// Reverse State Range: the first state, or the last.
+    ReverseState(bool),
     /// A text of Batch Process: 0 width, 1 height, 2 percentage, 3 prefix, 4 suffix.
     Batch(usize),
     /// A number of the Animate dialog: states, move, direction, scaling, opacity from and to, rotation.
@@ -684,6 +687,16 @@ pub struct Workspace {
     /// Save as Template: the name asked for.
     pub template_name: Option<String>,
     pub batch_dialog: Option<BatchDialog>,
+    /// The saved commands, as the Commands menu lists them.
+    pub saved_commands: Vec<(String, PathBuf)>,
+    /// The menu commands that changed the document, each with the place and the name its step has in the history.
+    pub recorded: Vec<(usize, String, String)>,
+    /// Manage Saved Commands: the command picked in the list.
+    pub commands_dialog: Option<Option<usize>>,
+    /// The name asked for: for the steps being saved as a command, or, with a place in the list, for a saved command being renamed.
+    pub command_name: Option<(String, Option<usize>)>,
+    /// Reverse State Range: the first and the last state, counted from 1.
+    pub reverse_dialog: Option<(u32, u32)>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -965,6 +978,11 @@ impl Workspace {
             template_dialog: None,
             template_name: None,
             batch_dialog: None,
+            saved_commands: crate::commands::saved(),
+            recorded: Vec::new(),
+            commands_dialog: None,
+            command_name: None,
+            reverse_dialog: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2537,6 +2555,13 @@ impl Workspace {
             | Cmd::FlipH | Cmd::FlipV => has_selection,
             Cmd::Filter(_) => self.ed.has_selected_bitmap(),
             Cmd::ConvertToSymbol | Cmd::Animate => has_selection,
+            Cmd::SaveSteps => !self.steps_to_save().is_empty(),
+            Cmd::Ready(ready) => match ready {
+                crate::menus::ReadyCmd::Grayscale | crate::menus::ReadyCmd::Sepia => has_selection,
+                crate::menus::ReadyCmd::DistributeToLayers => self.ed.selection.len() >= 2,
+                crate::menus::ReadyCmd::HideOtherLayers | crate::menus::ReadyCmd::LockOtherLayers => self.ed.doc.page().layers.len() >= 2,
+                crate::menus::ReadyCmd::ReverseStates | crate::menus::ReadyCmd::ReverseStateRange => self.ed.doc.page().states.len() >= 2,
+            },
             Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some(),
             Cmd::AnimateSettings | Cmd::RemoveAnimation => self.ed.selected_animation().is_some(),
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
@@ -2574,7 +2599,141 @@ impl Workspace {
         }
     }
 
+    /// Runs a command and, if it is one of the menus and changed the document, notes it as a step that can be saved and played again.
     pub fn run(&mut self, cmd: Cmd, window: &mut Window, cx: &mut Context<Self>) {
+        let before = (self.ed.history_pos, self.ed.history.len());
+        self.run_command(cmd, window, cx);
+        let after = (self.ed.history_pos, self.ed.history.len());
+        if after != before && after.0 > 0 && !matches!(cmd, Cmd::Undo | Cmd::Redo | Cmd::RunSaved(_) | Cmd::RunScript) {
+            if let Some(step) = crate::commands::step_of(cmd) {
+                self.recorded.push((after.0, self.ed.history[after.0].0.clone(), step));
+            }
+        }
+    }
+
+    /// The recorded steps that are still part of the document's history, oldest first.
+    pub fn steps_to_save(&self) -> Vec<String> {
+        self.recorded
+            .iter()
+            .filter(|(at, label, _)| *at <= self.ed.history_pos && self.ed.history.get(*at).is_some_and(|(name, _)| name == label))
+            .map(|(_, _, step)| step.clone())
+            .collect()
+    }
+
+    /// Plays the steps of a command one after another. Steps that are not menu commands, or cannot run now, are passed over.
+    pub fn play_steps(&mut self, steps: &[String], window: &mut Window, cx: &mut Context<Self>) {
+        let mut done = 0;
+        for step in steps {
+            let Some(cmd) = crate::commands::command_of(step).filter(|cmd| !matches!(cmd, Cmd::RunScript | Cmd::ManageCommands | Cmd::Exit | Cmd::New | Cmd::Open | Cmd::NewFromTemplate)) else { continue };
+            if self.is_enabled(cmd) {
+                self.run(cmd, window, cx);
+                done += 1;
+            }
+        }
+        self.status = tf("Command played: {} of {} step(s)", &[&done, &steps.len()]);
+    }
+
+    fn play_file(&mut self, path: &Path, window: &mut Window, cx: &mut Context<Self>) {
+        match crate::commands::read(path) {
+            Ok(steps) => self.play_steps(&steps, window, cx),
+            Err(error) => self.status = error.to_string(),
+        }
+    }
+
+    /// Asks for a command file and plays it.
+    fn run_script(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: false, prompt: None });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut paths))) = picked.await else { return };
+            let Some(path) = paths.pop() else { return };
+            this.update_in(cx, |this, window, cx| {
+                this.play_file(&path, window, cx);
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Closes the box that asks for a command's name; kept, the steps are saved under it, or the command renamed to it.
+    pub fn close_command_name(&mut self, keep: bool) {
+        self.commit_field();
+        let Some((name, renaming)) = self.command_name.take() else { return };
+        if !keep {
+            return;
+        }
+        let result = match renaming.and_then(|index| self.saved_commands.get(index)) {
+            Some((_, path)) => crate::commands::rename(path, &name),
+            None => crate::commands::save(&name, &self.steps_to_save()),
+        };
+        match result {
+            Ok(path) => self.status = tf("Command saved as {}", &[&path.display()]),
+            Err(error) => self.status = error.to_string(),
+        }
+        self.saved_commands = crate::commands::saved();
+    }
+
+    /// Deletes the saved command picked in Manage Saved Commands.
+    pub fn delete_saved_command(&mut self) {
+        let Some(Some(picked)) = self.commands_dialog else { return };
+        if let Some((_, path)) = self.saved_commands.get(picked) {
+            if let Err(error) = std::fs::remove_file(path) {
+                self.status = error.to_string();
+            }
+        }
+        self.saved_commands = crate::commands::saved();
+        self.commands_dialog = Some(None);
+    }
+
+    /// The Commands menu, with the saved commands at its foot.
+    pub fn commands_menu(&self, fixed: &'static [crate::menus::Entry]) -> &'static [crate::menus::Entry] {
+        let names: Vec<String> = self.saved_commands.iter().map(|(name, _)| name.clone()).collect();
+        crate::commands::menu(fixed, &names)
+    }
+
+    fn run_ready(&mut self, ready: crate::menus::ReadyCmd) {
+        use crate::menus::ReadyCmd;
+        match ready {
+            // Fireworks does both with a Hue/Saturation live filter, which stays editable.
+            ReadyCmd::Grayscale | ReadyCmd::Sepia => {
+                let sepia = ready == ReadyCmd::Sepia;
+                self.change_filters(|filters| {
+                    let mut filter = LiveFilter::new(FilterKind::HueSaturation);
+                    filter.values = if sepia { vec![30.0, -50.0, 0.0, 1.0] } else { vec![0.0, -100.0, 0.0, 0.0] };
+                    filters.push(filter);
+                });
+            }
+            ReadyCmd::DistributeToLayers => {
+                if self.ed.distribute_to_layers() > 0 {
+                    self.ed.commit(t("Distribute to Layers"));
+                }
+            }
+            ReadyCmd::HideOtherLayers | ReadyCmd::LockOtherLayers => {
+                let hide = ready == ReadyCmd::HideOtherLayers;
+                if self.ed.set_other_layers(hide) {
+                    self.ed.commit(if hide { t("Hide Other Layers") } else { t("Lock Other Layers") });
+                }
+            }
+            ReadyCmd::ReverseStates => {
+                let last = self.ed.doc.page().states.len() - 1;
+                if self.ed.reverse_states(0, last) {
+                    self.ed.commit(t("Reverse All States"));
+                }
+            }
+            ReadyCmd::ReverseStateRange => self.reverse_dialog = Some((1, self.ed.doc.page().states.len() as u32)),
+        }
+    }
+
+    /// Closes Reverse State Range; kept, the states from the first to the last asked for change places.
+    pub fn close_reverse_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some((from, to)) = self.reverse_dialog.take() else { return };
+        if keep && self.ed.reverse_states(from.saturating_sub(1) as usize, to.saturating_sub(1) as usize) {
+            self.ed.commit(t("Reverse State Range"));
+        }
+    }
+
+    fn run_command(&mut self, cmd: Cmd, window: &mut Window, cx: &mut Context<Self>) {
         self.close_overlays();
         // Finishing the pending transform forgets its center point, which Numeric Transform turns around.
         let center_point = self.transform.as_ref().and_then(|session| session.pivot);
@@ -2588,6 +2747,18 @@ impl Workspace {
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));
         match cmd {
             Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate => self.confirm_discard(cmd, window, cx),
+            Cmd::ManageCommands => {
+                self.saved_commands = crate::commands::saved();
+                self.commands_dialog = Some(None);
+            }
+            Cmd::RunScript => self.run_script(window, cx),
+            Cmd::RunSaved(index) => {
+                if let Some((_, path)) = self.saved_commands.get(index as usize).cloned() {
+                    self.play_file(&path, window, cx);
+                }
+            }
+            Cmd::SaveSteps => self.command_name = Some((tf("Command {}", &[&(self.saved_commands.len() + 1)]), None)),
+            Cmd::Ready(ready) => self.run_ready(ready),
             Cmd::BatchProcess => self.batch_dialog = Some(BatchDialog { width: 640, height: 480, percent: 50.0, ..Default::default() }),
             Cmd::SaveAsTemplate => self.template_name = Some(self.path.as_deref().map_or_else(|| t("Template").to_string(), file_stem)),
             Cmd::Save => self.save(false, window, cx),
@@ -3391,6 +3562,7 @@ impl Workspace {
     }
 
     fn load_document(&mut self, doc: Document, path: Option<PathBuf>) {
+        self.recorded.clear();
         self.ed = Editor::new(doc);
         self.path = path;
         self.source_image = None;
@@ -5519,6 +5691,12 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.command_name.is_some() && matches!(key, "enter" | "escape") {
+            self.close_command_name(key == "enter");
+        } else if self.reverse_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_reverse_dialog(key == "enter");
+        } else if self.commands_dialog.is_some() && key == "escape" {
+            self.commands_dialog = None;
         } else if self.template_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_template_dialog(key == "enter");
         } else if self.template_name.is_some() && matches!(key, "enter" | "escape") {
@@ -5808,6 +5986,8 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::CommandName => self.command_name.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
+            FieldId::ReverseState(last) => self.reverse_dialog.map_or_else(String::new, |(from, to)| if last { to } else { from }.to_string()),
             FieldId::Batch(which) => self.batch_dialog.as_ref().map_or_else(String::new, |d| match which {
                 0 => d.width.to_string(),
                 1 => d.height.to_string(),
@@ -6029,6 +6209,21 @@ impl Workspace {
                     (3, _) => dialog.prefix = text.to_string(),
                     (4, _) => dialog.suffix = text.to_string(),
                     _ => {}
+                }
+            }
+            FieldId::CommandName => {
+                if let Some((name, _)) = self.command_name.as_mut().filter(|_| !cleared) {
+                    *name = text.to_string();
+                }
+            }
+            FieldId::ReverseState(last) => {
+                let states = self.ed.doc.page().states.len() as f32;
+                let (Some(v), Some(range)) = (number.filter(|v| *v >= 1.0), self.reverse_dialog.as_mut()) else { return };
+                let v = v.round().min(states) as u32;
+                if last {
+                    range.1 = v;
+                } else {
+                    range.0 = v;
                 }
             }
             FieldId::TemplateName => {

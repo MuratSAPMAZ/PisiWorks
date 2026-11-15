@@ -1598,6 +1598,90 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// Commands > Manage Saved Commands: the saved commands, to rename or delete.
+    pub(crate) fn commands_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let picked = self.commands_dialog?;
+        let list: Vec<AnyElement> = self
+            .saved_commands
+            .iter()
+            .enumerate()
+            .map(|(index, (name, _))| {
+                div()
+                    .h(px(18.))
+                    .px_1()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .when(picked == Some(index), |d| d.bg(rgb(ACCENT)))
+                    .hover(|s| s.bg(rgb(HOVER)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.commands_dialog = Some(Some(index));
+                            cx.notify();
+                        }),
+                    )
+                    .child(name.clone())
+                    .into_any_element()
+            })
+            .collect();
+        let mut rows = vec![div().id("command-list").h(px(180.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(list).into_any_element()];
+        if self.saved_commands.is_empty() {
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(t("No saved commands yet. Use Save Steps as Command in the History panel.")).into_any_element());
+        }
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Rename..."), picked.is_some(), cx, move |this, _, _| {
+                if let Some((name, _)) = picked.and_then(|index| this.saved_commands.get(index)) {
+                    this.command_name = Some((name.clone(), picked));
+                }
+            }))
+            .child(self.text_button(t("Delete"), picked.is_some(), cx, |this, _, _| this.delete_saved_command()))
+            .child(self.text_button(t("Close"), true, cx, |this, _, _| this.commands_dialog = None));
+        Some(self.dialog_frame(300., t("Manage Saved Commands"), rows, buttons))
+    }
+
+    /// The name of a command: for steps being saved, or for a saved command being renamed.
+    pub(crate) fn command_name_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (_, renaming) = self.command_name.as_ref()?;
+        let mut rows = vec![labelled_row(t("Name:"), 40., self.field(FieldId::CommandName, 190., cx)).into_any_element()];
+        if renaming.is_none() {
+            let steps = self.steps_to_save();
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(tf("Steps: {}", &[&steps.len()])).into_any_element());
+            let list: Vec<AnyElement> = steps
+                .into_iter()
+                .map(|step| {
+                    // A step is kept in English, as the menus are written; here it shows as the menus do.
+                    let shown = step.split_once(" > ").map_or(step.clone(), |(menu, name)| format!("{} > {}", t(menu), t(name).trim_end_matches("...")));
+                    div().h(px(16.)).px_1().flex().flex_none().items_center().child(shown).into_any_element()
+                })
+                .collect();
+            rows.push(div().id("step-list").h(px(100.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(list).into_any_element());
+        }
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_command_name(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_command_name(false)));
+        Some(self.dialog_frame(280., t("Save Command"), rows, buttons))
+    }
+
+    /// Commands > Document > Reverse State Range: the first and the last state to change places.
+    pub(crate) fn reverse_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.reverse_dialog?;
+        let rows = vec![labelled_row(t("States:"), 60., div().flex().items_center().gap_1().child(self.field(FieldId::ReverseState(false), 44., cx)).child(label(t("to"))).child(self.field(FieldId::ReverseState(true), 44., cx))).into_any_element()];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_reverse_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_reverse_dialog(false)));
+        Some(self.dialog_frame(230., t("Reverse State Range"), rows, buttons))
+    }
+
     /// File > Batch Process: the files to work on, how to scale and export them, what to call the results and where to put them.
     pub(crate) fn batch_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let dialog = self.batch_dialog.as_ref()?;

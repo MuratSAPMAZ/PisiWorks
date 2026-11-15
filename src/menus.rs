@@ -181,7 +181,7 @@ pub const VIEW_TOOLS: &[ToolSlot] = &[on("Hand (H)", "hand", Tool::Hand), on("Zo
 
 pub const ZOOM_LEVELS: &[u32] = &[6, 12, 25, 50, 66, 100, 150, 200, 300, 400, 800, 1600, 3200, 6400];
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Cmd {
     New,
     Open,
@@ -219,6 +219,13 @@ pub enum Cmd {
     ConvertToSymbol,
     NewSymbol,
     NewFromTemplate,
+    ManageCommands,
+    RunScript,
+    /// Plays the saved command with this place in the list.
+    RunSaved(u16),
+    /// Saves the steps done so far as a command.
+    SaveSteps,
+    Ready(ReadyCmd),
     BatchProcess,
     SaveAsTemplate,
     NewButton,
@@ -319,6 +326,18 @@ pub fn font_entries() -> &'static [Entry] {
         crate::fonts::families().iter().take(u16::MAX as usize).enumerate().map(|(index, name)| Entry::Item(name.as_str(), "", Some(Cmd::TextFont(index as u16)))).collect()
     });
     &ENTRIES
+}
+
+/// The commands that come ready in the Commands menu.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReadyCmd {
+    Grayscale,
+    Sepia,
+    DistributeToLayers,
+    HideOtherLayers,
+    LockOtherLayers,
+    ReverseStates,
+    ReverseStateRange,
 }
 
 /// The commands of the Guides, Smart Guides and Slice Guides menus.
@@ -535,6 +554,7 @@ pub fn panel_shortcut(key: &str, control: bool, shift: bool, alt: bool) -> Optio
     Some(Cmd::Panel(panel))
 }
 
+#[derive(Clone, Copy)]
 pub enum Entry {
     Item(&'static str, &'static str, Option<Cmd>),
     Sep,
@@ -547,9 +567,6 @@ const fn cmd(label: &'static str, keys: &'static str, c: Cmd) -> Entry {
     Item(label, keys, Some(c))
 }
 
-const fn na(label: &'static str) -> Entry {
-    Item(label, "", None)
-}
 
 pub const MENUS: &[(&str, &[Entry])] = &[
     (
@@ -870,7 +887,25 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Check Spelling...", "Shift+F7", Cmd::CheckSpelling),
         ],
     ),
-    ("Commands", &[na("Manage Saved Commands..."), na("Run Script...")]),
+    (
+        "Commands",
+        &[
+            cmd("Manage Saved Commands...", "", Cmd::ManageCommands),
+            cmd("Run Script...", "", Cmd::RunScript),
+            Sep,
+            Sub("Creative", &[cmd("Convert to Grayscale", "", Cmd::Ready(ReadyCmd::Grayscale)), cmd("Convert to Sepia Tone", "", Cmd::Ready(ReadyCmd::Sepia))]),
+            Sub(
+                "Document",
+                &[
+                    cmd("Distribute to Layers", "", Cmd::Ready(ReadyCmd::DistributeToLayers)),
+                    cmd("Hide Other Layers", "", Cmd::Ready(ReadyCmd::HideOtherLayers)),
+                    cmd("Lock Other Layers", "", Cmd::Ready(ReadyCmd::LockOtherLayers)),
+                    cmd("Reverse All States", "", Cmd::Ready(ReadyCmd::ReverseStates)),
+                    cmd("Reverse State Range...", "", Cmd::Ready(ReadyCmd::ReverseStateRange)),
+                ],
+            ),
+        ],
+    ),
     (
         "Filters",
         &[

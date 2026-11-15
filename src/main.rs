@@ -5,6 +5,7 @@ mod batch;
 mod bitmap;
 mod blend;
 mod canvas_view;
+mod commands;
 mod effects;
 mod export;
 mod fit;

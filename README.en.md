@@ -143,7 +143,7 @@ The figures are from November 2026 and will drift as work goes on.
 
 ## Not in this version
 
-- The commands that appear greyed out in the menus: New from Template, Batch Process and the Commands menu.
+- Fireworks' JavaScript (JSF) scripts and extensions: Run Script plays only PisiWorks' own command files (one menu command on each line). Of the ready-made commands, Add Arrowheads, Add Picture Frame, Add Shadow, Auto Vector Mask and Twist and Fade are missing. Adobe's templates are not there either; New from Template lists our own and the ones you save.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
 - A ready-made package to download. For now the `.deb` is built from source.

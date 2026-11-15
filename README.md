@@ -143,7 +143,7 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 ## Bu sürümde olmayanlar
 
-- Menülerde gri görünen komutlar: Şablondan Yeni, Toplu İşlem ve Komutlar menüsü.
+- Fireworks'ün JavaScript (JSF) komut dosyaları ve uzantıları: Komut Dosyası Çalıştır yalnızca PisiWorks'ün kendi komut dosyalarını (her satırda bir menü komutu) çalıştırır. Komutlar menüsünün hazır komutlarından Ok Başları Ekle, Resim Çerçevesi Ekle, Gölge Ekle, Otomatik Vektör Maskesi ile Bük ve Soldur yoktur. Adobe'nin şablonları da yoktur; Şablondan Yeni kendi şablonlarımızı ve sizin kaydettiklerinizi listeler.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.
