@@ -289,6 +289,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: Some(Color::rgb(10, 20, 30)),
             stroke: Some(Stroke { color: Color::BLACK, width: 4.0 }),

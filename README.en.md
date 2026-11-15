@@ -39,7 +39,7 @@ It is deliberately a look-alike: the same docked layout, tool groups, panels and
 | **Panels** | Optimize, History, Align, Pages, States, Layers, Styles, Color Palette, Swatches, Path, Auto Shapes, Document Library, Common Library, Color Mixer, Info, URL, Find, Special Characters, Image Editing, Properties, Symbol Properties |
 | **Vector** | Bezier curves and point editing, Auto Shapes, Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset |
 | **Transforming** | Scale, Skew, Distort, a movable center point, Numeric Transform, rotating and flipping |
-| **Appearance** | 45 blend modes, masks, 29 live filters including Levels and Curves, Photoshop Live Effects with ten effects, styles |
+| **Appearance** | Gradient fills of 12 kinds and pattern fills, 45 blend modes, masks, 29 live filters including Levels and Curves, Photoshop Live Effects with ten effects, styles |
 | **Bitmap** | Paint, erase, clone, flood fill, pixel selections, Feather, Select Similar and Inverse, the marquee commands, Flatten Selection and Flatten Layers |
 | **Text** | Installed fonts, bold, italic, underline, alignment, Convert to Paths |
 | **Layout** | Rulers, grid, guides, smart guides, slice guides, groups with Superselect and Subselect |
@@ -144,7 +144,7 @@ The figures are from November 2026 and will drift as work goes on.
 ## Not in this version
 
 - The commands that appear greyed out in the menus: New from Template, Image Preview, Batch Process, New Button, New Symbol (an editor for an empty symbol), Preferences, Keyboard Shortcuts, Animation, Justified and Stretched text alignment, Attach to Path, Check Spelling and the Commands menu.
-- Gradient and pattern fills for objects. (Gradients and patterns exist only as overlays in Photoshop Live Effects.)
+- Feathered fill edges, textures and Web Dither; gradient fills for text; a separate Gradient tool in the toolbox.
 - The Polygon, Oval Marquee, Polygon Lasso, Smudge, Dodge, Burn and Replace Color tools.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.

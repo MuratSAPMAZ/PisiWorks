@@ -39,7 +39,7 @@ Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve aç
 | **Paneller** | En İyileştir, Geçmiş, Hizala, Sayfalar, Durumlar, Katmanlar, Stiller, Renk Paleti, Renk Örnekleri, Yol, Otomatik Şekiller, Belge Kitaplığı, Ortak Kitaplık, Renk Karıştırıcısı, Bilgi, URL, Bul, Özel Karakterler, Görüntü Düzenleme, Özellikler, Sembol Özellikleri |
 | **Vektör** | Bezier eğrileri ve nokta düzenleme, Otomatik Şekiller, yolları birleştirme (Birleştir, Böl, Topla, Kesiştir, Zımbala, Kırp), Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet |
 | **Dönüştürme** | Ölçek, Eğriltme, Deformasyon, taşınabilir merkez noktası, Sayısal Dönüştürme, döndürme ve çevirme |
-| **Görünüm** | 45 karışım modu, maskeler, 29 canlı filtre (Düzeyler ve Eğriler dahil), on efektli Photoshop Canlı Efektleri, stiller |
+| **Görünüm** | Degrade (12 tür) ve desen dolguları, 45 karışım modu, maskeler, 29 canlı filtre (Düzeyler ve Eğriler dahil), on efektli Photoshop Canlı Efektleri, stiller |
 | **Bitmap** | Boyama, silme, klonlama, doldurma, piksel seçimleri, Geçiş Yumuşatma, Benzerini ve Tersini Seç, seçim çerçevesi komutları, Seçimi ve Katmanları Düzleştir |
 | **Metin** | Kurulu fontlar, kalın, italik, altı çizili, hizalama, Yollara Dönüştür |
 | **Düzen** | Cetveller, ızgara, kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar ile Üst Seç ve Alt Seç |
@@ -144,7 +144,7 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 ## Bu sürümde olmayanlar
 
 - Menülerde gri görünen komutlar: Şablondan Yeni, Görüntü Önizleme, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon, metinde Yaslanmış ve Uzatılmış hizalama, Yola Ekle, Yazım Denetimi ve Komutlar menüsü.
-- Nesneler için degrade ve desen dolguları. (Degrade ve desen yalnızca Photoshop Canlı Efektleri'ndeki kaplama olarak vardır.)
+- Dolguda kenar yumuşatma (Geçiş Yumuşatma), doku ve Web Renk Taklidi; metinde degrade dolgu; araç kutusunda ayrı bir Degrade aracı.
 - Çokgen, Oval Seçim Çerçevesi, Çokgen Kement, Leke, Soldur, Yak ve Renk Değiştir araçları.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.

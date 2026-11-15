@@ -175,6 +175,8 @@ pub struct Scene {
     show_grid: bool,
     /// The lines drawn across the whole view: whether each runs across, where it is on the page, and its color.
     guide_lines: Vec<(bool, f32, u32)>,
+    /// The handles of the selected object's gradient: where it starts and where it ends.
+    fill_handles: Option<(Vec2, Vec2)>,
     stroke: Option<Color>,
     fill: Option<Color>,
     textures: Textures,
@@ -313,6 +315,7 @@ impl Scene {
             show_rulers: w.show_rulers,
             show_grid: w.show_grid,
             guide_lines: w.guide_lines(),
+            fill_handles: w.fill_handles(),
             stroke: w.stroke,
             fill: w.fill,
             textures: w.textures.clone(),
@@ -394,6 +397,16 @@ impl Scene {
             window.paint_quad(outline(page_bounds, rgb(theme::BORDER), BorderStyle::Solid));
             if overlays {
                 self.paint_overlays(map, window);
+                if let Some((start, end)) = self.fill_handles {
+                    let (from, to) = (map.to_screen(start), map.to_screen(end));
+                    if let Some(line) = build_path(&[from, to], false, Some(1.0)) {
+                        window.paint_path(line, rgb(0x000000));
+                    }
+                    // A round handle where the gradient starts, a square one where it ends.
+                    let knob = |at: Point<Pixels>| Bounds { origin: point(at.x - px(4.), at.y - px(4.)), size: size(px(8.), px(8.)) };
+                    window.paint_quad(fill(knob(from), rgb(0xffffff)).corner_radii(px(4.)).border_widths(1.).border_color(rgb(0x000000)));
+                    window.paint_quad(fill(knob(to), rgb(0xffffff)).border_widths(1.).border_color(rgb(0x000000)));
+                }
                 for (horizontal, at, color) in &self.guide_lines {
                     let on_screen = map.to_screen(Vec2 { x: *at, y: *at });
                     let line = if *horizontal {
@@ -606,6 +619,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
+        fill_style: None,
         filters: Vec::new(),
         fill: None,
         stroke: None,

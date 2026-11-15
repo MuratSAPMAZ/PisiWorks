@@ -78,6 +78,14 @@ Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi 
 
 Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
 
+## Degrade ve desen dolguları
+
+Bir vektör nesnesi seçiliyken Özellikler'de dolgunun yanındaki liste, nesnenin neyle doldurulacağını belirler: tek renk için Düz, on iki degradeden biri (Doğrusal, Radyal, Elips, Dikdörtgen, Koni, Kontur, Saten, Yıldız Patlaması, Kıvrımlar, Çubuklar, Dalgacıklar, Dalgalar) veya Desen. Yeni degrade, nesnenin dolgu renginden beyaza uzanır.
+
+İşaretçi ile degradenin tuvalde iki tutamacı görünür: başladığı yerde yuvarlak, bittiği yerde kare. Degradeyi taşımak, döndürmek, uzatmak veya kısaltmak için bunları sürükleyin; nesnenin dışında da durabilirler. Kontur, nesnenin dış hattını izler ve tutamacı yoktur.
+
+Düzenle, degradenin renklerini açar: durak eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için uzağa çekin; seçili durağın rengini, konumunu ve opaklığını ayarlayın. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Desende Düzenle, deseni ve ölçeğini seçtirir. Stiller, Nitelikleri Yapıştır ve dosyalar dolguyu korur.
+
 ## Yazdırma
 
 Dosya > Sayfa Yapısı kâğıdı, yönünü, kenar boşluklarını ve sayfanın kâğıda sığacak şekilde ölçeklenip ölçeklenmeyeceğini belirler. Dosya > Yazdır (Ctrl+P) sayfayı bilgisayarda kurulu bir yazıcıya gönderir veya PDF dosyası olarak kaydeder. Sayfa, dışa aktarıldığı gibi, dilimler ve sıcak noktalar olmadan, inç başına 72 pikselle yazdırılır; kâğıttan büyük sayfa, Sayfaya sığdır açık değilse kenar boşluklarında kesilir. Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.

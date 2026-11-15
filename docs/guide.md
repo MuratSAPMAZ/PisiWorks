@@ -76,6 +76,14 @@ A masked object shows Mask in Properties: Path Outline or Grayscale Appearance f
 
 In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
 
+## Gradient and pattern fills
+
+With a vector object selected, the list beside its fill in Properties chooses what it is filled with: Solid for one color, one of twelve gradients (Linear, Radial, Ellipse, Rectangle, Cone, Contour, Satin, Starburst, Folds, Bars, Ripples, Waves), or Pattern. A new gradient runs from the object's fill color to white.
+
+With the Pointer, a gradient shows two handles on the canvas: a round one where it starts and a square one where it ends. Drag them to move, turn, lengthen or shorten the gradient; they may lie outside the object. Contour follows the outline of the object and has no handles.
+
+Edit opens the gradient's colors: click under the gradient to add a stop, drag a stop to move it, pull one away to remove it, and set the color, place and opacity of the stop that is picked. Presets replaces the gradient with a ready-made one. For a pattern, Edit chooses the pattern and its scale. Styles, Paste Attributes and files keep the fill.
+
 ## Printing
 
 File > Page Setup sets the paper, which way it is turned, the margins, and whether the page is scaled to fit the paper. File > Print (Ctrl+P) sends the page to a printer set up on the computer, or saves it as a PDF file. The page prints as it exports, without slices and hotspots, at 72 pixels to the inch; a page larger than the paper is cut off at the margins unless Fit to page is on. Printing needs the system's print service (CUPS).

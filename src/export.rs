@@ -426,7 +426,9 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
         draw_bitmap(pixmap, object, bitmap);
         return;
     }
-    if let Some(fill) = object.fill {
+    if let (Some(style), Some(_)) = (&object.fill_style, object.fill) {
+        draw_styled_fill(pixmap, object, style);
+    } else if let Some(fill) = object.fill {
         if let Some(path) = sk_path(&object.outline(), object.is_closed()) {
             pixmap.fill_path(&path, &sk_paint(fill, object.opacity), FillRule::EvenOdd, Transform::identity(), None);
         }
@@ -443,6 +445,50 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
                 pixmap.stroke_path(&path, &sk_paint(stroke.color, object.opacity), &style, Transform::identity(), None);
             }
         }
+    }
+}
+
+/// Fills an object with its gradient or pattern: its shape is drawn on its own to
+/// find how much of each pixel it covers, and each covered pixel gets the color the fill has there.
+fn draw_styled_fill(pixmap: &mut Pixmap, object: &Object, style: &crate::model::FillStyle) {
+    use crate::model::FillKind;
+    let Some(path) = sk_path(&object.outline(), object.is_closed()) else { return };
+    let b = object.bounds;
+    // The part of the page the shape can touch.
+    let (left, top) = ((b.x.floor() as i32 - 1).max(0), (b.y.floor() as i32 - 1).max(0));
+    let (right, bottom) = ((b.right().ceil() as i32 + 1).min(pixmap.width() as i32), (b.bottom().ceil() as i32 + 1).min(pixmap.height() as i32));
+    if right <= left || bottom <= top {
+        return;
+    }
+    let (w, h) = ((right - left) as u32, (bottom - top) as u32);
+    let Some(mut shape) = Pixmap::new(w, h) else { return };
+    shape.fill_path(&path, &sk_paint(Color::BLACK, 1.0), FillRule::EvenOdd, Transform::from_translate(-left as f32, -top as f32), None);
+    let covered: Vec<f32> = shape.pixels().iter().map(|px| px.alpha() as f32 / 255.0).collect();
+    // A contour follows the outline, so it needs to know how deep inside each pixel lies.
+    let depth: Vec<f32> = if style.kind == FillKind::Contour {
+        let outside: Vec<f32> = covered.iter().map(|c| if *c < 0.5 { 1.0 } else { 0.0 }).collect();
+        let far = crate::pseffects::distances(&outside, w as usize, h as usize);
+        // The frame of the box counts as outside too, for a shape that fills it.
+        let edge = |at: usize| ((at % w as usize).min(w as usize - 1 - at % w as usize).min(at / w as usize).min(h as usize - 1 - at / w as usize)) as f32 + 1.0;
+        let far: Vec<f32> = far.iter().enumerate().map(|(at, d)| d.min(edge(at))).collect();
+        let deepest = far.iter().zip(&covered).filter(|(_, c)| **c >= 0.5).map(|(d, _)| *d).fold(1.0, f32::max);
+        far.iter().map(|d| (d / deepest).clamp(0.0, 1.0)).collect()
+    } else {
+        Vec::new()
+    };
+    let scale = (style.scale / 100.0).max(0.01);
+    for (at, coverage) in covered.iter().enumerate().filter(|(_, c)| **c > 0.0) {
+        let (x, y) = (left + (at as u32 % w) as i32, top + (at as u32 / w) as i32);
+        let p = Vec2 { x: x as f32 + 0.5, y: y as f32 + 0.5 };
+        let (color, opacity) = if style.kind == FillKind::Pattern {
+            // A pattern is laid from the corner of the object, so it moves with it.
+            (crate::pseffects::pattern(style.pattern as usize, (p.x - b.x) / scale, (p.y - b.y) / scale), 1.0)
+        } else {
+            crate::pseffects::gradient_color(&style.stops, style.place(p, b, depth.get(at).copied().unwrap_or(0.0)))
+        };
+        let channel = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
+        let tone = Color { r: channel(color[0]), g: channel(color[1]), b: channel(color[2]), a: channel(opacity * object.opacity) };
+        blend_pixel(pixmap, x, y, tone, *coverage);
     }
 }
 
@@ -588,6 +634,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
@@ -648,6 +695,63 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn a_gradient_or_pattern_fills_an_object_in_place_of_its_color() {
+        use crate::model::{FillKind, FillStyle};
+        use std::sync::Arc;
+        let (black, white) = (Color::rgb(0, 0, 0), Color::rgb(255, 255, 255));
+        let filled = |style: FillStyle| {
+            let mut p = page();
+            p.canvas = None;
+            let mut object = red_box(4.0, 32.0);
+            object.bounds = Rect { x: 4.0, y: 4.0, w: 32.0, h: 32.0 };
+            object.fill_style = Some(Arc::new(style));
+            p.layers[0].objects.push(object);
+            render_page(&p).unwrap()
+        };
+        // Linear: black at the left of the object, white at the right, gray in between, nothing outside it.
+        let linear = filled(FillStyle::new(FillKind::Linear, black, white));
+        let (left, middle, right) = (rgba(&linear, 5, 20), rgba(&linear, 20, 20), rgba(&linear, 35, 20));
+        assert!(left.0 < 20 && right.0 > 235 && (110..150).contains(&middle.0), "{left:?} {middle:?} {right:?}");
+        assert_eq!((left.3, rgba(&linear, 1, 20).3, rgba(&linear, 20, 38).3), (255, 0, 0));
+        assert_eq!(rgba(&linear, 20, 6), rgba(&linear, 20, 34), "the same all the way down");
+        // Radial: black in the middle, lighter toward every side.
+        let radial = filled(FillStyle::new(FillKind::Radial, black, white));
+        assert!(rgba(&radial, 20, 20).0 < 20 && rgba(&radial, 34, 20).0 > 200 && rgba(&radial, 20, 6).0 > 200 && rgba(&radial, 6, 20).0 > 200);
+        // Contour: like radial it starts deep inside, but it follows the outline: white along every edge.
+        let contour = filled(FillStyle::new(FillKind::Contour, black, white));
+        assert!(rgba(&contour, 20, 20).0 < 60 && rgba(&contour, 5, 20).0 > 200 && rgba(&contour, 20, 34).0 > 200 && rgba(&contour, 5, 5).0 > 200, "{:?}", rgba(&contour, 20, 20));
+        // A handle moved to the middle makes the gradient half as long.
+        let mut short = FillStyle::new(FillKind::Linear, black, white);
+        short.set_handle(true, Vec2 { x: 20.0, y: 20.0 }, Rect { x: 4.0, y: 4.0, w: 32.0, h: 32.0 });
+        assert_eq!(short.handles(Rect { x: 4.0, y: 4.0, w: 32.0, h: 32.0 }).1, Vec2 { x: 20.0, y: 20.0 });
+        assert!(rgba(&filled(short), 21, 20).0 > 235);
+        // A stop that is see-through lets what is under the object show.
+        let mut fading = FillStyle::new(FillKind::Linear, black, Color { r: 0, g: 0, b: 0, a: 0 });
+        fading.stops[0].1 = Color::rgb(255, 0, 0);
+        let faded = filled(fading);
+        assert!(rgba(&faded, 5, 20).3 > 235 && rgba(&faded, 35, 20).3 < 20);
+        // A pattern is two grays, and twice as large at a scale of 200.
+        let mut pattern = FillStyle::new(FillKind::Pattern, black, white);
+        let small = filled(pattern.clone());
+        assert_ne!(rgba(&small, 6, 6), rgba(&small, 14, 6));
+        pattern.scale = 200.0;
+        let large = filled(pattern);
+        assert_eq!(rgba(&large, 6, 6), rgba(&large, 14, 6));
+        assert_ne!(rgba(&large, 6, 6), rgba(&large, 22, 6));
+        // Every kind draws something and stays inside the object.
+        for kind in FillKind::ALL {
+            let drawn = filled(FillStyle::new(kind, black, white));
+            assert!(rgba(&drawn, 20, 20).3 == 255 && rgba(&drawn, 1, 1).3 == 0, "{kind:?}");
+        }
+        // The fill is kept in the file, and an object without one is written as before.
+        let mut object = red_box(0.0, 10.0);
+        assert!(!serde_json::to_string(&object).unwrap().contains("fill_style"));
+        object.fill_style = Some(Arc::new(FillStyle::new(FillKind::Cone, black, white)));
+        let back: Object = serde_json::from_str(&serde_json::to_string(&object).unwrap()).unwrap();
+        assert_eq!(back.fill_style, object.fill_style);
     }
 
     #[test]

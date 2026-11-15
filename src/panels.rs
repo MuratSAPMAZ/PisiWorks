@@ -62,6 +62,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
+        fill_style: None,
         filters: Vec::new(),
         fill,
         stroke,
@@ -387,6 +388,23 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::FillKind => {
+                let current = self.current_fill_style().map(|style| style.kind);
+                std::iter::once((t("Solid"), None))
+                    .chain(crate::model::FillKind::ALL.into_iter().map(|kind| (kind.label(), Some(kind))))
+                    .map(|(name, kind)| item(name.into(), kind == current, cx, Box::new(move |this, _, _| this.set_fill_kind(kind))))
+                    .collect()
+            }
+            Combo::FillPattern => {
+                let current = self.current_fill_style().map_or(0, |style| style.pattern as usize);
+                crate::pseffects::PATTERNS
+                    .iter()
+                    .enumerate()
+                    .map(|(index, name)| {
+                        item(crate::pseffects::label(name).into(), index == current, cx, Box::new(move |this, _, _| this.change_fill_style(true, |style| style.pattern = index as u8)))
+                    })
+                    .collect()
+            }
             Combo::Paper => crate::print::PaperSize::ALL
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
@@ -1335,6 +1353,77 @@ impl Workspace {
                                 .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_jpeg_dialog(false))),
                         ),
                 ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
+    /// The dialog that edits the fill of the selection: the stops of a gradient, or which pattern and how large.
+    pub(crate) fn fill_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.fill_dialog.as_ref()?;
+        let style = self.current_fill_style()?;
+        let pattern = style.kind == crate::model::FillKind::Pattern;
+        let names = [t("Pattern:"), t("Scale:"), t("Gradient:")];
+        let name_width = label_width(&names, 60.);
+        let rows: Vec<AnyElement> = if pattern {
+            let shown = crate::pseffects::PATTERNS[(style.pattern as usize).min(crate::pseffects::PATTERNS.len() - 1)];
+            vec![
+                labelled_row(names[0], name_width, self.combo(Combo::FillPattern, crate::pseffects::label(shown), 150., cx).bg(rgb(PANEL_RAISED))).into_any_element(),
+                labelled_row(names[1], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::FillScale, 50., cx)).child(label("%"))).into_any_element(),
+            ]
+        } else {
+            vec![self.gradient_editor(names[2], name_width, style.stops.clone(), cx)]
+        };
+        Some(
+            deferred(
+                div()
+                    .absolute()
+                    .top_0()
+                    .left_0()
+                    .size_full()
+                    .flex()
+                    .items_end()
+                    .justify_center()
+                    .pb(px(150.))
+                    .occlude()
+                    // A stop follows the mouse anywhere over the window, not only under the gradient.
+                    .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
+                        if this.drag_gradient(ev.position) {
+                            cx.notify();
+                        }
+                    }))
+                    .on_mouse_up(
+                        MouseButton::Left,
+                        cx.listener(|this, _, _, cx| {
+                            if this.gradient_drag.take().is_some() {
+                                this.ed.commit(t("Fill"));
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .child(
+                        div()
+                            .w(px(270.))
+                            .p_3()
+                            .flex()
+                            .flex_col()
+                            .gap_2()
+                            .bg(rgb(PANEL))
+                            .border_1()
+                            .border_color(rgb(BORDER))
+                            .shadow_lg()
+                            .child(div().font_weight(FontWeight::BOLD).child(tf("{} Fill", &[&style.kind.label()])))
+                            .children(rows)
+                            .child(
+                                div()
+                                    .flex()
+                                    .justify_end()
+                                    .gap_1()
+                                    .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_fill_dialog(true)))
+                                    .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_fill_dialog(false))),
+                            ),
+                    ),
             )
             .with_priority(1)
             .into_any_element(),

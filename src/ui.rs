@@ -873,6 +873,7 @@ impl Workspace {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
@@ -1014,6 +1015,19 @@ impl Workspace {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
             }
             _ => {}
+        }
+        // What a vector is filled with: one color, a gradient or a pattern, and a button to edit the latter two.
+        if first.takes_color() && !matches!(first.shape, crate::model::Shape::Text { .. } | crate::model::Shape::Line) {
+            let style = self.current_fill_style();
+            let shown = style.as_ref().map_or(t("Solid"), |style| style.kind.label());
+            extra = extra.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(self.combo(Combo::FillKind, shown, 124., cx).bg(rgb(PANEL_RAISED)))
+                    .when(style.is_some(), |d| d.child(self.text_button(t("Edit..."), true, cx, |this, _, _| this.open_fill_dialog()))),
+            );
         }
         let color_label_width = label_width(&[t("Fill:"), t("Stroke:"), t("Width:")], 34.);
         let color_line = |this: &Self, name: &'static str, target, hex, cx: &mut Context<Self>| {
@@ -1694,6 +1708,7 @@ impl Render for Workspace {
             .children(self.numeric_dialog_view(cx))
             .children(self.marquee_dialog_view(cx))
             .children(self.print_dialog_view(cx))
+            .children(self.fill_dialog_view(cx))
             .children(self.page_setup_dialog_view(cx))
             .children(self.jpeg_dialog_view(cx))
             .children(self.filter_dialog_view(cx))

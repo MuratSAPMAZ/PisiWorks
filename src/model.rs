@@ -365,6 +365,144 @@ pub struct Stroke {
     pub width: f32,
 }
 
+/// What an object can be filled with besides one color: Fireworks' gradients, and a pattern.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FillKind {
+    Linear,
+    Radial,
+    Ellipse,
+    Rectangle,
+    Cone,
+    Contour,
+    Satin,
+    Starburst,
+    Folds,
+    Bars,
+    Ripples,
+    Waves,
+    Pattern,
+}
+
+impl FillKind {
+    /// The gradients in the order of Fireworks' fill list, then the pattern.
+    pub const ALL: [FillKind; 13] = [
+        FillKind::Linear,
+        FillKind::Radial,
+        FillKind::Ellipse,
+        FillKind::Rectangle,
+        FillKind::Cone,
+        FillKind::Contour,
+        FillKind::Satin,
+        FillKind::Starburst,
+        FillKind::Folds,
+        FillKind::Bars,
+        FillKind::Ripples,
+        FillKind::Waves,
+        FillKind::Pattern,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            FillKind::Linear => t("Linear"),
+            FillKind::Radial => t("Radial"),
+            FillKind::Ellipse => t("Ellipse"),
+            FillKind::Rectangle => t("Rectangle"),
+            FillKind::Cone => t("Cone"),
+            FillKind::Contour => t("Contour"),
+            FillKind::Satin => t("Satin"),
+            FillKind::Starburst => t("Starburst"),
+            FillKind::Folds => t("Folds"),
+            FillKind::Bars => t("Bars"),
+            FillKind::Ripples => t("Ripples"),
+            FillKind::Waves => t("Waves"),
+            FillKind::Pattern => t("Pattern"),
+        }
+    }
+
+    /// Where the two handles of a new fill of this kind stand in the object's box,
+    /// which runs from 0 to 1 each way: a linear one crosses it, the others start in its middle.
+    pub fn start_handles(self) -> (Vec2, Vec2) {
+        match self {
+            FillKind::Linear | FillKind::Bars | FillKind::Waves | FillKind::Folds | FillKind::Satin => (v2(0.0, 0.5), v2(1.0, 0.5)),
+            _ => (v2(0.5, 0.5), v2(1.0, 0.5)),
+        }
+    }
+}
+
+/// A gradient or pattern fill.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FillStyle {
+    pub kind: FillKind,
+    /// The colors of a gradient: where each is, from 0 to 1, and the color, whose alpha is how opaque the fill is there.
+    #[serde(default)]
+    pub stops: Vec<(f32, Color)>,
+    /// The two handles, in the object's box from 0 to 1 each way: where the gradient starts, and where it ends.
+    pub start: Vec2,
+    pub end: Vec2,
+    /// Which pattern, and how large it is drawn, in percent.
+    #[serde(default)]
+    pub pattern: u8,
+    #[serde(default = "full_scale")]
+    pub scale: f32,
+}
+
+fn full_scale() -> f32 {
+    100.0
+}
+
+impl FillStyle {
+    /// A fill of a kind running between two colors, with its handles where they start out.
+    pub fn new(kind: FillKind, from: Color, to: Color) -> Self {
+        let (start, end) = kind.start_handles();
+        Self { kind, stops: vec![(0.0, from), (1.0, to)], start, end, pattern: 0, scale: 100.0 }
+    }
+
+    /// The handles on the page, for an object with this box.
+    pub fn handles(&self, bounds: Rect) -> (Vec2, Vec2) {
+        let place = |p: Vec2| v2(bounds.x + p.x * bounds.w, bounds.y + p.y * bounds.h);
+        (place(self.start), place(self.end))
+    }
+
+    /// Puts a handle at a place on the page.
+    pub fn set_handle(&mut self, end: bool, at: Vec2, bounds: Rect) {
+        let inside = v2((at.x - bounds.x) / bounds.w.max(0.001), (at.y - bounds.y) / bounds.h.max(0.001));
+        if end { self.end = inside } else { self.start = inside }
+    }
+
+    /// How far along the gradient a point of the page is, from 0 to 1, for an
+    /// object with this box. `depth` is how deep inside the object the point lies,
+    /// from 0 at its edge to 1 at its deepest, which only a contour asks for.
+    pub fn place(&self, p: Vec2, bounds: Rect, depth: f32) -> f32 {
+        use std::f32::consts::TAU;
+        let (start, end) = self.handles(bounds);
+        let (dx, dy) = (end.x - start.x, end.y - start.y);
+        let length = (dx * dx + dy * dy).sqrt().max(0.001);
+        // Along the line between the handles, and across it, both in lengths of that line.
+        let (px, py) = (p.x - start.x, p.y - start.y);
+        let (along, across) = ((px * dx + py * dy) / (length * length), (-px * dy + py * dx) / (length * length));
+        let turn = (across.atan2(along) / TAU).rem_euclid(1.0);
+        let far = along.hypot(across);
+        // Up to 1 and back down to 0, once for each whole number.
+        let wave = |v: f32| 1.0 - (v.rem_euclid(1.0) * 2.0 - 1.0).abs();
+        match self.kind {
+            FillKind::Linear | FillKind::Pattern => along,
+            FillKind::Radial => far,
+            // An ellipse half as tall as it is long.
+            FillKind::Ellipse => along.hypot(across * 2.0),
+            FillKind::Rectangle => along.abs().max(across.abs()),
+            FillKind::Cone => turn,
+            FillKind::Contour => 1.0 - depth,
+            FillKind::Starburst => wave(turn * 8.0),
+            FillKind::Ripples => wave(far * 3.0),
+            FillKind::Bars => wave(along * 3.0),
+            FillKind::Waves => 0.5 + 0.5 * (along * TAU * 2.0 + (across * TAU).sin()).sin(),
+            FillKind::Folds => wave(along * 2.0).powi(2),
+            FillKind::Satin => 0.5 + 0.5 * ((along + across) * TAU).sin() * ((along - across) * TAU * 0.5).cos(),
+        }
+        .clamp(0.0, 1.0)
+    }
+}
+
 /// Where the lines of a text stand in its box.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TextAlign {
@@ -507,6 +645,10 @@ pub struct Object {
     /// it is not drawn, and it never reaches a file.
     #[serde(skip)]
     pub mask_of: Option<u64>,
+    /// A gradient or pattern the object is filled with in place of its fill color.
+    /// The fill color stays set, so everything that only asks whether there is a fill still works.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_style: Option<Arc<FillStyle>>,
     /// Live filters, applied in this order each time the object is drawn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<crate::effects::LiveFilter>,
@@ -543,6 +685,7 @@ impl Object {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -567,6 +710,7 @@ impl Object {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -800,6 +944,7 @@ impl Object {
                     blend: crate::blend::BlendMode::Normal,
                     mask: None,
                     mask_of: None,
+                    fill_style: None,
                     filters: Vec::new(),
                     fill: self.fill,
                     stroke: None,
@@ -1884,6 +2029,9 @@ pub struct Style {
     /// The live filters the style gives an object.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<crate::effects::LiveFilter>,
+    /// The gradient or pattern the style fills an object with.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fill_style: Option<Arc<FillStyle>>,
 }
 
 pub fn default_styles() -> Vec<Style> {
@@ -1893,6 +2041,7 @@ pub fn default_styles() -> Vec<Style> {
         stroke: stroke.map(|(color, width)| Stroke { color, width }),
         opacity,
         filters: Vec::new(),
+        fill_style: None,
     };
     let ink = Color::rgb(0x22, 0x22, 0x22);
     let blue = Color::rgb(0x1e, 0x78, 0xd2);
@@ -2247,7 +2396,7 @@ impl Editor {
     /// it has to be shown as the exporter renders it.
     pub fn needs_compositing(&self) -> bool {
         fn special(object: &Object) -> bool {
-            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
         self.doc.page().objects().any(|o| o.visible && special(o))
     }
@@ -2367,6 +2516,7 @@ impl Editor {
         self.for_selected(|o| {
             if o.takes_color() && source.takes_color() {
                 (o.fill, o.stroke) = (source.fill, source.stroke);
+                o.fill_style = source.fill_style.clone();
             }
             (o.opacity, o.blend, o.filters) = (source.opacity, source.blend, source.filters.clone());
         });
@@ -2849,6 +2999,7 @@ impl Editor {
         self.for_selected(|o| {
             if o.takes_color() {
                 o.fill = style.fill;
+                o.fill_style = style.fill_style.clone();
                 o.stroke = style.stroke;
                 o.opacity = style.opacity;
                 o.filters = style.filters.clone();
@@ -2860,7 +3011,7 @@ impl Editor {
     pub fn add_style_from_selection(&mut self) -> bool {
         let Some(source) = self.selected().into_iter().find(|o| o.takes_color()).cloned() else { return false };
         let name = tf("Style {}", &[&(self.doc.styles.len() + 1)]);
-        self.doc.styles.push(Style { name, fill: source.fill, stroke: source.stroke, opacity: source.opacity, filters: source.filters.clone() });
+        self.doc.styles.push(Style { name, fill: source.fill, stroke: source.stroke, opacity: source.opacity, filters: source.filters.clone(), fill_style: source.fill_style.clone() });
         true
     }
 
@@ -2888,6 +3039,7 @@ impl Editor {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -3199,6 +3351,7 @@ impl Editor {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -3669,6 +3822,7 @@ mod tests {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,

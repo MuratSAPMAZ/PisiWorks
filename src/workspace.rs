@@ -26,7 +26,7 @@ use crate::autoshape::AutoKind;
 use crate::export::{export_web, measure_text};
 use crate::library::common_items;
 use crate::menus::{panel_shortcut, Cmd, GuideCmd, Panel, ScreenMode, Tool, DOCK_GROUPS, ZOOM_LEVELS};
-use crate::model::{snap_offset, snap_places};
+use crate::model::{snap_offset, snap_places, FillKind, FillStyle};
 use crate::theme::RULER_SIZE;
 use crate::optimize::{comparison_settings, encode, encoded_palette, export_page, format_size, settings_label, ExportSettings, MAX_COLORS, MIN_COLORS};
 use crate::paths::PathOp;
@@ -96,6 +96,9 @@ pub enum Combo {
     Paper,
     Orientation,
     Printer,
+    /// What an object is filled with: a color, a gradient or a pattern.
+    FillKind,
+    FillPattern,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -244,6 +247,8 @@ pub enum FieldId {
     /// A margin in Page Setup: left, right, top, bottom.
     PrintMargin(usize),
     PrintCopies,
+    /// How large a pattern fill is drawn, in percent.
+    FillScale,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -373,6 +378,8 @@ pub enum Drag {
     /// Moving the selection: where the mouse took hold, the box of the selection
     /// then, and how far it has been moved since, which snapping can make differ from the mouse.
     Move { start: Vec2, origin: Option<Rect>, moved: Vec2 },
+    /// Dragging a handle of a gradient fill: its end, or else its start.
+    FillHandle { end: bool },
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
     Guide { horizontal: bool, index: Option<usize>, at: f32 },
     Resize { handle: usize, origin: Rect },
@@ -501,6 +508,8 @@ pub struct Workspace {
     /// Page Setup while it is open, holding what to go back to on Cancel.
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
     pub print_dialog: Option<PrintDialog>,
+    /// The dialog that edits a gradient or pattern fill, holding the fill to go back to on Cancel.
+    pub fill_dialog: Option<Arc<FillStyle>>,
     /// The bitmap filter last used from the Filters menu, for Repeat Filter.
     pub last_filter: Option<crate::bitmap::Filter>,
     /// The dialog of a marquee command that is open, and the number of pixels in it.
@@ -750,6 +759,7 @@ impl Workspace {
             print_setup: Settings::load().print,
             page_setup_dialog: None,
             print_dialog: None,
+            fill_dialog: None,
             last_filter: None,
             marquee_dialog: None,
             gradient_stop: None,
@@ -1021,27 +1031,45 @@ impl Workspace {
         true
     }
 
-    /// The gradient of the effect on show in Photoshop Live Effects: its number and its stops.
-    pub fn shown_gradient(&self) -> Option<(usize, Vec<crate::pseffects::Stop>)> {
+    /// The gradient of the effect on show in Photoshop Live Effects, by its number there.
+    fn shown_filter_gradient(&self) -> Option<usize> {
         let (_, filter) = self.edited_filter()?;
-        let gradient = crate::pseffects::gradient_of(&filter, self.ps_effect)?;
-        Some((gradient, filter.gradient(gradient)))
+        crate::pseffects::gradient_of(&filter, self.ps_effect)
+    }
+
+    /// The stops of the gradient being edited: the fill's while its dialog is open,
+    /// otherwise that of the effect on show in Photoshop Live Effects.
+    pub fn shown_stops(&self) -> Option<Vec<crate::pseffects::Stop>> {
+        if self.fill_dialog.is_some() {
+            return self.current_fill_style().filter(|style| style.kind != FillKind::Pattern).map(|style| style.stops.clone());
+        }
+        let gradient = self.shown_filter_gradient()?;
+        Some(self.edited_filter()?.1.gradient(gradient))
+    }
+
+    /// Writes the stops of the gradient being edited back to where they came from.
+    fn write_stops(&mut self, stops: Vec<crate::pseffects::Stop>, commit: bool) {
+        if self.fill_dialog.is_some() {
+            self.change_fill_style(commit, |style| style.stops = stops.clone());
+        } else if let Some(gradient) = self.shown_filter_gradient() {
+            self.edit_filter(commit, |filter| filter.set_gradient(gradient, stops.clone()));
+        }
     }
 
     /// The gradient stop that is picked.
     pub fn picked_stop(&self) -> Option<crate::pseffects::Stop> {
-        self.shown_gradient()?.1.get(self.gradient_stop?).copied()
+        self.shown_stops()?.get(self.gradient_stop?).copied()
     }
 
     /// Changes the picked stop of the gradient on show.
     fn change_picked_stop(&mut self, change: impl Fn(&mut crate::pseffects::Stop)) {
-        let (Some((gradient, mut stops)), Some(index)) = (self.shown_gradient(), self.gradient_stop) else { return };
+        let (Some(mut stops), Some(index)) = (self.shown_stops(), self.gradient_stop) else { return };
         let Some(stop) = stops.get_mut(index) else { return };
         change(stop);
         // Typing a place can carry the stop past its neighbors.
         let (stops, held) = crate::pseffects::stop_dragged(stops.clone(), index, stops[index].0, false);
         self.gradient_stop = held;
-        self.edit_filter(true, |filter| filter.set_gradient(gradient, stops.clone()));
+        self.write_stops(stops, true);
     }
 
     /// Where a place on screen is along the gradient, from 0 to 1, how far a stop reaches, and whether it is well away from the gradient.
@@ -1055,28 +1083,106 @@ impl Workspace {
     /// A press under the gradient: picks the stop there, or adds one.
     pub fn press_gradient(&mut self, at: Point<Pixels>) {
         self.commit_field();
-        let Some((gradient, stops)) = self.shown_gradient() else { return };
+        let Some(stops) = self.shown_stops() else { return };
         let (place, reach, _) = self.gradient_place(at);
         let (stops, index) = crate::pseffects::stop_pressed(stops, place, reach);
-        self.edit_filter(false, |filter| filter.set_gradient(gradient, stops.clone()));
+        self.write_stops(stops, false);
         (self.gradient_stop, self.gradient_drag) = (Some(index), Some(index));
     }
 
     /// Moves the held gradient stop to the mouse; pulled well away from the gradient, it is taken off.
     pub fn drag_gradient(&mut self, at: Point<Pixels>) -> bool {
-        let (Some(index), Some((gradient, stops))) = (self.gradient_drag, self.shown_gradient()) else { return false };
+        let (Some(index), Some(stops)) = (self.gradient_drag, self.shown_stops()) else { return false };
         let (place, _, away) = self.gradient_place(at);
         let (stops, held) = crate::pseffects::stop_dragged(stops, index, place, away);
         (self.gradient_stop, self.gradient_drag) = (held, held);
-        self.edit_filter(false, |filter| filter.set_gradient(gradient, stops.clone()));
+        self.write_stops(stops, false);
         true
     }
 
     /// Replaces the gradient on show with one of the ready-made ones.
     pub fn use_gradient_preset(&mut self, which: usize) {
-        let Some((gradient, _)) = self.shown_gradient() else { return };
         self.gradient_stop = None;
-        self.edit_filter(true, |filter| filter.set_gradient(gradient, crate::pseffects::preset(which)));
+        self.write_stops(crate::pseffects::preset(which), true);
+    }
+
+    /// The gradient or pattern the first selected object is filled with.
+    pub fn current_fill_style(&self) -> Option<FillStyle> {
+        self.ed.selected().iter().find(|o| o.takes_color()).and_then(|o| o.fill_style.as_deref().cloned())
+    }
+
+    /// Changes the gradient or pattern fill of every selected object that has one.
+    pub fn change_fill_style(&mut self, commit: bool, change: impl Fn(&mut FillStyle)) {
+        self.ed.for_selected(|o| {
+            if let Some(style) = o.fill_style.as_mut() {
+                change(Arc::make_mut(style));
+            }
+        });
+        if commit {
+            self.ed.commit(t("Fill"));
+        }
+    }
+
+    /// The Fill category list: one color, one of the gradients, or a pattern.
+    /// A new gradient runs from the object's fill color to white, or to black from a light color.
+    pub fn set_fill_kind(&mut self, kind: Option<FillKind>) {
+        let fallback = self.fill.unwrap_or(Color::BLACK);
+        self.ed.for_selected(|o| {
+            if !o.takes_color() {
+                return;
+            }
+            o.fill_style = kind.map(|kind| {
+                let mut style = o.fill_style.as_deref().cloned().unwrap_or_else(|| {
+                    let from = o.fill.unwrap_or(fallback);
+                    let light = from.r as u32 + from.g as u32 + from.b as u32 > 600;
+                    FillStyle::new(kind, from, if light { Color::BLACK } else { Color::rgb(255, 255, 255) })
+                });
+                if style.kind != kind {
+                    (style.start, style.end) = kind.start_handles();
+                    style.kind = kind;
+                }
+                Arc::new(style)
+            });
+            // Something must be there to fill with: a fill of "none" would hide the gradient.
+            if kind.is_some() && o.fill.is_none() {
+                o.fill = Some(fallback);
+            }
+        });
+        self.ed.commit(t("Fill"));
+    }
+
+    /// Opens the dialog that edits the gradient or pattern of the selection.
+    pub fn open_fill_dialog(&mut self) {
+        self.finish_pending();
+        if let Some(style) = self.current_fill_style() {
+            self.fill_dialog = Some(Arc::new(style));
+            (self.gradient_stop, self.gradient_drag) = (None, None);
+        }
+    }
+
+    /// Closes the fill dialog, putting the fill back as it was unless `keep` is set.
+    pub fn close_fill_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(before) = self.fill_dialog.take() else { return };
+        (self.gradient_stop, self.gradient_drag) = (None, None);
+        if !keep {
+            self.ed.for_selected(|o| {
+                if o.fill_style.is_some() {
+                    o.fill_style = Some(before.clone());
+                }
+            });
+            self.ed.commit(t("Fill"));
+        }
+    }
+
+    /// The two handles of the gradient of the one selected object, on the page: where it starts and where it ends.
+    pub fn fill_handles(&self) -> Option<(Vec2, Vec2)> {
+        if self.tool != Tool::Pointer || self.ed.selection.len() != 1 {
+            return None;
+        }
+        let object = self.ed.selected().into_iter().next()?;
+        let style = object.fill_style.as_deref().filter(|style| !matches!(style.kind, FillKind::Pattern | FillKind::Contour))?;
+        Some(style.handles(object.bounds))
     }
 
     /// The five numbers of the Levels channel on show.
@@ -2998,6 +3104,15 @@ impl Workspace {
     }
 
     fn pointer_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        // The handles of a gradient come first: they may lie outside the object.
+        if let Some((start, end)) = self.fill_handles() {
+            let reach = 6.0 / self.zoom;
+            let near = |handle: Vec2| (handle.x - p.x).abs() <= reach && (handle.y - p.y).abs() <= reach;
+            if near(end) || near(start) {
+                self.drag = Some(Drag::FillHandle { end: near(end) });
+                return;
+            }
+        }
         // Inside a pixel selection the Pointer moves the pixels, and Alt leaves a copy behind.
         if self.tool == Tool::Pointer && self.pixel_drag_down(p, true, ev.modifiers.alt) {
             return;
@@ -3603,6 +3718,7 @@ impl Workspace {
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
+            fill_style: None,
             filters: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
@@ -3737,6 +3853,15 @@ impl Workspace {
         match drag {
             Drag::Move { .. } => {}
             Drag::Guide { horizontal, at, .. } => *at = if *horizontal { p.y } else { p.x }.round(),
+            Drag::FillHandle { end } => {
+                let end = *end;
+                self.ed.for_selected(|o| {
+                    let bounds = o.bounds;
+                    if let Some(style) = o.fill_style.as_mut() {
+                        Arc::make_mut(style).set_handle(end, on_guides, bounds);
+                    }
+                });
+            }
             Drag::Resize { handle, origin } => {
                 let target = resized(*origin, *handle, on_guides);
                 self.ed.for_selected(|o| o.set_bounds(target));
@@ -3934,6 +4059,7 @@ impl Workspace {
                 self.smart_lines.clear();
                 self.ed.commit(t("Move"));
             }
+            Drag::FillHandle { .. } => self.ed.commit(t("Fill")),
             Drag::Guide { horizontal, index, at } => {
                 // Let go over a ruler or off the canvas, a guide is thrown away.
                 let bounds = self.canvas_bounds.get();
@@ -4121,6 +4247,12 @@ impl Workspace {
             match key {
                 "enter" => self.close_jpeg_dialog(true),
                 "escape" => self.close_jpeg_dialog(false),
+                _ => {}
+            }
+        } else if self.fill_dialog.is_some() {
+            match key {
+                "enter" => self.close_fill_dialog(true),
+                "escape" => self.close_fill_dialog(false),
                 _ => {}
             }
         } else if self.page_setup_dialog.is_some() {
@@ -4374,6 +4506,7 @@ impl Workspace {
             FieldId::FilterValue(setting) => self.edited_filter().map_or_else(String::new, |(_, filter)| number(filter.value(setting))),
             FieldId::MarqueeAmount => self.marquee_dialog.map_or_else(String::new, |(_, amount)| number(amount)),
             FieldId::PrintMargin(side) => number(self.print_setup.margins[side.min(3)]),
+            FieldId::FillScale => self.current_fill_style().map_or_else(String::new, |style| number(style.scale)),
             FieldId::PrintCopies => self.print_dialog.as_ref().map_or_else(String::new, |dialog| dialog.copies.to_string()),
             FieldId::GradientPlace => self.picked_stop().map_or_else(String::new, |stop| number((stop.0 * 100.0).round())),
             FieldId::GradientOpacity => self.picked_stop().map_or_else(String::new, |stop| number((stop.1.a as f32 / 2.55).round())),
@@ -4601,6 +4734,10 @@ impl Workspace {
             FieldId::PrintMargin(side) => {
                 let Some(v) = number.filter(|v| *v >= 0.0) else { return };
                 self.print_setup.margins[side.min(3)] = v.min(100.0);
+            }
+            FieldId::FillScale => {
+                let Some(v) = number.filter(|v| *v >= 1.0) else { return };
+                self.change_fill_style(true, |style| style.scale = v.min(1000.0));
             }
             FieldId::PrintCopies => {
                 let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.print_dialog.as_mut()) else { return };
