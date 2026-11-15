@@ -355,6 +355,36 @@ impl ScriptEdit {
         true
     }
 
+    /// Writes one name in place of another wherever it stands as a word of its own. Says how many times it did.
+    pub fn replace_name(&mut self, from: &str, to: &str) -> usize {
+        if from.is_empty() {
+            return 0;
+        }
+        self.keep(false);
+        let part_of_word = |c: Option<char>| c.is_some_and(|c| c.is_alphanumeric() || c == '_');
+        let mut done = 0;
+        for line in &mut self.lines {
+            let mut out = String::with_capacity(line.len());
+            let mut rest = line.as_str();
+            while let Some(at) = rest.find(from) {
+                let (before, after) = (rest[..at].chars().next_back(), rest[at + from.len()..].chars().next());
+                out.push_str(&rest[..at]);
+                if part_of_word(before) || part_of_word(after) {
+                    out.push_str(from);
+                } else {
+                    out.push_str(to);
+                    done += 1;
+                }
+                rest = &rest[at + from.len()..];
+            }
+            out.push_str(rest);
+            *line = out;
+        }
+        self.col = self.col.min(self.length());
+        self.check();
+        done
+    }
+
     /// Adds a sentence as a line of its own under the caret's line: an event at the edge with a blank
     /// line before it, a step further in. The caret is left at its end.
     pub fn add_sentence(&mut self, sentence: &str, event: bool) {
@@ -501,6 +531,17 @@ mod tests {
         assert_eq!(edit.lines, vec!["one", "two"]);
         edit.undo();
         assert_eq!(edit.lines, vec![""]);
+    }
+
+    #[test]
+    fn a_name_is_put_right_everywhere_it_stands_alone() {
+        set_language(Language::English);
+        let mut edit = ScriptEdit::new("When kTop is clicked:\n    hide kTop\n    show kTopper\n    put kTop at kTop.x + 1, 5");
+        assert_eq!(edit.replace_name("kTop", "Top"), 4);
+        assert_eq!(edit.lines, vec!["When Top is clicked:", "    hide Top", "    show kTopper", "    put Top at Top.x + 1, 5"]);
+        // It is one change, to be taken back at once.
+        edit.undo();
+        assert_eq!(edit.lines[1], "    hide kTop");
     }
 
     #[test]

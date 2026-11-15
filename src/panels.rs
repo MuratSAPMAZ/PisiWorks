@@ -2360,8 +2360,26 @@ impl Workspace {
             Some(Ok(read)) => {
                 rows.push(div().text_color(rgb(0x1c7a30)).child(label(tf("The text reads: {} rules, {} numbers", &[&read.rules.len(), &read.variables.len()]))).into_any_element());
                 // What reads but will not do what was hoped is told plainly, in the color of a warning.
-                for advice in self.script_advice(read).into_iter().take(4) {
-                    rows.push(div().px_1().bg(rgb(0xfff0c8)).text_color(rgb(0x8a4a00)).font_weight(FontWeight::BOLD).child(label(advice)).into_any_element());
+                for (advice, fix) in self.script_advice(read).into_iter().take(4) {
+                    // Beside what can be put right at once, a button that does it.
+                    let button = fix.map(|fix| {
+                        let name = match &fix {
+                            crate::workspace::ScriptFix::Falls(_) => t("Give It Fall and Jump").to_string(),
+                            crate::workspace::ScriptFix::Rename(_, to) => tf("Write {}", &[to]),
+                        };
+                        self.text_button(name, true, cx, move |this, _, _| this.apply_fix(fix.clone()))
+                    });
+                    rows.push(
+                        div()
+                            .px_1()
+                            .flex()
+                            .items_center()
+                            .gap_2()
+                            .bg(rgb(0xfff0c8))
+                            .child(div().flex_1().min_w_0().text_color(rgb(0x8a4a00)).font_weight(FontWeight::BOLD).child(label(advice)))
+                            .children(button)
+                            .into_any_element(),
+                    );
                 }
             }
             Some(Err(mistakes)) => {
@@ -2391,15 +2409,15 @@ impl Workspace {
             }
             None => {}
         }
-        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S applies, Ctrl+Enter applies and tests the movie, Esc closes"))).into_any_element());
         let buttons = div()
             .flex()
             .justify_end()
             .gap_1()
-            .child(self.text_button(t("Take the Text"), true, cx, |this, _, _| {
+            .child(self.text_button(t("Apply"), true, cx, |this, _, _| {
                 this.apply_script();
             }))
-            .child(self.text_button(t("Take It and Test Movie"), true, cx, |this, window, cx| {
+            .child(self.text_button(t("Apply and Test"), true, cx, |this, window, cx| {
                 if this.apply_script() {
                     this.run(Cmd::Frame(crate::menus::FrameCmd::TestMovie), window, cx);
                 }

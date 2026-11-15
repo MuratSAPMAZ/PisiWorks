@@ -1018,6 +1018,15 @@ pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Res
 /// How wide a frame is in the timeline, in pixels.
 pub const TIMELINE_CELL: f32 = 11.0;
 
+/// A way to put right at once what a piece of advice in Rules as Text is about.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ScriptFix {
+    /// Give every object of this name the behavior Fall and Jump.
+    Falls(String),
+    /// Write the second name wherever the first stands in the text.
+    Rename(String, String),
+}
+
 /// The frame rate a new animation starts with, as Flash's does.
 pub const DEFAULT_FPS: f32 = 24.0;
 
@@ -3636,18 +3645,19 @@ impl Workspace {
 
     /// What in a text that reads will still not do what its writer hopes, each as a sentence to show: a name
     /// that nothing answers to, with the name that was most likely meant; a jump asked of what cannot fall.
-    pub fn script_advice(&self, read: &crate::script::Read) -> Vec<String> {
+    pub fn script_advice(&self, read: &crate::script::Read) -> Vec<(String, Option<ScriptFix>)> {
         use crate::behavior::BehaviorKind;
         use crate::rules::StepKind;
         let doc = &self.ed.doc;
         let (objects, sounds) = (doc.object_names(), doc.sounds.iter().map(|s| s.name.clone()).collect::<Vec<_>>());
         let known: Vec<String> = objects.iter().chain(&sounds).cloned().collect();
-        let mut advice: Vec<String> = crate::script::strangers(&read.rules, &read.commands, &objects, &sounds)
+        // Where there is a way to put a thing right at once, the advice carries it: a button beside it does it.
+        let mut advice: Vec<(String, Option<ScriptFix>)> = crate::script::strangers(&read.rules, &read.commands, &objects, &sounds)
             .into_iter()
             .map(|name| match crate::script::meant(&name, &known) {
-                Some(near) => tf("Nothing in the document is called {}. Did you mean {}?", &[&name, near]),
-                None if objects.is_empty() => tf("Nothing in the document is called {}: give an object that name in Properties", &[&name]),
-                None => tf("Nothing in the document is called {}", &[&name]),
+                Some(near) => (tf("Nothing in the document is called {}. Did you mean {}?", &[&name, near]), Some(ScriptFix::Rename(name.clone(), near.clone()))),
+                None if objects.is_empty() => (tf("Nothing in the document is called {}: give an object that name in Properties", &[&name]), None),
+                None => (tf("Nothing in the document is called {}", &[&name]), None),
             })
             .collect();
         // A jump needs something to pull the object down again.
@@ -3655,7 +3665,7 @@ impl Workspace {
         let jumps: Vec<&crate::rules::Step> = lists.flat_map(|steps| crate::rules::every_step(steps)).filter(|step| step.kind == StepKind::Jump).collect();
         // A jump of a few pixels cannot be seen: the number is a height, and a figure's height is tens of pixels.
         for step in jumps.iter().filter(|step| step.ex.is_empty() && step.x < 15.0) {
-            advice.push(tf("A jump of {} pixels is too small to see: try 100", &[&crate::rules::Step::first(step)]));
+            advice.push((tf("A jump of {} pixels is too small to see: try 100", &[&crate::rules::Step::first(step)]), None));
         }
         let mut jumpers: Vec<&str> = jumps.iter().map(|step| step.a.as_str()).collect();
         jumpers.sort();
@@ -3664,10 +3674,36 @@ impl Workspace {
             let falls = |o: &crate::model::Object| o.behaviors.iter().any(|b| b.kind == BehaviorKind::Gravity);
             let mut named = doc.pages.iter().flat_map(|page| page.objects()).filter(|o| o.name == name).peekable();
             if named.peek().is_some() && !named.any(falls) {
-                advice.push(tf("{} cannot jump yet: give it the behavior Fall and Jump", &[&name]));
+                advice.push((tf("{} cannot jump yet: it needs the behavior Fall and Jump", &[&name]), Some(ScriptFix::Falls(name.to_string()))));
             }
         }
         advice
+    }
+
+    /// Puts right what a piece of advice in Rules as Text was about.
+    pub fn apply_fix(&mut self, fix: ScriptFix) {
+        match fix {
+            ScriptFix::Falls(name) => {
+                // Every object of that name, on every scene and every keyframe, is given Fall and Jump.
+                use crate::behavior::{Behavior, BehaviorKind};
+                let give = |object: &mut crate::model::Object| {
+                    if object.name == name && !object.behaviors.iter().any(|b| b.kind == BehaviorKind::Gravity) {
+                        object.behaviors.push(Behavior::new(BehaviorKind::Gravity));
+                    }
+                };
+                for page in &mut self.ed.doc.pages {
+                    page.edit_timeline(|timeline| timeline.layers.iter_mut().flatten().flat_map(|span| span.objects.iter_mut()).for_each(&give));
+                    page.layers.iter_mut().flat_map(|layer| layer.objects.iter_mut()).for_each(&give);
+                }
+                self.ed.commit(t("Fall and Jump"));
+                self.status = tf("{} was given the behavior Fall and Jump", &[&name]);
+            }
+            ScriptFix::Rename(from, to) => {
+                if let Some(script) = self.script.as_mut() {
+                    script.replace_name(&from, &to);
+                }
+            }
+        }
     }
 
     /// Takes one of the offers into the line.
@@ -3685,7 +3721,7 @@ impl Workspace {
         match script.outcome.clone() {
             Some(Ok(read)) => {
                 script.changed = false;
-                self.status = tf("{} rules and {} numbers were taken from the text", &[&read.rules.len(), &read.variables.len()]);
+                self.status = tf("Applied: {} rules and {} numbers", &[&read.rules.len(), &read.variables.len()]);
                 (self.ed.doc.rules, self.ed.doc.variables, self.ed.doc.commands) = (read.rules, read.variables, read.commands);
                 self.rule_picked = 0;
                 self.ed.commit(t("Rules as Text"));

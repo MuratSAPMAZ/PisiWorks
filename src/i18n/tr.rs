@@ -1599,4 +1599,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes", "Tab öneriyi alır ya da sonraki ? yerine gider, oklar seçer. Ctrl+Z geri alır. Ctrl+S metni alır, Ctrl+Enter alıp filmi test eder, Esc kapatır"),
     ("make {} jump {} high", "{} nesnesini {} yükseğe zıplat"),
     ("A jump of {} pixels is too small to see: try 100", "{} piksellik zıplama gözle görülmez: 100 deneyin"),
+    ("Apply and Test", "Uygula ve Test Et"),
+    ("Applied: {} rules and {} numbers", "Uygulandı: {} kural, {} sayı"),
+    ("Give It Fall and Jump", "Düş ve Zıpla Ver"),
+    ("Write {}", "{} Yaz"),
+    ("{} was given the behavior Fall and Jump", "{} nesnesine Düş ve Zıpla davranışı verildi"),
+    ("{} cannot jump yet: it needs the behavior Fall and Jump", "{} henüz zıplayamaz: Düş ve Zıpla davranışı gerekir"),
+    ("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S applies, Ctrl+Enter applies and tests the movie, Esc closes", "Tab öneriyi alır ya da sonraki ? yerine gider, oklar seçer. Ctrl+Z geri alır. Ctrl+S uygular, Ctrl+Enter uygulayıp filmi test eder, Esc kapatır"),
 ];
