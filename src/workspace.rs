@@ -2619,7 +2619,11 @@ impl Workspace {
                 let _ = window.prompt(
                     PromptLevel::Info,
                     APP_NAME,
-                    Some(&tf("Version {}", &[&env!("CARGO_PKG_VERSION")])),
+                    Some(&format!(
+                        "{}\n{}\nhttps://github.com/gregstein/emberframe",
+                        tf("Version {}", &[&env!("CARGO_PKG_VERSION")]),
+                        t("Based on Emberframe by Med Amine Belbachir, under the MIT license.")
+                    )),
                     &[t("OK")],
                     cx,
                 );

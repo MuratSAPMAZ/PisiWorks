@@ -942,4 +942,5 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Web Dither", "Web Renk Taklidi"),
     ("Edge:", "Kenar:"),
     ("Texture:", "Doku:"),
+    ("Based on Emberframe by Med Amine Belbachir, under the MIT license.", "Med Amine Belbachir'in Emberframe projesi temel alınmıştır; MIT lisansı altındadır."),
 ];
