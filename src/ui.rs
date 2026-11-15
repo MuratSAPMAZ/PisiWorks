@@ -303,7 +303,8 @@ impl Workspace {
                     .child(t(name))
                     .child(icon("chevron", 10., TEXT_DIM))
                     .when(open, |d| {
-                        d.child(self.menu_panel(children, false, cx).absolute().left(px(238.)).top(px(-5.)))
+                        // Beside its row, moved up or to the left as far as it must be to lie inside the window.
+                        d.child(div().absolute().left(px(238.)).top(px(-5.)).child(anchored().snap_to_window().child(self.menu_panel(children, false, cx))))
                     })
                     .into_any_element()
             }
@@ -1872,7 +1873,7 @@ impl Render for Workspace {
             .on_key_up(cx.listener(Self::key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::root_mouse_down))
             // The menu a right-click opened lies over everything, where the click was.
-            .children(self.context_menu.map(|(at, entries)| deferred(self.menu_panel(entries, false, cx).absolute().left(at.x).top(at.y)).with_priority(2)))
+            .children(self.context_menu.map(|(at, entries)| deferred(anchored().position(at).snap_to_window().child(self.menu_panel(entries, false, cx))).with_priority(2)))
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .child(self.app_bar(window, cx))
