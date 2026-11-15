@@ -82,19 +82,22 @@ pub fn glyph_outlines_on_path(content: &str, size: f32, style: &TextStyle, path:
             TextAlign::Right => total - width,
             _ => 0.0,
         };
+    // Justified text is spread from one end of the path to the other; stretched text has its letters widened as well.
+    let spread = if matches!(style.align, TextAlign::Justify | TextAlign::Stretch) && width > 0.0 { total / width } else { 1.0 };
+    let widen = if style.align == TextAlign::Stretch { spread } else { 1.0 };
     glyphs
         .into_iter()
         .map(|rings| {
             let (low, high) = rings.iter().flatten().fold((f32::MAX, f32::MIN), |(low, high), p| (low.min(p.x), high.max(p.x)));
             let middle = (low + high) / 2.0;
-            let (at, dx, dy) = along(start + middle);
+            let (at, dx, dy) = along(start + middle * spread);
             rings
                 .into_iter()
                 .map(|ring| {
                     ring.into_iter()
                         .map(|p| {
                             // The letter's own place: across from its middle, and up from the baseline (down is positive).
-                            let (u, v) = (p.x - middle, p.y);
+                            let (u, v) = ((p.x - middle) * widen, p.y);
                             match style.on_path {
                                 PathOrientation::Rotate => Vec2 { x: at.x + u * dx - v * dy, y: at.y + u * dy + v * dx },
                                 PathOrientation::Vertical => Vec2 { x: at.x + u, y: at.y + v },
@@ -1325,6 +1328,14 @@ mod tests {
         assert!((tall(&upright[0]) - flat_h).abs() < 0.5 && (tall(&on_path[0]) - flat_h).abs() > 0.5);
         // An offset starts the text further along, and on a path of one point the text is left straight.
         let later = glyph_outlines_on_path("HHH", 20.0, &TextStyle { path_offset: 40.0, ..TextStyle::default() }, &down);
+        // Justified, the letters reach from one end of the path to the other; stretched, they are widened too.
+        let long = [Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 400.0, y: 0.0 }];
+        let reach = |style: &TextStyle| Rect::of_points(&glyph_outlines_on_path("HHH", 20.0, style, &long).concat().concat());
+        let first_wide = |style: &TextStyle| Rect::of_points(&glyph_outlines_on_path("HHH", 20.0, style, &long)[0].concat()).w;
+        let (plain_reach, spread_reach, wide_reach) = (reach(&TextStyle::default()), reach(&TextStyle { align: TextAlign::Justify, ..TextStyle::default() }), reach(&TextStyle { align: TextAlign::Stretch, ..TextStyle::default() }));
+        assert!(plain_reach.w < 80.0 && spread_reach.w > 250.0 && wide_reach.w > 350.0);
+        assert!((first_wide(&TextStyle { align: TextAlign::Justify, ..TextStyle::default() }) - first_wide(&TextStyle::default())).abs() < 0.01);
+        assert!(first_wide(&TextStyle { align: TextAlign::Stretch, ..TextStyle::default() }) > first_wide(&TextStyle::default()) * 3.0);
         assert!((middle(&later[0]).1 - first.1 - 40.0).abs() < 0.5);
         assert_eq!(glyph_outlines_on_path("H", 20.0, &plain, &down[..1]).len(), 1);
         // A style that is not plain is kept in the file; plain text is written as before.
