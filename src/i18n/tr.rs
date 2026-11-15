@@ -932,4 +932,5 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Path Scrubber", "Yol Süpürgesi"),
     ("Rate:", "Hız:"),
     ("Press on a path that has a stroke to change how heavy it is.", "Kalınlığını değiştirmek için konturu olan bir yola basın."),
+    ("Image Preview", "Görüntü Önizleme"),
 ];

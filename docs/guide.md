@@ -82,7 +82,7 @@ A button with a small triangle stands for several tools. Hold it down to list th
 
 - Pointer (V): Select Behind picks the next object down under the mouse with each click.
 - Scale (Q): after Skew and Distort comes 9-Slice Scaling. Four blue lines cut the selection into nine parts; drag a line to move it, then drag a handle of the selection: the corners keep their size and only the middle stretches, so rounded corners stay round.
-- Crop (C): Export Area saves the part of the page you drag over as an image, with the settings of the Optimize panel. Press Enter or double-click to choose the file.
+- Crop (C): Export Area exports only the part of the page you drag over. Press Enter or double-click, and Image Preview opens for that part.
 - Marquee (M): Oval Marquee selects an oval. Lasso (L): Polygon Lasso selects with straight sides; click each corner, and double-click or click the first corner to close it.
 - Blur (R): Sharpen, Dodge (lightens), Burn (darkens) and Smudge (drags paint along the stroke) work under the brush like Blur. Dodge and Burn have an Exposure and a Range of tones in Properties; Smudge has a Pressure and can start loaded with the stroke color.
 - Rubber Stamp (S): Replace Color changes the From color into the To color, within its Tolerance; with no From color it changes the color the stroke starts on. Red Eye Removal takes the red out of eyes in the area you drag over, by its Tolerance and Strength.
@@ -99,6 +99,10 @@ With a vector object selected, the list beside its fill in Properties chooses wh
 With the Pointer, a gradient shows two handles on the canvas: a round one where it starts and a square one where it ends. Drag them to move, turn, lengthen or shorten the gradient; they may lie outside the object. Contour follows the outline of the object and has no handles.
 
 Edit opens the gradient's colors: click under the gradient to add a stop, drag a stop to move it, pull one away to remove it, and set the color, place and opacity of the stop that is picked. Presets replaces the gradient with a ready-made one. For a pattern, Edit chooses the pattern and its scale. Styles, Paste Attributes and files keep the fill.
+
+## Image Preview
+
+File > Image Preview (Ctrl+Shift+X) shows the export settings beside the image they give, with its format, file size and dimensions, and the image changes as you change the settings. Export saves it; OK keeps the settings without exporting, and Cancel puts them back.
 
 ## Printing
 

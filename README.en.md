@@ -143,7 +143,7 @@ The figures are from November 2026 and will drift as work goes on.
 
 ## Not in this version
 
-- The commands that appear greyed out in the menus: New from Template, Image Preview, Batch Process, New Button, New Symbol (an editor for an empty symbol), Preferences, Keyboard Shortcuts, Animation, Justified and Stretched text alignment, Attach to Path, Check Spelling and the Commands menu.
+- The commands that appear greyed out in the menus: New from Template, Batch Process, New Button, New Symbol (an editor for an empty symbol), Preferences, Keyboard Shortcuts, Animation, Justified and Stretched text alignment, Attach to Path, Check Spelling and the Commands menu.
 - Feathered fill edges, textures and Web Dither; gradient fills for text.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.

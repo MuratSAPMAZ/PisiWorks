@@ -1439,6 +1439,65 @@ impl Workspace {
         )
     }
 
+    /// File > Image Preview: the Optimize settings on the left, the image they give
+    /// on the right with its format and size, and a button that saves it.
+    pub(crate) fn image_preview_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let preview = self.image_preview.as_ref()?;
+        let (image, caption) = match &preview.pane {
+            Some(pane) => (Some(pane.image.clone()), pane.caption.clone()),
+            None => (None, t("Estimating size...").to_string()),
+        };
+        let (width, height) = preview.size;
+        let picture = canvas(|_, _, _| (), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            window.paint_quad(fill(bounds, rgb(PASTEBOARD)));
+            let Some(image) = image.clone() else { return };
+            // As large as fits, but never enlarged: a small image is shown pixel for pixel.
+            let (room_w, room_h) = (f32::from(bounds.size.width) - 16.0, f32::from(bounds.size.height) - 16.0);
+            let scale = (room_w / width as f32).min(room_h / height as f32).min(1.0);
+            let (w, h) = (width as f32 * scale, height as f32 * scale);
+            let origin = point(bounds.origin.x + px((f32::from(bounds.size.width) - w) / 2.0), bounds.origin.y + px((f32::from(bounds.size.height) - h) / 2.0));
+            let area = Bounds { origin, size: size(px(w), px(h)) };
+            window.paint_quad(fill(area, rgb(INPUT)));
+            let _ = window.paint_image(area, gpui::Corners::default(), image, 0, false);
+        })
+        .w(px(440.))
+        .h(px(330.));
+        Some(
+            deferred(
+                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                    div()
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .bg(rgb(PANEL))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_lg()
+                        .child(div().font_weight(FontWeight::BOLD).child(t("Image Preview")))
+                        .child(
+                            div()
+                                .flex()
+                                .gap_3()
+                                .child(div().w(px(300.)).h(px(330.)).flex().flex_col().child(self.optimize_body(cx)))
+                                .child(div().flex().flex_col().gap_1().child(div().border_1().border_color(rgb(INPUT_BORDER)).child(picture)).child(label(format!("{caption}   {width} x {height}")))),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_1()
+                                .child(self.text_button(t("Export..."), true, cx, |this, window, cx| this.export_image_preview(window, cx)))
+                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_image_preview(true)))
+                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_image_preview(false))),
+                        ),
+                ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
     /// A dialog in the middle of the window, over everything else.
     fn dialog_frame(&self, width: f32, title: &'static str, rows: Vec<AnyElement>, buttons: Div) -> AnyElement {
         deferred(

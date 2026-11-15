@@ -172,6 +172,19 @@ impl NumericMode {
 }
 
 /// The Numeric Transform dialog while it is open.
+/// File > Image Preview: the export settings beside the image they give, before it is saved.
+pub struct ImagePreview {
+    /// The part of the page to export; all of it when there is none.
+    pub area: Option<Rect>,
+    /// The settings to go back to on Cancel.
+    pub before: ExportSettings,
+    /// The image as it will be exported, with its format and size, and the revision of the document it was made from.
+    pub pane: Option<PreviewPane>,
+    pub made_from: Option<u64>,
+    /// The size of the exported image in pixels.
+    pub size: (u32, u32),
+}
+
 /// What Properties offers for the tool in hand, beyond the size of its brush.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ToolOptions {
@@ -593,6 +606,7 @@ pub struct Workspace {
     /// Page Setup while it is open, holding what to go back to on Cancel.
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
     pub print_dialog: Option<PrintDialog>,
+    pub image_preview: Option<ImagePreview>,
     /// The dialog that edits a gradient or pattern fill, holding the fill to go back to on Cancel.
     pub fill_dialog: Option<Arc<FillStyle>>,
     /// The bitmap filter last used from the Filters menu, for Repeat Filter.
@@ -849,6 +863,7 @@ impl Workspace {
             print_setup: Settings::load().print,
             page_setup_dialog: None,
             print_dialog: None,
+            image_preview: None,
             fill_dialog: None,
             last_filter: None,
             marquee_dialog: None,
@@ -2442,6 +2457,7 @@ impl Workspace {
                     self.ed.commit(t("Group"));
                 }
             }
+            Cmd::ImagePreview => self.open_image_preview(None),
             Cmd::PageSetup => self.page_setup_dialog = Some(self.print_setup),
             Cmd::Print => {
                 let (printers, default) = crate::print::printers();
@@ -4470,14 +4486,79 @@ impl Workspace {
         }
     }
 
-    /// Fireworks' Export Area: asks for a file and saves that part of the page, with the settings of the Optimize panel.
-    fn export_area(&mut self, area: Rect, window: &mut Window, cx: &mut Context<Self>) {
+    /// Fireworks' Export Area: opens Image Preview for that part of the page alone.
+    fn export_area(&mut self, area: Rect, _: &mut Window, _: &mut Context<Self>) {
+        self.open_image_preview(Some(area));
+    }
+
+    /// The page as it is exported, or with an area only that part of it.
+    fn export_source(&mut self, area: Option<Rect>) -> crate::model::Page {
         self.ed.end_mask_edit();
         self.ed.close_groups();
         let mut page = self.ed.export_page();
-        let (x, y) = (area.x.round(), area.y.round());
-        (page.width, page.height) = (area.w.round().max(1.0) as u32, area.h.round().max(1.0) as u32);
-        page.all_objects_mut().for_each(|o| o.translate(-x, -y));
+        if let Some(area) = area {
+            let (x, y) = (area.x.round(), area.y.round());
+            (page.width, page.height) = (area.w.round().max(1.0) as u32, area.h.round().max(1.0) as u32);
+            page.all_objects_mut().for_each(|o| o.translate(-x, -y));
+            // The guides and the JPEG mask belong to the whole page.
+            page.jpeg_mask = None;
+        }
+        page
+    }
+
+    pub fn open_image_preview(&mut self, area: Option<Rect>) {
+        self.finish_pending();
+        let page = self.ed.doc.page();
+        let size = area.map_or((page.width, page.height), |a| (a.w.round().max(1.0) as u32, a.h.round().max(1.0) as u32));
+        self.image_preview = Some(ImagePreview { area, before: page.export, pane: None, made_from: None, size });
+    }
+
+    /// Encodes the image for Image Preview again whenever the settings or the page have changed.
+    pub fn refresh_image_preview(&mut self, cx: &mut Context<Self>) {
+        let revision = self.ed.revision;
+        let Some(area) = self.image_preview.as_ref().filter(|preview| preview.made_from != Some(revision)).map(|preview| preview.area) else { return };
+        if let Some(preview) = self.image_preview.as_mut() {
+            preview.made_from = Some(revision);
+        }
+        let page = self.export_source(area);
+        cx.spawn(async move |this, cx| {
+            let pane = cx
+                .background_executor()
+                .spawn(async move {
+                    let bytes = encode(&page, &page.export).ok()?;
+                    let image = encoded_texture(&bytes)?;
+                    Some(PreviewPane { image, caption: format!("{}   {}", settings_label(&page.export), format_size(bytes.len())) })
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                // Only the newest image is shown; an older one that arrives late is dropped.
+                match this.image_preview.as_mut().filter(|preview| preview.made_from == Some(revision)) {
+                    Some(preview) => this.stale_previews.extend(std::mem::replace(&mut preview.pane, pane).map(|old| old.image)),
+                    None => this.stale_previews.extend(pane.map(|new| new.image)),
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Closes Image Preview. Kept, the settings stay as they were set there; otherwise they go back.
+    pub fn close_image_preview(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(preview) = self.image_preview.take() else { return };
+        self.stale_previews.extend(preview.pane.map(|pane| pane.image));
+        if !keep && self.ed.doc.page().export != preview.before {
+            self.set_export(|settings| *settings = preview.before);
+        }
+    }
+
+    /// Export in Image Preview: asks for a file and saves the image shown.
+    pub fn export_image_preview(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.commit_field();
+        let Some(area) = self.image_preview.as_ref().map(|preview| preview.area) else { return };
+        let page = self.export_source(area);
+        let whole = area.is_none();
         let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").into(), |p| file_stem(p));
         let extension = page.export.format.extension();
         let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.{extension}")));
@@ -4487,10 +4568,14 @@ impl Workspace {
                     path.set_extension(extension);
                 }
                 this.update(cx, |this, cx| {
-                    this.status = match export_page(&page, &path) {
-                        Ok(()) => tf("Exported {}", &[&path.display()]),
+                    // The whole page takes its slices and image map with it; a part of it is one image.
+                    let written = export_page(&page, &path).and_then(|()| if whole { export_web(&page, &path) } else { Ok(0) });
+                    this.status = match written {
+                        Ok(0) => tf("Exported {}", &[&path.display()]),
+                        Ok(extra) => tf("Exported {} and {} web file(s) beside it", &[&path.display(), &extra]),
                         Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
                     };
+                    this.close_image_preview(true);
                     cx.notify();
                 })
                 .ok();
@@ -4741,6 +4826,12 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.image_preview.is_some() {
+            match key {
+                "enter" => self.export_image_preview(window, cx),
+                "escape" => self.close_image_preview(false),
+                _ => {}
+            }
         } else if self.fill_dialog.is_some() {
             match key {
                 "enter" => self.close_fill_dialog(true),
@@ -4804,6 +4895,7 @@ impl Workspace {
             ("z", false, false) => Cmd::Undo,
             ("z", true, false) | ("y", false, false) => Cmd::Redo,
             ("x", false, false) => Cmd::Cut,
+            ("x", true, false) => Cmd::ImagePreview,
             ("c", false, false) => Cmd::Copy,
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,

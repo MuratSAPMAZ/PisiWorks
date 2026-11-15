@@ -1703,6 +1703,7 @@ impl Render for Workspace {
         self.sync_textures(window, cx);
         self.refresh_estimate(cx);
         self.refresh_previews(cx);
+        self.refresh_image_preview(cx);
         let title = self.title();
         if title != self.last_title {
             window.set_window_title(&title);
@@ -1745,6 +1746,7 @@ impl Render for Workspace {
             .children(self.numeric_dialog_view(cx))
             .children(self.marquee_dialog_view(cx))
             .children(self.print_dialog_view(cx))
+            .children(self.image_preview_view(cx))
             .children(self.fill_dialog_view(cx))
             .children(self.page_setup_dialog_view(cx))
             .children(self.jpeg_dialog_view(cx))

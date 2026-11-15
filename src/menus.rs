@@ -280,6 +280,7 @@ pub enum Cmd {
     Subselect,
     PageSetup,
     Print,
+    ImagePreview,
 }
 
 /// The commands of the Text > Style menu.
@@ -504,7 +505,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Import...", "Ctrl+R", Cmd::Import),
             cmd("Export...", "Ctrl+Shift+R", Cmd::Export),
-            na("Image Preview..."),
+            cmd("Image Preview...", "Ctrl+Shift+X", Cmd::ImagePreview),
             Sep,
             na("Batch Process..."),
             Sep,

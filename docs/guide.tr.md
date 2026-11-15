@@ -84,7 +84,7 @@ Köşesinde küçük üçgen olan düğme birkaç aracı temsil eder. Listelemek
 
 - İşaretçi (V): Arkasındakini Seç, her tıklamada farenin altındaki bir alttaki nesneyi seçer.
 - Ölçek (Q): Eğriltme ve Deformasyon'dan sonra 9 dilimli ölçekleme gelir. Dört mavi çizgi seçimi dokuz parçaya böler; bir çizgiyi taşımak için sürükleyin, sonra seçimin bir tutamacını sürükleyin: köşeler boyutunu korur, yalnızca orta kısım uzar; böylece yuvarlak köşeler yuvarlak kalır.
-- Kırpma (C): Dışa Aktarma Alanı, sayfanın üzerinden sürüklediğiniz kısmını En İyileştir panelindeki ayarlarla görüntü olarak kaydeder. Dosyayı seçmek için Enter'a basın veya çift tıklayın.
+- Kırpma (C): Dışa Aktarma Alanı, sayfanın yalnızca üzerinden sürüklediğiniz kısmını dışa aktarır. Enter'a basın veya çift tıklayın; o kısım için Görüntü Önizleme açılır.
 - Seçim Çerçevesi (M): Oval Seçim Çerçevesi oval bir alan seçer. Kement (L): Çokgen Kement düz kenarlarla seçer; her köşeye tıklayın, kapatmak için çift tıklayın veya ilk köşeye tıklayın.
 - Bulanıklaştırma (R): Keskinleştir, Soldurma (açar), Yakma (koyulaştırır) ve Leke (boyayı fırça boyunca sürükler) Bulanıklaştırma gibi fırçanın altında çalışır. Soldurma ve Yakma'nın Özellikler'de Pozlama ve ton Aralığı; Leke'nin Basınç ayarı vardır ve Leke, kontur rengiyle yüklü başlayabilir.
 - Lastik Damgası (S): Renk Değiştir, Kimden rengini Tolerans içinde Kime rengine çevirir; Kimden rengi yoksa fırçanın başladığı yerdeki rengi değiştirir. Kırmızı Göz Kaldırma, üzerinden sürüklediğiniz alandaki gözlerin kırmızısını Tolerans ve Güç ayarına göre alır.
@@ -101,6 +101,10 @@ Bir vektör nesnesi seçiliyken Özellikler'de dolgunun yanındaki liste, nesnen
 İşaretçi ile degradenin tuvalde iki tutamacı görünür: başladığı yerde yuvarlak, bittiği yerde kare. Degradeyi taşımak, döndürmek, uzatmak veya kısaltmak için bunları sürükleyin; nesnenin dışında da durabilirler. Kontur, nesnenin dış hattını izler ve tutamacı yoktur.
 
 Düzenle, degradenin renklerini açar: durak eklemek için degradenin altına tıklayın, taşımak için durağı sürükleyin, kaldırmak için uzağa çekin; seçili durağın rengini, konumunu ve opaklığını ayarlayın. Hazır Ayarlar, degradeyi hazır bir degradeyle değiştirir. Desende Düzenle, deseni ve ölçeğini seçtirir. Stiller, Nitelikleri Yapıştır ve dosyalar dolguyu korur.
+
+## Görüntü Önizleme
+
+Dosya > Görüntü Önizleme (Ctrl+Shift+X), dışa aktarma ayarlarını verdikleri görüntünün yanında gösterir; biçimi, dosya boyutu ve ölçüleri altında yazar, ayarları değiştirdikçe görüntü de değişir. Dışa Aktar görüntüyü kaydeder; Tamam dışa aktarmadan ayarları korur, İptal eski haline döndürür.
 
 ## Yazdırma
 
