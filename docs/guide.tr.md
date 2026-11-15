@@ -337,6 +337,14 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 - *Hareket eden manzara.* **Sürekli Git** verilmiş bulutlar, **Dön** verilmiş güneş, üç ayrı hızda akan yıldızlar, **Yanıp Sön** verilmiş lambalar. Hiçbiri bir kuralda yer almaz.
 - *Gittikçe zorlaşma.* Puan veren kurala *… nesnesini yüzde 5 hızlandır* ekleyin.
 
+**Karakterler nerede.** Bir örneğin karakterini değiştirmek için ona üç yerden birinde bakın:
+
+- *Sahnenin üstünde.* Karakterlerin çoğu sahnede duran gruplardır: seçmek için tıklayın, adı Özellikler'de görünür. İçine girip bir parçasını değiştirmek için (kahramanın şapkasının rengi, gözlerinin boyu) gruba çift tıklayın; **Değiştir > Grubu Çöz** (Ctrl+Shift+G) onu tümüyle parçalarına ayırır.
+- *Sahnenin çevresinde.* Sahnenin etrafındaki gri alan çalışma alanıdır ve PisiSahne, Flash gibi, orada duranları gösterir. Kopyaların çıkarıldığı asıl nesneler orada tutulur: Pisi: Demir Pençe'de fare, dron, ateş, bomba, kalp, mermi ve patlama sol kenarın dışında alt alta durur; geçitler (küçük pembe yıldızlar) sağ kenarın ve üst kenarın dışındadır. Sahnedeki her şey gibi seçilir, taşınır ve değiştirilirler. O tek fareyi değiştirmek, o sahnedeki bütün fareleri değiştirir; çünkü her biri onun kopyasıdır. Görünmüyorlarsa uzaklaştırın ya da kaydırın.
+- *Kitaplıkta.* Bacaklarını oynatan karakter bir film klibidir: Pisi öyledir. **Belge Kitaplığı** panelinde listelenir. Klibi açmak için sahnedeki Pisi'ye çift tıklayın; zaman çizelgesinde koşunun dört adımı vardır, her biri ayrı bir çizimdir. Sahnenin üstündeki **◀** düğmesi geri döner.
+
+Her sahnede karakterlerin kendi kopyaları vardır; bu yüzden şehirde yapılan değişiklik çatıda yapılmış olmaz: değiştirdiğiniz karakteri kopyalayıp öteki sahnelere yapıştırın (adlar aynı kalmalıdır, çünkü kurallar adlara bakar).
+
 **Vitrin oyunu: Pisi: Demir Pençe.** Örnekler menüsünün ilk satırı uzunca bir oyundur: silahlı robot pars Pisi bir şehirden, bir fabrikadan ve bir çatıdan geçer, sonunda dev bir fareyle karşılaşır. Robot fareler gelip ateş eder, dronlar bomba bırakır, çatıyı bir taret korur, arada bir kalp düşer. Derslerde anlatılmayan hiçbir şey kullanmaz, yalnızca daha çoğunu kullanır; parçalarına ayırıp bakmaya değer:
 
 - *Pisi koşar.* Pisi, her biri üç kare süren dört adımlık bir film klibidir. Klibin sahnedeki kopyasının **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** davranışları vardır: bir klibin de her nesne gibi davranışı ve adı olabilir.

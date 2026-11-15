@@ -335,6 +335,14 @@ The first ten show when you play inside the program (Enter): the film then plays
 - *Scenery that moves.* Clouds with **Keep Going**, a sun with **Spin**, stars streaming past at three speeds, lamps with **Blink**. None of it is in a rule.
 - *Harder as it goes.* Add *make … faster by 5 percent* to the rule that gives a point.
 
+**Where the characters are.** To change a character of an example, find it in one of three places:
+
+- *On the stage.* Most characters are groups lying on the stage: click one to select it, and its name shows in Properties. Double-click the group to go inside it and change a part (the color of the hero's cap, the size of its eyes); **Modify > Ungroup** (Ctrl+Shift+G) takes it apart altogether.
+- *Around the stage.* The grey area around the stage is the pasteboard, and PisiSahne shows what lies on it, as Flash does. What copies are made from is kept there: in Pisi: Iron Claw the rat, the drone, the shot, the bomb, the heart, the bullet and the explosion stand in a column off the left edge, and the gates, small pink stars, off the right and the top. They can be selected, moved and changed like anything on the stage. Changing the one rat changes every rat of that scene, since each is a copy of it. Zoom out, or scroll, if they are out of sight.
+- *In the library.* A character that moves its legs is a movie clip: Pisi is one. It is listed in the **Document Library** panel. Double-click Pisi on the stage to open the clip; its timeline has the four steps of the run, each a drawing of its own. The **◀** button above the stage goes back.
+
+Each scene has its own copies of the characters, so a change made in the city is not made on the rooftop: copy the changed character and paste it into the other scenes (the names must stay the same, since the rules go by them).
+
 **The showcase: Pisi: Iron Claw.** The first entry of the Examples menu is a game of some length: Pisi, a robot leopard with a blaster, goes through a city, a factory and a rooftop, and meets a giant rat at the end. Robot rats roll in and shoot, drones drop bombs, a turret guards the roof, hearts fall now and then. It is made of nothing the lessons do not teach, only more of it, and it is worth taking apart:
 
 - *Pisi runs.* Pisi is a movie clip of four steps, three frames each. A copy of the clip on the stage has the behaviors **Walk with the Arrow Keys** and **Fall and Jump**: a clip can have behaviors and a name like anything else.

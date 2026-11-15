@@ -394,6 +394,17 @@ impl Scene {
             let page_rect = Rect { x: 0.0, y: 0.0, w: self.page.width as f32, h: self.page.height as f32 };
             let page_bounds = screen_rect(map, page_rect);
             self.paint_canvas(page_bounds, bounds, window);
+            // In PisiSahne what lies off the stage shows on the pasteboard around it, as in Flash: that is where
+            // things wait to come on, and where what copies are made from is kept. PisiWorks, like Fireworks,
+            // shows the canvas only.
+            if theme::is_sahne() {
+                let outside = |o: &&Object| o.bounds.x < 0.0 || o.bounds.y < 0.0 || o.bounds.right() > page_rect.w || o.bounds.bottom() > page_rect.h;
+                for layer in self.page.layers.iter().filter(|l| l.visible) {
+                    for object in layer.objects.iter().filter(|o| o.visible && !o.is_web()).filter(outside) {
+                        paint_object(object, &self.textures, map, window, cx);
+                    }
+                }
+            }
             window.with_content_mask(Some(ContentMask { bounds: page_bounds }), |window| {
                 for object in &self.ghosts {
                     paint_object(object, &self.textures, map, window, cx);
