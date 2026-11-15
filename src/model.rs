@@ -151,6 +151,11 @@ impl Warp {
         Self { m: [1.0, -lean, lean * foot, 0.0, squash, foot * (1.0 - squash), 0.0, 0.0, 1.0] }
     }
 
+    /// The map as the six numbers a browser's canvas takes for a transform. What the map does beyond turning, scaling and slanting is left out.
+    pub fn affine(&self) -> [f32; 6] {
+        [self.m[0], self.m[3], self.m[1], self.m[4], self.m[2], self.m[5]]
+    }
+
     /// How far the map turns what it is given, in radians clockwise: the angle of a rotation, or of the turn in a freer transform.
     pub fn turn(&self) -> f32 {
         self.m[3].atan2(self.m[0])
@@ -2237,6 +2242,13 @@ pub struct Page {
     /// The timeline, in a document of the animation program; the page is then a scene of the animation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timeline: Option<Timeline>,
+    /// Set on the page that holds the timeline of a movie clip: the number of the clip's symbol.
+    /// Such a page is not a scene of the animation, and is shown only while the clip is edited.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clip_of: Option<u64>,
+    /// Where on the clip's page the top left of the clip's first frame lies: the point its copies are placed by.
+    #[serde(default)]
+    pub clip_origin: Vec2,
     /// How many times an animated GIF made from the page plays: 0 is for ever, 1 is once through.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub gif_loops: u16,
@@ -2317,6 +2329,8 @@ impl Page {
             guides: Guides::default(),
             open_groups: Vec::new(),
             symbol_edit: None,
+            clip_of: None,
+            clip_origin: Vec2::default(),
             timeline: None,
             gif_loops: 0,
             animations: Vec::new(),
@@ -2359,7 +2373,7 @@ impl Page {
     /// Gives the page a timeline, if it has none: each layer starts with one keyframe holding what it shows.
     pub fn start_timeline(&mut self, fps: f32) {
         if self.timeline.is_none() {
-            let layers = self.layers.iter().map(|layer| vec![Span { start: 0, length: 1, objects: layer.objects.clone(), tween: None }]).collect();
+            let layers = self.layers.iter().map(|layer| vec![Span { start: 0, length: 1, objects: layer.objects.clone(), ..Default::default() }]).collect();
             self.timeline = Some(Timeline { fps, current: 0, layers, kinds: Vec::new(), bound: Vec::new() });
         }
     }
@@ -2373,7 +2387,7 @@ impl Page {
         let frame = timeline.current;
         for (index, layer) in self.layers.iter().enumerate() {
             if timeline.layers[index].is_empty() {
-                timeline.layers[index].push(Span { start: 0, length: frame + 1, objects: Vec::new(), tween: None });
+                timeline.layers[index].push(Span { start: 0, length: frame + 1, objects: Vec::new(), ..Default::default() });
             }
             let Some(at) = timeline.span_at(index, frame) else {
                 // Past the end of the layer: drawing there makes it reach the frame, with a keyframe of what was drawn.
@@ -2923,8 +2937,108 @@ impl Tween {
     }
 }
 
-/// A keyframe and the frames that follow it until the next keyframe.
+/// What a frame of the timeline, or a button, does when the finished animation reaches it or it is clicked.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Action {
+    Stop,
+    Play,
+    /// Goes to a frame of the scene, counted from 1, and plays on from there.
+    GotoPlay(usize),
+    /// Goes to a frame of the scene, counted from 1, and stops there.
+    GotoStop(usize),
+    /// Goes to the first frame of a scene, counted from 1, and plays.
+    Scene(usize),
+    /// Opens an address.
+    Url(String),
+}
+
+impl Action {
+    /// Reads an action as it is kept in a document. Anything that is not one of the others is an address.
+    pub fn parse(text: &str) -> Option<Action> {
+        let text = text.trim();
+        let number = |rest: &str| rest.parse::<usize>().ok().filter(|n| *n >= 1);
+        Some(match text {
+            "" => return None,
+            "action:stop" => Action::Stop,
+            "action:play" => Action::Play,
+            _ => {
+                if let Some(rest) = text.strip_prefix("action:goto-play:") {
+                    Action::GotoPlay(number(rest)?)
+                } else if let Some(rest) = text.strip_prefix("action:goto-stop:") {
+                    Action::GotoStop(number(rest)?)
+                } else if let Some(rest) = text.strip_prefix("action:scene:") {
+                    Action::Scene(number(rest)?)
+                } else if text.starts_with("action:") {
+                    return None;
+                } else {
+                    Action::Url(text.to_string())
+                }
+            }
+        })
+    }
+
+    /// The action as it is kept in a document.
+    pub fn text(&self) -> String {
+        match self {
+            Action::Stop => "action:stop".into(),
+            Action::Play => "action:play".into(),
+            Action::GotoPlay(frame) => format!("action:goto-play:{frame}"),
+            Action::GotoStop(frame) => format!("action:goto-stop:{frame}"),
+            Action::Scene(scene) => format!("action:scene:{scene}"),
+            Action::Url(address) => address.clone(),
+        }
+    }
+
+    /// Which entry of the list of actions this is: 0 none, then in the order the list shows them.
+    pub fn choice(action: &Option<Action>) -> usize {
+        match action {
+            None => 0,
+            Some(Action::Stop) => 1,
+            Some(Action::Play) => 2,
+            Some(Action::GotoPlay(_)) => 3,
+            Some(Action::GotoStop(_)) => 4,
+            Some(Action::Scene(_)) => 5,
+            Some(Action::Url(_)) => 6,
+        }
+    }
+
+    /// The action an entry of the list stands for, keeping the number or address of the one before where it fits.
+    pub fn chosen(choice: usize, before: &Option<Action>) -> Option<Action> {
+        let number = match before {
+            Some(Action::GotoPlay(n) | Action::GotoStop(n) | Action::Scene(n)) => *n,
+            _ => 1,
+        };
+        match choice {
+            1 => Some(Action::Stop),
+            2 => Some(Action::Play),
+            3 => Some(Action::GotoPlay(number)),
+            4 => Some(Action::GotoStop(number)),
+            5 => Some(Action::Scene(number)),
+            6 => Some(Action::Url(match before {
+                Some(Action::Url(address)) => address.clone(),
+                _ => "https://".into(),
+            })),
+            _ => None,
+        }
+    }
+}
+
+/// The names of the actions, in the order of [`Action::choice`].
+pub const ACTION_NAMES: [&str; 7] = ["None", "Stop", "Play", "Go to Frame and Play", "Go to Frame and Stop", "Go to Scene", "Go to Address"];
+
+/// A sound kept in the document: a file as it was imported.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Sound {
+    pub id: u64,
+    pub name: String,
+    /// What kind of sound file it is, as a browser is told: audio/mpeg, audio/ogg, audio/wav.
+    pub mime: String,
+    /// The file, in base64, as it goes into a published page.
+    pub data: Arc<String>,
+}
+
+/// A keyframe and the frames that follow it until the next keyframe.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Span {
     /// The frame the keyframe is on, counted from 0.
     pub start: usize,
@@ -2934,6 +3048,12 @@ pub struct Span {
     pub objects: Vec<Object>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tween: Option<Tween>,
+    /// What the finished animation does on reaching the keyframe, written as [`Action::text`] writes it; empty for nothing.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub action: String,
+    /// The sound that starts on the keyframe, by its number in the document.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound: Option<u64>,
 }
 
 /// The timeline of a scene: for each layer of the page, its keyframes one after
@@ -3311,7 +3431,7 @@ impl Timeline {
         match spans.last_mut() {
             Some(last) if last.start + last.length <= frame => last.length = frame + 1 - last.start,
             Some(_) => {}
-            None => spans.push(Span { start: 0, length: frame + 1, objects: Vec::new(), tween: None }),
+            None => spans.push(Span { start: 0, length: frame + 1, objects: Vec::new(), ..Default::default() }),
         }
     }
 
@@ -3356,7 +3476,7 @@ impl Timeline {
         spans[index].length -= rest;
         // A tween goes on to the new keyframe, and from it to where it went before.
         let tween = spans[index].tween.clone().filter(|_| !blank);
-        spans.insert(index + 1, Span { start: frame, length: rest, objects, tween });
+        spans.insert(index + 1, Span { start: frame, length: rest, objects, tween, ..Default::default() });
         true
     }
 
@@ -3474,6 +3594,12 @@ pub struct Document {
     pub symbols: Vec<Symbol>,
     #[serde(default)]
     pub urls: Vec<String>,
+    /// The sounds of an animation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sounds: Vec<Sound>,
+    /// While a movie clip is edited, the page to go back to. Never written to a file.
+    #[serde(skip)]
+    pub clip_return: Option<usize>,
 }
 
 const MAX_SYMBOL_DEPTH: usize = 16;
@@ -3549,7 +3675,19 @@ impl Document {
             styles: default_styles(),
             symbols: Vec::new(),
             urls: Vec::new(),
+            sounds: Vec::new(),
+            clip_return: None,
         }
+    }
+
+    /// The pages that are scenes of the animation, in order: every page that is not the timeline of a movie clip.
+    pub fn scenes(&self) -> Vec<usize> {
+        (0..self.pages.len()).filter(|index| self.pages[*index].clip_of.is_none()).collect()
+    }
+
+    /// The page that holds the timeline of a movie clip.
+    pub fn clip_page(&self, symbol: u64) -> Option<usize> {
+        self.pages.iter().position(|page| page.clip_of == Some(symbol))
     }
 
     /// A document sized to an image, with the image as its only object.
@@ -4277,7 +4415,7 @@ impl Editor {
         if let Some(timeline) = &mut page.timeline {
             // A new layer of an animation is empty for as long as the scene lasts.
             let frames = timeline.frame_count().max(1);
-            timeline.layers.insert(at.min(timeline.layers.len()), vec![Span { start: 0, length: frames, objects: Vec::new(), tween: None }]);
+            timeline.layers.insert(at.min(timeline.layers.len()), vec![Span { start: 0, length: frames, objects: Vec::new(), ..Default::default() }]);
             if at < timeline.kinds.len() {
                 timeline.kinds.insert(at, LayerKind::Normal);
             }
@@ -4472,17 +4610,26 @@ impl Editor {
             let p = self.doc.page();
             (p.width, p.height, p.canvas)
         };
-        let mut page = Page::new(tf("Page {}", &[&(self.doc.pages.len() + 1)]), w, h);
+        self.leave_clip();
+        // In an animation a new page is a new scene, with a timeline of its own.
+        let fps = self.doc.page().timeline.as_ref().map(|timeline| timeline.fps);
+        let number = self.doc.scenes().len() + 1;
+        let mut page = Page::new(if fps.is_some() { tf("Scene {}", &[&number]) } else { tf("Page {}", &[&number]) }, w, h);
         page.canvas = canvas;
+        if let Some(fps) = fps {
+            page.start_timeline(fps);
+        }
         self.doc.pages.push(page);
         self.doc.active_page = self.doc.pages.len() - 1;
         self.selection.clear();
     }
 
     pub fn delete_page(&mut self) -> bool {
-        if self.doc.pages.len() < 2 {
+        // The last scene stays, and the page of a movie clip goes only with its symbol.
+        if self.doc.scenes().len() < 2 || self.doc.page().clip_of.is_some() {
             return false;
         }
+        self.doc.clip_return = None;
         self.doc.pages.remove(self.doc.active_page);
         self.doc.active_page = self.doc.active_page.min(self.doc.pages.len() - 1);
         self.selection.clear();
@@ -5594,7 +5741,122 @@ impl Editor {
     }
 
     /// Removes a symbol and every copy of it, including copies inside other symbols.
+    /// The symbol whose movie clip is being edited.
+    pub fn editing_clip(&self) -> Option<u64> {
+        self.doc.page().clip_of
+    }
+
+    /// Opens the timeline of a movie clip: the clip gets a page of its own, where every tool
+    /// and the whole timeline work on it as they do on a scene. The first time, the page
+    /// starts with what the symbol holds, in the middle.
+    pub fn open_clip(&mut self, symbol: u64) -> bool {
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        self.leave_clip();
+        let Some(entry) = self.doc.symbols.iter().find(|s| s.id == symbol).cloned() else { return false };
+        let back = self.doc.active_page;
+        let index = match self.doc.clip_page(symbol) {
+            Some(index) => index,
+            None => {
+                let scene = self.doc.page();
+                let (fps, middle) = (scene.timeline.as_ref().map_or(24.0, |timeline| timeline.fps), scene.rect().center());
+                let mut page = Page::new(entry.name.clone(), scene.width, scene.height);
+                page.canvas = scene.canvas;
+                let natural = entry.objects.iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
+                let origin = v2((middle.x - natural.w / 2.0).round(), (middle.y - natural.h / 2.0).round());
+                let mut parts = entry.objects.clone();
+                for part in &mut parts {
+                    link_object(&self.doc.symbols, part, 1);
+                    part.translate(origin.x - natural.x, origin.y - natural.y);
+                }
+                page.layers[0].objects = parts;
+                (page.clip_of, page.clip_origin) = (Some(symbol), origin);
+                page.start_timeline(fps);
+                self.doc.pages.push(page);
+                self.doc.pages.len() - 1
+            }
+        };
+        self.doc.clip_return = Some(back);
+        self.doc.active_page = index;
+        self.selection.clear();
+        true
+    }
+
+    /// Writes the first frame of the clip being edited into its symbol, so that every copy on the
+    /// stage shows it, and keeps the copies the size and place they were. The clip's page stays open.
+    pub fn sync_clip(&mut self) {
+        let Some(symbol) = self.editing_clip() else { return };
+        let page = self.doc.page_mut();
+        page.store_frame();
+        let first: Vec<Object> = page.at_frame(0).played().objects().filter(|o| o.visible && !o.is_web()).cloned().collect();
+        let before_origin = page.clip_origin;
+        let now = first.iter().map(|o| o.bounds).reduce(Rect::union);
+        let Some(entry) = self.doc.symbols.iter_mut().find(|s| s.id == symbol) else { return };
+        let before = entry.objects.iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
+        entry.objects = normalized(&first);
+        let Some(now) = now else {
+            self.doc.relink_symbols();
+            return;
+        };
+        self.doc.page_mut().clip_origin = v2(now.x, now.y);
+        // The copies keep their own scale: they grow and move as the clip's first frame did.
+        if before.w > 0.0 && before.h > 0.0 {
+            for object in self.doc.pages.iter_mut().flat_map(Page::all_objects_mut) {
+                if !matches!(object.shape, Shape::Instance { symbol: of, .. } if of == symbol) {
+                    continue;
+                }
+                let frame = object.placement.map_or(object.bounds, |p| p.frame);
+                let (kx, ky) = (frame.w / before.w, frame.h / before.h);
+                let fitted = Rect { x: frame.x + (now.x - before_origin.x) * kx, y: frame.y + (now.y - before_origin.y) * ky, w: now.w * kx, h: now.h * ky };
+                match &mut object.placement {
+                    Some(placement) => {
+                        placement.frame = fitted;
+                        object.bounds = placement.bounds();
+                    }
+                    None => object.bounds = fitted,
+                }
+            }
+        }
+        self.doc.relink_symbols();
+    }
+
+    /// Ends the edit of a movie clip and goes back to the scene it was opened from. Returns whether one was being edited.
+    pub fn leave_clip(&mut self) -> bool {
+        if self.editing_clip().is_none() {
+            return false;
+        }
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        self.sync_clip();
+        let scenes = self.doc.scenes();
+        let back = self.doc.clip_return.take().filter(|index| scenes.contains(index)).or(scenes.first().copied()).unwrap_or(0);
+        self.doc.active_page = back;
+        self.selection.clear();
+        true
+    }
+
+    /// Adds a sound to the document. Returns its number.
+    pub fn add_sound(&mut self, name: &str, mime: &str, bytes: &[u8]) -> u64 {
+        use base64::Engine;
+        let id = self.alloc_id();
+        self.doc.sounds.push(Sound { id, name: name.to_string(), mime: mime.to_string(), data: Arc::new(base64::engine::general_purpose::STANDARD.encode(bytes)) });
+        id
+    }
+
     pub fn delete_symbol(&mut self, id: u64) {
+        // A movie clip's own page goes with it.
+        if let Some(index) = self.doc.clip_page(id) {
+            if self.doc.active_page == index {
+                self.leave_clip();
+            }
+            self.doc.pages.remove(index);
+            self.doc.clip_return = None;
+            if self.doc.active_page > index {
+                self.doc.active_page -= 1;
+            }
+        }
         let is_copy = |o: &Object| matches!(o.shape, Shape::Instance { symbol, .. } if symbol == id);
         self.doc.symbols.retain(|s| s.id != id);
         for symbol in &mut self.doc.symbols {
@@ -6429,6 +6691,68 @@ mod tests {
         let timeline = e.doc.page().timeline.as_ref().unwrap();
         assert_eq!((timeline.kind(0), timeline.kind(1), timeline.kind(2), timeline.kind(3)), (LayerKind::Normal, LayerKind::Normal, LayerKind::Normal, LayerKind::Mask));
         assert!(timeline.is_bound(2) && !timeline.is_bound(1), "the layer under the mask is still the tied one");
+    }
+
+    #[test]
+    fn actions_are_kept_as_text_and_read_back() {
+        for action in [Action::Stop, Action::Play, Action::GotoPlay(12), Action::GotoStop(3), Action::Scene(2), Action::Url("https://pardus.org.tr".into())] {
+            assert_eq!(Action::parse(&action.text()), Some(action.clone()));
+            assert_eq!(Action::chosen(Action::choice(&Some(action.clone())), &Some(action.clone())), Some(action));
+        }
+        assert_eq!(Action::parse(""), None);
+        assert_eq!(Action::parse("action:goto-play:0"), None, "frames are counted from 1");
+        assert_eq!(Action::parse("action:nonsense"), None);
+        // Choosing another action that takes a number keeps the number.
+        assert_eq!(Action::chosen(4, &Some(Action::GotoPlay(7))), Some(Action::GotoStop(7)));
+        assert_eq!(Action::chosen(0, &Some(Action::Stop)), None);
+    }
+
+    #[test]
+    fn a_movie_clip_has_a_timeline_of_its_own() {
+        let mut e = editor();
+        e.doc.page_mut().start_timeline(12.0);
+        e.selection = vec![100];
+        let symbol = e.make_symbol().unwrap();
+        let copy = e.selection[0];
+        e.doc.symbols[0].kind = SymbolKind::Animation;
+        assert_eq!(e.doc.scenes(), [0]);
+        // Opened, the clip has a page of its own with what the symbol holds in the middle, and a timeline.
+        assert!(e.open_clip(symbol));
+        assert_eq!((e.doc.active_page, e.doc.pages.len(), e.editing_clip()), (1, 2, Some(symbol)));
+        assert_eq!(e.doc.scenes(), [0], "the clip's page is no scene");
+        let page = e.doc.page();
+        assert!(page.timeline.is_some());
+        assert_eq!(page.objects().next().unwrap().bounds, Rect { x: 230.0, y: 180.0, w: 40.0, h: 40.0 });
+        // A second keyframe further right; in the first frame the box is made wider.
+        e.goto_frame(5);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        let part = e.doc.page().objects().next().unwrap().id;
+        e.selection = vec![part];
+        e.for_selected(|o| o.translate(100.0, 0.0));
+        e.goto_frame(0);
+        e.selection = vec![part];
+        e.for_selected(|o| o.set_bounds(Rect { x: 230.0, y: 180.0, w: 80.0, h: 40.0 }));
+        // Leaving goes back to the scene; the copy shows the first frame and is as much wider.
+        assert!(e.leave_clip() && !e.leave_clip());
+        assert_eq!(e.doc.active_page, 0);
+        assert_eq!(e.object(copy).unwrap().bounds, Rect { x: 0.0, y: 10.0, w: 80.0, h: 40.0 });
+        assert_eq!(e.doc.symbols[0].objects[0].bounds, Rect { x: 0.0, y: 0.0, w: 80.0, h: 40.0 });
+        // Opened again, it is the same page, with its frames.
+        assert!(e.open_clip(symbol));
+        assert_eq!((e.doc.pages.len(), e.doc.page().timeline.as_ref().unwrap().frame_count()), (2, 6));
+        e.leave_clip();
+        // A new scene has a timeline and is named as one; the clip's page still is not a scene.
+        e.add_page();
+        assert_eq!(e.doc.scenes(), [0, 2]);
+        assert!(e.doc.page().timeline.is_some() && e.doc.page().name == "Scene 2");
+        // The whole survives a file, and deleting the symbol takes the clip's page along.
+        let again = document_from_json(&document_to_json(&e.doc).unwrap()).unwrap();
+        assert_eq!((again.pages.len(), again.clip_page(symbol)), (3, Some(1)));
+        e.delete_symbol(symbol);
+        assert_eq!((e.doc.pages.len(), e.doc.scenes(), e.doc.active_page), (2, vec![0, 1], 1));
+        // A sound is kept as it was imported.
+        let sound = e.add_sound("zil.wav", "audio/wav", b"RIFF");
+        assert_eq!((e.doc.sounds[0].id, e.doc.sounds[0].data.as_str()), (sound, "UklGRg=="));
     }
 
     #[test]

@@ -1214,4 +1214,5 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Scenes", "Sahneler"),
     ("An animation program for Pardus,", "Pardus için, Türkçe arayüzlü,"),
     ("built on PisiWorks.", "PisiWorks üzerine kurulu animasyon programı."),
+    ("Scene {}", "Sahne {}"),
 ];
