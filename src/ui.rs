@@ -1836,6 +1836,7 @@ impl Render for Workspace {
             .children(self.symbol_dialog_view(cx))
             .children(self.template_dialog_view(window, cx))
             .children(self.template_name_view(cx))
+            .children(self.batch_dialog_view(cx))
             .children(self.animate_dialog_view(cx))
             .children(self.shortcuts_view(cx))
             .children(self.spell_dialog_view(cx))

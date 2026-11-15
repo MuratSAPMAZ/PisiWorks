@@ -81,9 +81,13 @@ pub fn saved() -> Vec<(String, PathBuf)> {
 
 /// A name as it can stand in a file name: nothing that would lead out of the folder.
 pub fn file_name(name: &str) -> String {
-    let cleaned: String = name.trim().chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
-    let cleaned = cleaned.trim_matches('.').trim().to_string();
+    let cleaned = name_part(name).trim_matches('.').trim().to_string();
     if cleaned.is_empty() { "template".into() } else { cleaned }
+}
+
+/// A piece of a file name, such as a prefix: what cannot stand in one is replaced.
+pub fn name_part(text: &str) -> String {
+    text.trim().chars().map(|c| if c.is_control() || "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect()
 }
 
 /// Keeps a document, already written out as text, as a template under a name.

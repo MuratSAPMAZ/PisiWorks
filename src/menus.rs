@@ -219,6 +219,7 @@ pub enum Cmd {
     ConvertToSymbol,
     NewSymbol,
     NewFromTemplate,
+    BatchProcess,
     SaveAsTemplate,
     NewButton,
     /// Opens the selected copy of a symbol for editing in place, or ends the edit.
@@ -567,7 +568,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Export...", "Ctrl+Shift+R", Cmd::Export),
             cmd("Image Preview...", "Ctrl+Shift+X", Cmd::ImagePreview),
             Sep,
-            na("Batch Process..."),
+            cmd("Batch Process...", "", Cmd::BatchProcess),
             Sep,
             cmd("Page Setup...", "", Cmd::PageSetup),
             cmd("Print...", "Ctrl+P", Cmd::Print),

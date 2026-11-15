@@ -1,6 +1,7 @@
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
 mod autoshape;
+mod batch;
 mod bitmap;
 mod blend;
 mod canvas_view;

@@ -103,6 +103,7 @@ pub enum Combo {
     Orientation,
     /// Which look of the button being edited is on show.
     ButtonLook,
+    BatchScale,
     Printer,
     PrintRange,
     /// What an object is filled with: a color, a gradient or a pattern.
@@ -261,6 +262,25 @@ impl ToolOptions {
     }
 }
 
+/// File > Batch Process: the files, and what is done to each.
+#[derive(Clone, Debug, Default)]
+pub struct BatchDialog {
+    pub files: Vec<PathBuf>,
+    /// 0 no scaling, 1 to a size, 2 to fit an area, 3 to a percentage.
+    pub scale: usize,
+    pub width: u32,
+    pub height: u32,
+    pub percent: f32,
+    /// Export every file with the Optimize settings of the document on show, not with its own.
+    pub use_current: bool,
+    pub prefix: String,
+    pub suffix: String,
+    /// Where the results go; beside each original if not set.
+    pub output: Option<PathBuf>,
+}
+
+pub const BATCH_SCALES: [&str; 4] = ["No Scaling", "Scale to Size", "Scale to Fit Area", "Scale to Percentage"];
+
 /// The Print dialog: where the page is to go, and how many times.
 #[derive(Clone, Debug)]
 pub struct PrintDialog {
@@ -369,6 +389,8 @@ pub enum FieldId {
     SpellChange,
     NewSymbolName,
     TemplateName,
+    /// A text of Batch Process: 0 width, 1 height, 2 percentage, 3 prefix, 4 suffix.
+    Batch(usize),
     /// A number of the Animate dialog: states, move, direction, scaling, opacity from and to, rotation.
     Animate(usize),
     PrefUndo,
@@ -661,6 +683,7 @@ pub struct Workspace {
     pub template_dialog: Option<(Vec<(String, PathBuf)>, usize)>,
     /// Save as Template: the name asked for.
     pub template_name: Option<String>,
+    pub batch_dialog: Option<BatchDialog>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -941,6 +964,7 @@ impl Workspace {
             symbol_dialog: None,
             template_dialog: None,
             template_name: None,
+            batch_dialog: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -2216,6 +2240,76 @@ impl Workspace {
         self.ed.selected_animation().map_or_else(Vec::new, |index| self.ed.animation_path(index))
     }
 
+    /// Asks for files to add to the batch.
+    pub fn add_batch_files(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions { files: true, directories: false, multiple: true, prompt: None });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(paths))) = picked.await else { return };
+            this.update(cx, |this, cx| {
+                if let Some(dialog) = this.batch_dialog.as_mut() {
+                    for path in paths {
+                        if !dialog.files.contains(&path) {
+                            dialog.files.push(path);
+                        }
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Asks for the folder the results of the batch go to.
+    pub fn pick_batch_folder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let picked = cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, multiple: false, prompt: None });
+        cx.spawn_in(window, async move |this, cx| {
+            let Ok(Ok(Some(mut paths))) = picked.await else { return };
+            this.update(cx, |this, cx| {
+                if let Some(dialog) = this.batch_dialog.as_mut() {
+                    dialog.output = paths.pop();
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Runs the batch over its files and says how it went.
+    pub fn run_batch(&mut self) {
+        self.commit_field();
+        let Some(dialog) = self.batch_dialog.take() else { return };
+        let scale = match dialog.scale {
+            1 => crate::batch::Scale::ToSize(dialog.width, dialog.height),
+            2 => crate::batch::Scale::FitArea(dialog.width, dialog.height),
+            3 => crate::batch::Scale::Percent(dialog.percent),
+            _ => crate::batch::Scale::None,
+        };
+        let batch = crate::batch::Batch {
+            scale,
+            settings: dialog.use_current.then(|| self.ed.doc.page().export),
+            prefix: crate::templates::name_part(&dialog.prefix),
+            suffix: crate::templates::name_part(&dialog.suffix),
+            output: dialog.output.clone(),
+        };
+        let open = |bytes: &[u8], path: &Path| match parse_file(bytes)? {
+            Opened::Document(document) => Ok((document, true)),
+            Opened::Image(bitmap) => Ok((Document::from_bitmap(file_stem(path), bitmap), false)),
+        };
+        let mut failed = Vec::new();
+        for path in &dialog.files {
+            if let Err(error) = crate::batch::process(path, &batch, open) {
+                failed.push(format!("{}: {error}", path.file_name().unwrap_or_default().to_string_lossy()));
+            }
+        }
+        let done = dialog.files.len() - failed.len();
+        self.status = match failed.first() {
+            None => tf("Batch finished: {} file(s) processed", &[&done]),
+            Some(first) => tf("Batch finished: {} processed, {} failed ({})", &[&done, &failed.len(), first]),
+        };
+    }
+
     /// Starts a new, unnamed document from the template picked in New from Template.
     pub fn close_template_dialog(&mut self, keep: bool) {
         let Some((saved, picked)) = self.template_dialog.take() else { return };
@@ -2494,6 +2588,7 @@ impl Workspace {
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));
         match cmd {
             Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate => self.confirm_discard(cmd, window, cx),
+            Cmd::BatchProcess => self.batch_dialog = Some(BatchDialog { width: 640, height: 480, percent: 50.0, ..Default::default() }),
             Cmd::SaveAsTemplate => self.template_name = Some(self.path.as_deref().map_or_else(|| t("Template").to_string(), file_stem)),
             Cmd::Save => self.save(false, window, cx),
             Cmd::SaveAs => self.save(true, window, cx),
@@ -5713,6 +5808,13 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::Batch(which) => self.batch_dialog.as_ref().map_or_else(String::new, |d| match which {
+                0 => d.width.to_string(),
+                1 => d.height.to_string(),
+                2 => number(d.percent),
+                3 => d.prefix.clone(),
+                _ => d.suffix.clone(),
+            }),
             FieldId::NewSymbolName => self.symbol_dialog.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
             FieldId::Animate(which) => self.animate_dialog.map_or_else(String::new, |s| number([s.states as f32, s.distance, s.direction, s.scale, s.opacity_from, s.opacity_to, s.rotation][which.min(6)])),
             FieldId::PrefUndo => self.prefs.undo_steps.to_string(),
@@ -5916,6 +6018,18 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::Batch(which) => {
+                let Some(dialog) = self.batch_dialog.as_mut() else { return };
+                let size = number.filter(|v| *v >= 1.0);
+                match (which, size) {
+                    (0, Some(v)) => dialog.width = v.round().min(30000.0) as u32,
+                    (1, Some(v)) => dialog.height = v.round().min(30000.0) as u32,
+                    (2, Some(v)) => dialog.percent = v.min(10000.0),
+                    (3, _) => dialog.prefix = text.to_string(),
+                    (4, _) => dialog.suffix = text.to_string(),
+                    _ => {}
+                }
             }
             FieldId::TemplateName => {
                 if let Some(name) = self.template_name.as_mut().filter(|_| !cleared) {

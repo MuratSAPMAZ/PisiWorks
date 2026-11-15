@@ -449,6 +449,15 @@ impl Workspace {
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
                 .collect(),
+            Combo::BatchScale => (0..4)
+                .map(|scale| {
+                    item(t(crate::workspace::BATCH_SCALES[scale]).into(), self.batch_dialog.as_ref().is_some_and(|d| d.scale == scale), cx, Box::new(move |this, _, _| {
+                        if let Some(dialog) = this.batch_dialog.as_mut() {
+                            dialog.scale = scale;
+                        }
+                    }))
+                })
+                .collect(),
             Combo::ButtonLook => (0..4)
                 .map(|look| {
                     item(crate::model::button_look_name(look).into(), self.ed.editing_symbol().is_some_and(|edit| edit.look == look), cx, Box::new(move |this, _, _| {
@@ -1587,6 +1596,47 @@ impl Workspace {
         )
         .with_priority(1)
         .into_any_element()
+    }
+
+    /// File > Batch Process: the files to work on, how to scale and export them, what to call the results and where to put them.
+    pub(crate) fn batch_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let dialog = self.batch_dialog.as_ref()?;
+        let names = [t("Scale:"), t("Add Prefix:"), t("Add Suffix:"), t("Output:")];
+        let name_width = label_width(&names, 70.);
+        let files: Vec<AnyElement> = dialog
+            .files
+            .iter()
+            .map(|path| div().h(px(18.)).px_1().flex().flex_none().items_center().child(path.file_name().unwrap_or_default().to_string_lossy().into_owned()).into_any_element())
+            .collect();
+        let mut scale = div().flex().items_center().gap_1().child(self.combo(Combo::BatchScale, t(crate::workspace::BATCH_SCALES[dialog.scale.min(3)]), 150., cx).bg(rgb(PANEL_RAISED)));
+        scale = match dialog.scale {
+            1 | 2 => scale.child(self.field(FieldId::Batch(0), 44., cx)).child(label("x")).child(self.field(FieldId::Batch(1), 44., cx)),
+            3 => scale.child(self.field(FieldId::Batch(2), 44., cx)).child(label("%")),
+            _ => scale,
+        };
+        let output: SharedString = dialog.output.as_ref().map_or_else(|| t("Same location as original file").to_string(), |path| path.display().to_string()).into();
+        let rows = vec![
+            div().child(tf("Files: {}", &[&dialog.files.len()])).into_any_element(),
+            div().id("batch-files").h(px(110.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(files).into_any_element(),
+            div()
+                .flex()
+                .gap_1()
+                .child(self.text_button(t("Add Files..."), true, cx, |this, window, cx| this.add_batch_files(window, cx)))
+                .child(self.text_button(t("Remove All"), !dialog.files.is_empty(), cx, |this, _, _| this.batch_dialog.iter_mut().for_each(|d| d.files.clear())))
+                .into_any_element(),
+            labelled_row(names[0], name_width, scale).into_any_element(),
+            self.check_box(t("Export with this document's Optimize settings"), dialog.use_current, cx, |this| this.batch_dialog.iter_mut().for_each(|d| d.use_current = !d.use_current)).into_any_element(),
+            labelled_row(names[1], name_width, self.field(FieldId::Batch(3), 120., cx)).into_any_element(),
+            labelled_row(names[2], name_width, self.field(FieldId::Batch(4), 120., cx)).into_any_element(),
+            labelled_row(names[3], name_width, div().flex().items_center().gap_1().child(div().max_w(px(190.)).overflow_hidden().child(output)).child(self.text_button(t("Browse..."), true, cx, |this, window, cx| this.pick_batch_folder(window, cx)))).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Batch"), !dialog.files.is_empty(), cx, |this, _, _| this.run_batch()))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.batch_dialog = None));
+        Some(self.dialog_frame(380., t("Batch Process"), rows, buttons))
     }
 
     /// File > New from Template: the templates that come with the program, group by group, then the user's own.
