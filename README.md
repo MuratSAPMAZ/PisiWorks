@@ -1,136 +1,147 @@
-<p align="center">
-  <img src="docs/ef-logo.png" width="250" alt="Emberframe logo">
-</p>
-
-<h1 align="center">Emberframe</h1>
+<h1 align="center">PisiWorks</h1>
 
 <p align="center">
-  <strong>An open-source Adobe Fireworks look-alike, rebuilt from scratch in Rust.</strong><br>
-  Vector and bitmap screen design in the docked workspace Fireworks users remember.
+  <strong>Pardus için, Türkçe arayüzlü, açık kaynak bir Adobe Fireworks benzeri.</strong><br>
+  Fireworks'ü hâlâ derslerinde anlatan öğretmenler ve öğrencileri için.
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ff6a2b" alt="MIT license"></a>
-  <img src="https://img.shields.io/badge/Rust-1.91%2B-1b2042?logo=rust" alt="Rust 1.91 or later">
-  <img src="https://img.shields.io/badge/UI-GPUI-7a5cff" alt="Built with GPUI">
-  <img src="https://img.shields.io/badge/platform-Windows-2ed3b7" alt="Windows">
-  <a href="https://github.com/gregstein/emberframe/stargazers"><img src="https://img.shields.io/github/stars/gregstein/emberframe?style=flat&color=ffb547" alt="GitHub stars"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/lisans-MIT-ff6a2b" alt="MIT lisansı"></a>
+  <img src="https://img.shields.io/badge/Rust-1.91%2B-1b2042?logo=rust" alt="Rust 1.91 veya üzeri">
+  <img src="https://img.shields.io/badge/aray%C3%BCz-GPUI-7a5cff" alt="GPUI ile yapıldı">
+  <img src="https://img.shields.io/badge/platform-Linux-2ed3b7" alt="Linux">
 </p>
 
 <p align="center">
-  <a href="#get-started">Get started</a> ·
-  <a href="#features">Features</a> ·
-  <a href="docs/guide.md">User guide</a> ·
-  <a href="https://medamineweb.com/en/emberframe/">Project page</a>
+  <a href="#kurulum">Kurulum</a> ·
+  <a href="#özellikler">Özellikler</a> ·
+  <a href="docs/guide.tr.md">Kullanım kılavuzu</a> ·
+  <a href="README.en.md">English</a>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/workspace.png" alt="Emberframe workspace editing a landing page design, with the tools on the left, Properties below and the panel dock on the right">
+  <img src="docs/screenshots/pisiworks-calisma-alani.png" alt="PisiWorks çalışma alanı: solda araçlar, altta Özellikler, sağda paneller, ortada örnek bir açılış sayfası tasarımı">
 </p>
 
-> **Created by [Med Amine Belbachir](https://medamineweb.com/)**, who started this project to bring the Fireworks workflow back as free, native software.
+> PisiWorks, [Med Amine Belbachir](https://medamineweb.com/)'in yazdığı [Emberframe](https://github.com/gregstein/emberframe) projesinin bir çatalıdır. Temeli Emberframe'in kodudur; üzerine neler eklendiği [aşağıda](#emberframeden-farklar) yazıyor.
 
-> **This repository is PisiWorks**, a fork of [Emberframe](https://github.com/gregstein/emberframe) for the [Pardus](https://www.pardus.org.tr/) operating system, with a Turkish interface, for schools that still teach Fireworks. Emberframe's code is the foundation; see [What PisiWorks adds to Emberframe](#what-pisiworks-adds-to-emberframe) for what was built on it. The rest of this page is still Emberframe's own description.
+## Neden PisiWorks
 
-## Why Emberframe
+Adobe, Fireworks'ü geliştirmeyi 2013'te bıraktı; ama vektör çizimi, bitmap düzenlemeyi, durumları ve web için dışa aktarmayı tek pencerede toplayan bu program okullarda hâlâ anlatılıyor. PisiWorks, aynı çalışma biçimini Pardus üzerinde, Türkçe olarak ve özgür yazılım olarak sunmayı amaçlar.
 
-Adobe stopped developing Fireworks in 2013, and many designers still miss how it mixed vector shapes, bitmap editing, states and web export in one window. Emberframe brings that way of working back as a native Rust app you can read, build and change.
+Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve açık gri arayüz; menüler ve komut adları Türkçe Fireworks'tekilerle aynıdır. Kendi adıyla yayımlanır, bütün simgeleri yeniden çizilmiştir ve Adobe'ye ait hiçbir kod ya da görsel içermez.
 
-It is deliberately a look-alike: the same docked layout, tool groups, panels and light gray interface, under its own name and with every icon newly drawn. It contains no Adobe code or artwork.
+## Özellikler
 
-## Features
-
-| Area | What you get |
+| Alan | Neler var |
 |---|---|
-| **27 tools** | Pointer, Subselection, Scale, Crop, Marquee, Lasso, Magic Wand, Brush, Pencil, Eraser, Blur, Rubber Stamp, Eyedropper, Paint Bucket, Line, Pen, Rectangle, Ellipse, Text, Freeform, Knife, Hotspot, Slice, Hide Slices, Show Slices, Hand, Zoom |
-| **23 panels** | Optimize, History, Align, Pages, States, Layers, Styles, Color Palette, Swatches, Path, Auto Shapes, Auto Shape Properties, Document Library, Common Library, Color Mixer, Info, URL, Find, Special Characters, Image Editing, Properties, Symbol Properties, Tools |
-| **Vector** | Auto Shapes, Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset |
-| **Bitmap** | Paint, erase, clone, flood fill, pixel selections, Brighten, Darken, Grayscale, Invert, Blur and Sharpen |
-| **Screens and animation** | Pages, layers, shared layers, states, onion skinning, symbols and a library |
-| **Export** | PNG 8, PNG 24, PNG 32, JPEG, GIF and animated GIF, with Preview, 2-Up and 4-Up comparison, slices and HTML image maps |
-| **Documents** | Native `.pisi` files (`.ember` files from Emberframe open too), opening and importing common image formats, Canvas Size, Image Size and Fit Canvas |
+| **Araçlar** | İşaretçi, Alt Seçim, Ölçek, Eğriltme, Deformasyon, Kırpma, Seçim Çerçevesi, Kement, Sihirli Değnek, Fırça, Kurşun Kalem, Silgi, Bulanıklaştırma, Lastik Damgası, Damlalık, Boya Kovası, Çizgi, Kalem, Dikdörtgen, Elips, Metin, Serbest Biçim, Bıçak, Sıcak Nokta, Dilim, El, Yakınlaştırma |
+| **Paneller** | En İyileştir, Geçmiş, Hizala, Sayfalar, Durumlar, Katmanlar, Stiller, Renk Paleti, Renk Örnekleri, Yol, Otomatik Şekiller, Belge Kitaplığı, Ortak Kitaplık, Renk Karıştırıcısı, Bilgi, URL, Bul, Özel Karakterler, Görüntü Düzenleme, Özellikler, Sembol Özellikleri |
+| **Vektör** | Bezier eğrileri ve nokta düzenleme, Otomatik Şekiller, yolları birleştirme (Birleştir, Böl, Topla, Kesiştir, Zımbala, Kırp), Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet |
+| **Dönüştürme** | Ölçek, Eğriltme, Deformasyon, taşınabilir merkez noktası, Sayısal Dönüştürme, döndürme ve çevirme |
+| **Görünüm** | 45 karışım modu, maskeler, 29 canlı filtre (Düzeyler ve Eğriler dahil), on efektli Photoshop Canlı Efektleri, stiller |
+| **Bitmap** | Boyama, silme, klonlama, doldurma, piksel seçimleri, Geçiş Yumuşatma, Benzerini ve Tersini Seç, seçim çerçevesi komutları, Seçimi ve Katmanları Düzleştir |
+| **Metin** | Kurulu fontlar, kalın, italik, altı çizili, hizalama, Yollara Dönüştür |
+| **Düzen** | Cetveller, ızgara, kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar ile Üst Seç ve Alt Seç |
+| **Ekranlar ve animasyon** | Sayfalar, katmanlar, paylaşılan katmanlar, durumlar, soğan zarı, semboller ve kitaplık |
+| **Dışa aktarma** | PNG 8, PNG 24, PNG 32, JPEG (seçmeli kalite ve yumuşatma ile), GIF ve animasyonlu GIF; Önizleme, 2 Yukarı ve 4 Yukarı karşılaştırma; dilimler ve HTML görüntü eşlemleri |
+| **Belgeler** | Kendi `.pisi` dosyaları (Emberframe'in `.ember` dosyaları da açılır), yaygın görüntü biçimlerini açma ve içe aktarma, Tuval Boyutu, Görüntü Boyutu, Tuvali Sığdır ve Tuvali Kes |
+| **Yazdırma** | Sayfa Yapısı, kurulu yazıcıya gönderme veya PDF olarak kaydetme |
+| **Dil** | Türkçe ve İngilizce; Düzenle > Dil menüsünden değiştirilir |
 
-## Screenshots
+<p align="center">
+  <img src="docs/screenshots/pisiworks-menuler.png" alt="Değiştir menüsü ve Yerleştir alt menüsü, Türkçe komut adlarıyla">
+</p>
 
-**Compare export settings side by side in 4-Up**
+## Kurulum
 
-<img src="docs/screenshots/four-up.png" alt="4-Up view comparing the original design with three PNG 8 export settings and their file sizes">
+Henüz hazır bir paket yok; program kaynaktan derlenir. Derleme ve çalıştırma Linux Mint 22.3 üzerinde doğrulandı. Hedef Pardus 25'tir, ancak **Pardus 25 üzerinde henüz denenmedi**.
 
-<table>
-  <tr>
-    <td width="72%" valign="top"><strong>The familiar menus</strong><br><br><img src="docs/screenshots/menus.png" alt="Modify menu open on the Canvas submenu"></td>
-    <td width="28%" valign="top"><strong>The panel dock</strong><br><br><img src="docs/screenshots/panels.png" alt="Dock with Optimize, Layers, Color Palette, Auto Shapes and Common Library panels"></td>
-  </tr>
-</table>
-
-## Get started
-
-Download `emberframe.exe` for Windows from the [latest release](https://github.com/gregstein/emberframe/releases/latest) and run it.
-
-To build from source, you need Rust 1.91 or later, the Visual Studio C++ tools and the Windows SDK.
+Gerekenler: Rust 1.91 veya üzeri ([rustup](https://rustup.rs/) ile kurulabilir) ve şu paketler:
 
 ```bash
-git clone https://github.com/gregstein/emberframe.git
-cd emberframe
+sudo apt install build-essential pkg-config libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev
+```
+
+Program ekrana Vulkan ile çizer. Ekran kartı sürücüsü Vulkan desteklemiyorsa yazılımsal sürücü de iş görür:
+
+```bash
+sudo apt install mesa-vulkan-drivers
+```
+
+Derleyip çalıştırmak için:
+
+```bash
+git clone https://github.com/MuratSAPMAZ/PisiWorks.git
+```
+
+```bash
+cd PisiWorks
+```
+
+```bash
+git checkout pisiworks
+```
+
+```bash
 cargo run --release
 ```
 
-Then open [`examples/solstice-landing.pisi`](examples/solstice-landing.pisi) with Ctrl+O to explore the design in the screenshots. The [user guide](docs/guide.md) explains the tools and panels.
+İlk derleme uzun sürer. Program açılınca Ctrl+O ile [`examples/solstice-landing.pisi`](examples/solstice-landing.pisi) dosyasını açıp ekran görüntülerindeki tasarımı inceleyebilirsiniz. Araçlar ve paneller [kullanım kılavuzunda](docs/guide.tr.md) anlatılıyor.
+
+Testleri çalıştırmak için:
 
 ```bash
 cargo test
 ```
 
-## What PisiWorks adds to Emberframe
+Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
 
-PisiWorks was forked from Emberframe 0.1 and keeps it as its foundation: the window layout, the menus, tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from Emberframe. About 94% of Emberframe's lines are still in place.
+## Emberframe'den farklar
+
+PisiWorks, Emberframe 0.1'den çatallandı ve onu temel olarak korur: pencere düzeni, menüler, araç paleti ve paneller, simgeler, katmanları, sayfaları, durumları ve sembolleriyle nesne modeli, temel çizim ve bitmap araçları, yol işlemleri, Otomatik Şekiller ve dışa aktarma Emberframe'den gelir. Emberframe'in satırlarının yaklaşık %94'ü yerinde durur.
 
 | | Emberframe 0.1 | PisiWorks |
 |---|---|---|
-| Source code | 12,286 lines in 16 files | 25,179 lines in 25 files |
-| Tests | 141 | 271 |
+| Kaynak kod | 16 dosyada 12.286 satır | 25 dosyada 25.179 satır |
+| Test | 141 | 271 |
 
-What was added on top:
+Üzerine eklenenler:
 
-| Area | Added in PisiWorks |
+| Alan | PisiWorks'te eklenen |
 |---|---|
-| **Linux and Pardus** | Builds and runs on Linux, a fix for the crash when typing Turkish letters through an input method, a font chosen from those installed, and a plain message when the graphics driver is missing |
-| **Turkish** | The whole interface in Turkish, with the terms of the Turkish edition of Fireworks, a language menu, and tests that fail when a text has no translation |
-| **Vectors** | Bezier curves, full point and handle editing with the Pen and Subselection tools, and curve fitting after path operations |
-| **Transforming** | Scale, Skew and Distort with a movable center point, and Numeric Transform |
-| **Appearance** | 45 blend modes, masks with all their commands, 29 live filters including Levels and Curves, and Photoshop Live Effects with ten effects and a gradient editor |
-| **Bitmaps** | Moving selected pixels, Feather, Select Similar and Inverse, the marquee commands, Flatten Selection, Merge Down and Flatten Layers |
-| **Text** | Fonts, bold, italic, underline and alignment |
-| **Layout** | Guides, smart guides, slice guides, and Subselect and Superselect for groups |
-| **Export** | Selective JPEG quality and smoothing, with a JPEG encoder of its own |
-| **Other** | Printing and Page Setup, dragging from the library panels onto the canvas, the `.pisi` file extension (`.ember` files still open), and more than thirty menu commands that were greyed out |
+| **Linux ve Pardus** | Linux'ta derlenip çalışma, giriş yöntemiyle Türkçe harf yazınca oluşan çökmenin düzeltilmesi, kurulu fontlardan seçim, grafik sürücüsü eksikse anlaşılır bir uyarı |
+| **Türkçe** | Türkçe Fireworks'ün terimleriyle bütün arayüz, dil menüsü, çevirisi eksik metni yakalayan testler |
+| **Vektör** | Bezier eğrileri, Kalem ve Alt Seçim araçlarıyla nokta ve tutamaç düzenleme, yol işlemlerinden sonra eğri uydurma |
+| **Dönüştürme** | Taşınabilir merkez noktasıyla Ölçek, Eğriltme ve Deformasyon; Sayısal Dönüştürme |
+| **Görünüm** | 45 karışım modu, bütün komutlarıyla maskeler, Düzeyler ve Eğriler dahil 29 canlı filtre, on efekti ve degrade düzenleyicisiyle Photoshop Canlı Efektleri |
+| **Bitmap** | Seçili pikselleri taşıma, Geçiş Yumuşatma, Benzerini ve Tersini Seç, seçim çerçevesi komutları, Seçimi Düzleştir, Aşağıda Birleştir, Katmanları Düzleştir |
+| **Metin** | Font, kalın, italik, altı çizili ve hizalama |
+| **Düzen** | Kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar için Üst Seç ve Alt Seç |
+| **Dışa aktarma** | Kendi JPEG kodlayıcısıyla seçmeli JPEG kalitesi ve yumuşatma |
+| **Diğer** | Yazdırma ve Sayfa Yapısı, kitaplık panellerinden tuvale sürükleme, `.pisi` dosya uzantısı, daha önce gri olan otuzdan fazla menü komutu |
 
-The figures are from November 2026 and will drift as work goes on. PisiWorks is released under the same MIT license as Emberframe, and the license keeps its author's copyright notice.
+Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
-## Not in this version
+## Bu sürümde olmayanlar
 
-Some things are still missing:
+- Tercihler, Klavye Kısayolları, Toplu İşlem, düğme düzenleyicisi, animasyon sembolleri, yola metin ekleme ve yazım denetimi. Bunlar menülerde gri görünür.
+- Nesneler için degrade ve desen dolguları.
+- Çokgen, Oval Seçim Çerçevesi, Çokgen Kement, Leke, Soldur, Yak ve Renk Değiştir araçları.
+- Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
+- Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
+- Pardus için hazır paket (`.deb`).
 
-- Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
-- Layers inside Fireworks PNG files. Only the flat image is read.
-- Preferences, Keyboard Shortcuts, Batch Process, the button editor, animation symbols, text on a path and spell checking, which appear greyed out.
-- Gradient and pattern fills for objects.
-- Packages for Pardus, and macOS builds.
+Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
 
-Issues and pull requests are welcome, especially for the items above.
+## Lisans ve teşekkür
 
-## Creator
+PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır; lisans, Emberframe'in yazarının telif satırını korur.
 
-**Med Amine Belbachir** created Emberframe.
+Emberframe'i **Med Amine Belbachir** yazdı:
 
-- Website: [medamineweb.com](https://medamineweb.com/)
-- Project page: [medamineweb.com/en/emberframe](https://medamineweb.com/en/emberframe/)
+- Web sitesi: [medamineweb.com](https://medamineweb.com/)
+- Proje sayfası: [medamineweb.com/en/emberframe](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-If Emberframe is useful or brings back good memories, a star helps other Fireworks fans find it.
-
-## Legal
-
-Emberframe is an independent project. It is not affiliated with, endorsed by or sponsored by Adobe Inc. Adobe and Fireworks are either registered trademarks or trademarks of Adobe in the United States and/or other countries, and are used here only to describe what this project resembles.
-
-Released under the [MIT License](LICENSE).
+Adobe ve Fireworks, Adobe Inc.'in ticari markalarıdır. PisiWorks'ün Adobe ile bir bağı yoktur.
