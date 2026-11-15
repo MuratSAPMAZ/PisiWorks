@@ -273,7 +273,7 @@ impl Workspace {
                     })
                     .when(checked, |d| d.child(div().absolute().left(px(1.)).child(icon("check", 10., TEXT))))
                     .child(t(name))
-                    .child(div().text_color(rgb(TEXT_DIM)).child(*keys))
+                    .child(div().text_color(rgb(TEXT_DIM)).child(self.shortcut_of(name, keys)))
                     .into_any_element()
             }
             Entry::Sub(name, children) => {
@@ -1788,6 +1788,8 @@ impl Render for Workspace {
             .children(self.numeric_dialog_view(cx))
             .children(self.marquee_dialog_view(cx))
             .children(self.print_dialog_view(cx))
+            .children(self.preferences_view(cx))
+            .children(self.shortcuts_view(cx))
             .children(self.spell_dialog_view(cx))
             .children(self.guide_dialog_view(cx))
             .children(self.guides_dialog_view(cx))

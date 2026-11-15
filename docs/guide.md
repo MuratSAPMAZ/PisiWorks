@@ -157,3 +157,9 @@ The panel menu at the right of each tab row collapses or closes that group. Expa
 ## Comparing exports
 
 Preview shows the page as it will export. 2-Up puts the original next to it, and 4-Up compares the original with three export settings and their file sizes. Drag to pan in these views.
+
+## Preferences and Keyboard Shortcuts
+
+**Edit > Preferences** (Ctrl+U) sets the number of undo steps, how near the pointer picks an object, how near things snap, the size and color of the grid and the color of the guides. With text selected, Ctrl+U underlines instead. **View > Grid > Snap to Grid** (Ctrl+Alt+Shift+G) makes moved objects snap to the grid lines while the grid is shown.
+
+**Edit > Keyboard Shortcuts** lists every menu command with its keys. Pick a command, press **Change**, then the new keys. Keys that belonged to another command are taken from it. **Remove** leaves the command without keys and **Reset** gives back the ones it came with. Changes are kept in the settings file.

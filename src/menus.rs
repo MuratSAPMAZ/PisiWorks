@@ -285,6 +285,9 @@ pub enum Cmd {
     DetachFromPath,
     ReversePathText,
     CheckSpelling,
+    Preferences,
+    KeyboardShortcuts,
+    SnapToGrid,
     PathOrientation(crate::model::PathOrientation),
 }
 
@@ -457,6 +460,43 @@ pub const DOCK_GROUPS: [&[Panel]; 7] = [
     &[Panel::AutoShapeProperties, Panel::Find],
 ];
 
+/// Every command of the menus that has one, with the menu it is in, its English name and the keys it comes with.
+pub fn menu_commands() -> Vec<(&'static str, &'static str, &'static str, Cmd)> {
+    fn collect(menu: &'static str, entries: &'static [Entry], out: &mut Vec<(&'static str, &'static str, &'static str, Cmd)>) {
+        for entry in entries {
+            match entry {
+                Entry::Item(name, keys, Some(cmd)) => out.push((menu, name, keys, *cmd)),
+                Entry::Sub(_, children) => collect(menu, children, out),
+                _ => {}
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (menu, entries) in MENUS {
+        collect(menu, entries, &mut out);
+    }
+    out
+}
+
+/// A key press written as the menus write shortcuts, such as "Ctrl+Shift+D" or "F7".
+pub fn key_name(key: &str, control: bool, alt: bool, shift: bool) -> String {
+    let mut name = String::new();
+    for (held, word) in [(control, "Ctrl+"), (alt, "Alt+"), (shift, "Shift+")] {
+        if held {
+            name.push_str(word);
+        }
+    }
+    let mut letters = key.chars();
+    match letters.next() {
+        Some(first) => {
+            name.extend(first.to_uppercase());
+            name.push_str(letters.as_str());
+        }
+        None => return String::new(),
+    }
+    name
+}
+
 /// Window-menu shortcuts. These work even while a field is being edited.
 pub fn panel_shortcut(key: &str, control: bool, shift: bool, alt: bool) -> Option<Cmd> {
     let panel = match (key, control, shift, alt) {
@@ -558,8 +598,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Duplicate", "Ctrl+Alt+D", Cmd::Duplicate),
             cmd("Clone", "Ctrl+Shift+D", Cmd::Clone),
             Sep,
-            na("Preferences..."),
-            na("Keyboard Shortcuts..."),
+            cmd("Preferences...", "Ctrl+U", Cmd::Preferences),
+            cmd("Keyboard Shortcuts...", "", Cmd::KeyboardShortcuts),
             Sep,
             // Each language is listed under its own name, so it can be found from any language.
             Sub(
@@ -600,7 +640,10 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Fit All", "Ctrl+0", Cmd::FitAll),
             Sep,
             cmd("Rulers", "Ctrl+Alt+R", Cmd::Rulers),
-            cmd("Show Grid", "Ctrl+Alt+G", Cmd::Grid),
+            Sub(
+                "Grid",
+                &[cmd("Show Grid", "Ctrl+Alt+G", Cmd::Grid), cmd("Snap to Grid", "Ctrl+Alt+Shift+G", Cmd::SnapToGrid), Sep, cmd("Edit Grid...", "", Cmd::Preferences)],
+            ),
             Sub(
                 "Guides",
                 &[

@@ -79,6 +79,7 @@ pub enum ColorTarget {
     ReplaceTo,
     /// The color guides are drawn in.
     Guides,
+    Grid,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -364,6 +365,11 @@ pub enum FieldId {
     PathOffset,
     /// What Check Spelling changes the word on show to.
     SpellChange,
+    PrefUndo,
+    PrefPick,
+    PrefSnap,
+    PrefGridX,
+    PrefGridY,
     GuidePosition,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
@@ -643,6 +649,13 @@ pub struct Workspace {
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
     pub print_dialog: Option<PrintDialog>,
     pub image_preview: Option<ImagePreview>,
+    /// What Edit > Preferences sets, and while its dialog is open what to go back to on Cancel.
+    pub prefs: crate::settings::Preferences,
+    pub prefs_dialog: Option<crate::settings::Preferences>,
+    /// The keyboard shortcuts the user has changed, by the English menu name of the command.
+    pub shortcuts: std::collections::HashMap<String, String>,
+    /// Edit > Keyboard Shortcuts while it is open: the command picked in the list, and whether the next key press is its new shortcut.
+    pub shortcut_dialog: Option<(Option<usize>, bool)>,
     pub spell: Option<SpellSession>,
     /// The dialog that edits a gradient or pattern fill, holding the fill to go back to on Cancel.
     pub fill_dialog: Option<Arc<FillStyle>>,
@@ -909,6 +922,10 @@ impl Workspace {
             page_setup_dialog: None,
             print_dialog: None,
             image_preview: None,
+            prefs: Settings::load().preferences,
+            prefs_dialog: None,
+            shortcuts: Settings::load().shortcuts,
+            shortcut_dialog: None,
             spell: None,
             fill_dialog: None,
             last_filter: None,
@@ -1719,6 +1736,7 @@ impl Workspace {
             Cmd::HidePanels => self.panels_off,
             Cmd::Rulers => self.show_rulers,
             Cmd::Grid => self.show_grid,
+            Cmd::SnapToGrid => self.prefs.snap_to_grid,
             Cmd::TextFont(index) => crate::fonts::families().get(index as usize).is_some_and(|name| {
                 let style = self.shown_text_style();
                 *name == style.font || (style.font.is_empty() && name == crate::fonts::family())
@@ -2569,6 +2587,12 @@ impl Workspace {
                 }
             }
             Cmd::ImagePreview => self.open_image_preview(None),
+            Cmd::Preferences => self.prefs_dialog = Some(self.prefs),
+            Cmd::KeyboardShortcuts => self.shortcut_dialog = Some((None, false)),
+            Cmd::SnapToGrid => {
+                self.prefs.snap_to_grid = !self.prefs.snap_to_grid;
+                self.save_preferences();
+            }
             Cmd::CheckSpelling => self.check_spelling(),
             Cmd::AttachToPath => {
                 if self.ed.attach_text_to_path() {
@@ -2829,6 +2853,70 @@ impl Workspace {
             }
         })
         .detach();
+    }
+
+    /// Writes the preferences and the changed shortcuts to the settings file, and puts the number of undo steps to work.
+    pub(crate) fn save_preferences(&mut self) {
+        self.ed.history_limit = self.prefs.undo_steps.clamp(2, 1000) as usize + 1;
+        let mut settings = Settings::load();
+        (settings.preferences, settings.shortcuts) = (self.prefs, self.shortcuts.clone());
+        if let Err(error) = settings.save() {
+            self.status = error.to_string();
+        }
+    }
+
+    /// Closes Preferences. Kept, they are remembered for the next run; otherwise they go back to what they were.
+    pub fn close_preferences(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(before) = self.prefs_dialog.take() else { return };
+        if keep {
+            self.save_preferences();
+        } else {
+            self.prefs = before;
+        }
+    }
+
+    /// The keys a menu command has now: those the user gave it, or those it came with.
+    pub fn shortcut_of(&self, name: &str, keys: &'static str) -> String {
+        self.shortcuts.get(name).cloned().unwrap_or_else(|| keys.to_string())
+    }
+
+    /// What a key press does once the user's own shortcuts are taken into account:
+    /// the command given those keys, or nothing at all if the keys belonged to a
+    /// command that has since been given others. `None` leaves the press to the built-in shortcuts.
+    fn custom_shortcut(&self, pressed: &str) -> Option<Option<Cmd>> {
+        if self.shortcuts.is_empty() || pressed.is_empty() {
+            return None;
+        }
+        let commands = crate::menus::menu_commands();
+        if let Some((_, _, _, cmd)) = commands.iter().find(|(_, name, _, _)| self.shortcuts.get(*name).is_some_and(|keys| keys.eq_ignore_ascii_case(pressed))) {
+            return Some(Some(*cmd));
+        }
+        commands.iter().any(|(_, name, keys, _)| keys.eq_ignore_ascii_case(pressed) && self.shortcuts.contains_key(*name)).then_some(None)
+    }
+
+    /// Gives the command picked in Keyboard Shortcuts new keys, none, or the ones it came with.
+    pub fn set_shortcut(&mut self, keys: Option<String>) {
+        let Some((Some(picked), _)) = self.shortcut_dialog else { return };
+        let Some((_, name, _, _)) = crate::menus::menu_commands().get(picked).copied() else { return };
+        match keys {
+            Some(keys) => {
+                // Keys can open one command only: any other that had them loses them.
+                if !keys.is_empty() {
+                    for (_, other, default, _) in crate::menus::menu_commands() {
+                        if other != name && self.shortcut_of(other, default).eq_ignore_ascii_case(&keys) {
+                            self.shortcuts.insert(other.to_string(), String::new());
+                        }
+                    }
+                }
+                self.shortcuts.insert(name.to_string(), keys);
+            }
+            None => {
+                self.shortcuts.remove(name);
+            }
+        }
+        self.shortcut_dialog = Some((Some(picked), false));
+        self.save_preferences();
     }
 
     /// The texts Check Spelling goes through: the selected ones, or with none selected every text on the page.
@@ -3404,7 +3492,12 @@ impl Workspace {
     }
 
     fn tolerance(&self) -> f32 {
-        3.0 / self.zoom
+        self.prefs.pick_distance.max(1.0) / self.zoom
+    }
+
+    /// How near something has to come to snap, in pixels of the page.
+    fn snap_reach(&self) -> f32 {
+        self.prefs.snap_distance.max(1.0) / self.zoom
     }
 
     /// Starts dragging the pixel selection if `p` is inside it.
@@ -3504,17 +3597,28 @@ impl Workspace {
     /// A point moved onto a guide, if it is within reach of one and snapping is on.
     fn guide_snapped(&self, p: Vec2) -> Vec2 {
         let p = snap(p);
+        // The grid comes first: with Snap to Grid on, a point within reach of a grid line goes onto it.
+        let p = if self.show_grid && self.prefs.snap_to_grid {
+            let (across, down) = (self.prefs.grid.0.max(1.0), self.prefs.grid.1.max(1.0));
+            let near = |v: f32, step: f32| {
+                let line = (v / step).round() * step;
+                if (line - v).abs() <= self.snap_reach() { line } else { v }
+            };
+            v2(near(p.x, across), near(p.y, down))
+        } else {
+            p
+        };
         if !(self.show_guides && self.snap_guides) {
             return p;
         }
-        let (guides, reach) = (&self.ed.doc.page().guides, 5.0 / self.zoom);
+        let (guides, reach) = (&self.ed.doc.page().guides, self.snap_reach());
         v2(p.x + snap_offset(&[p.x], &guides.vertical, reach).unwrap_or(0.0), p.y + snap_offset(&[p.y], &guides.horizontal, reach).unwrap_or(0.0))
     }
 
     /// How much further a selection whose box would be `moved` has to go to line up
     /// with a guide or, failing that, with another object; and the smart guides it then lies on.
     fn move_snap(&self, moved: Rect) -> (Vec2, Vec<(bool, f32)>) {
-        let (page, reach) = (self.ed.doc.page(), 5.0 / self.zoom);
+        let (page, reach) = (self.ed.doc.page(), self.snap_reach());
         let (xs, ys) = snap_places(moved);
         let guides = (self.show_guides && self.snap_guides).then_some(&page.guides);
         let smart = self.snap_smart_guides.then(|| page.smart_targets(&self.ed.selection));
@@ -5082,6 +5186,28 @@ impl Workspace {
         let k = &ev.keystroke;
         let key = k.key.as_str();
         let m = k.modifiers;
+        let pressed = crate::menus::key_name(key, m.control, m.alt, m.shift);
+        // Keyboard Shortcuts is waiting for the new keys of a command: this press is them.
+        if let Some((picked, capturing)) = self.shortcut_dialog {
+            match (capturing, key) {
+                (false, "escape") => self.shortcut_dialog = None,
+                (true, "escape") => self.shortcut_dialog = Some((picked, false)),
+                (true, "shift" | "control" | "alt" | "platform" | "function") => {}
+                (true, _) => self.set_shortcut(Some(pressed)),
+                _ => {}
+            }
+            cx.notify();
+            return;
+        }
+        let typing = self.field.is_some() || self.text_edit.is_some();
+        // The user's own shortcuts come before the built-in ones, except while something is being typed.
+        if let Some(action) = self.custom_shortcut(&pressed).filter(|_| !typing || m.control || m.alt) {
+            if let Some(cmd) = action {
+                self.run(cmd, window, cx);
+            }
+            cx.notify();
+            return;
+        }
         if let Some(cmd) = panel_shortcut(key, m.control, m.shift, m.alt) {
             self.run(cmd, window, cx);
         } else if m.control && key == "v" && (self.field.is_some() || self.text_edit.is_some()) {
@@ -5109,6 +5235,12 @@ impl Workspace {
             match key {
                 "enter" => self.close_jpeg_dialog(true),
                 "escape" => self.close_jpeg_dialog(false),
+                _ => {}
+            }
+        } else if self.prefs_dialog.is_some() {
+            match key {
+                "enter" => self.close_preferences(true),
+                "escape" => self.close_preferences(false),
                 _ => {}
             }
         } else if self.spell.is_some() {
@@ -5204,6 +5336,7 @@ impl Workspace {
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,
             ("d", true, false) => Cmd::Clone,
+            ("g", true, true) => Cmd::SnapToGrid,
             ("y", true, false) => Cmd::AttachToPath,
             ("p", false, false) => Cmd::Print,
             (";", false, false) => Cmd::Guides(GuideCmd::Show),
@@ -5231,7 +5364,9 @@ impl Workspace {
             ("b", false, false) if self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })) => Cmd::TextStyle(crate::menus::TextStyleCmd::Bold),
             ("b", false, false) => Cmd::BreakApart,
             ("i", false, false) => Cmd::TextStyle(crate::menus::TextStyleCmd::Italic),
-            ("u", false, false) => Cmd::TextStyle(crate::menus::TextStyleCmd::Underline),
+            // On text Ctrl+U underlines; otherwise it opens Preferences, as in Fireworks.
+            ("u", false, false) if self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })) => Cmd::TextStyle(crate::menus::TextStyleCmd::Underline),
+            ("u", false, false) => Cmd::Preferences,
             ("," | "<", true, false) => Cmd::TextSizeStep(false),
             ("." | ">", true, false) => Cmd::TextSizeStep(true),
             ("l", true, true) => Cmd::TextAlign(crate::model::TextAlign::Left),
@@ -5382,6 +5517,11 @@ impl Workspace {
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
+            FieldId::PrefUndo => self.prefs.undo_steps.to_string(),
+            FieldId::PrefPick => number(self.prefs.pick_distance),
+            FieldId::PrefSnap => number(self.prefs.snap_distance),
+            FieldId::PrefGridX => number(self.prefs.grid.0),
+            FieldId::PrefGridY => number(self.prefs.grid.1),
             FieldId::SpellChange => self.spell.as_ref().map_or_else(String::new, |session| session.replacement.clone()),
             FieldId::TextureAmount => number(self.current_fill_look().texture_amount),
             FieldId::GuidePosition => self.guide_dialog.map_or_else(String::new, |(_, _, place)| number(place)),
@@ -5578,6 +5718,16 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::PrefUndo | FieldId::PrefPick | FieldId::PrefSnap | FieldId::PrefGridX | FieldId::PrefGridY => {
+                let Some(v) = number.filter(|v| *v >= 1.0) else { return };
+                match field.id {
+                    FieldId::PrefUndo => self.prefs.undo_steps = v.round().clamp(1.0, 1000.0) as u32,
+                    FieldId::PrefPick => self.prefs.pick_distance = v.min(10.0),
+                    FieldId::PrefSnap => self.prefs.snap_distance = v.min(10.0),
+                    FieldId::PrefGridX => self.prefs.grid.0 = v.min(2000.0),
+                    _ => self.prefs.grid.1 = v.min(2000.0),
+                }
             }
             FieldId::SpellChange => {
                 if let Some(session) = self.spell.as_mut() {
@@ -5804,6 +5954,7 @@ impl Workspace {
             ColorTarget::GradientStop => self.picked_stop().map(|stop| Color { a: 255, ..stop.1 }),
             ColorTarget::ReplaceFrom => self.tool_options.replace_from,
             ColorTarget::Guides => Some(self.guide_color),
+            ColorTarget::Grid => Some(self.prefs.grid_color),
             ColorTarget::ReplaceTo => Some(self.tool_options.replace_to),
         }
     }
@@ -5845,6 +5996,7 @@ impl Workspace {
             // "None" for the color to change means: the one the stroke starts on.
             ColorTarget::ReplaceFrom => self.tool_options.replace_from = color,
             ColorTarget::Guides => self.guide_color = color.unwrap_or(self.guide_color),
+            ColorTarget::Grid => self.prefs.grid_color = color.unwrap_or(self.prefs.grid_color),
             ColorTarget::ReplaceTo => self.tool_options.replace_to = color.unwrap_or(self.tool_options.replace_to),
             ColorTarget::GradientStop => {
                 // The stop keeps how opaque it is; only its color changes.

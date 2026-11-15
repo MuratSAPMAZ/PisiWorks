@@ -1579,6 +1579,85 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// Edit > Preferences: undo steps, how near the pointer picks and things snap, and the grid.
+    pub(crate) fn preferences_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.prefs_dialog?;
+        let names = [t("Undo steps:"), t("Pick distance:"), t("Snap distance:"), t("Grid:"), t("Color:")];
+        let name_width = label_width(&names, 90.);
+        let heading = |text: &'static str| div().pt_1().font_weight(FontWeight::BOLD).child(text).into_any_element();
+        let rows = vec![
+            heading(t("General")),
+            labelled_row(names[0], name_width, self.field(FieldId::PrefUndo, 50., cx)).into_any_element(),
+            heading(t("Edit")),
+            labelled_row(names[1], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::PrefPick, 50., cx)).child(label(t("pixels")))).into_any_element(),
+            labelled_row(names[2], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::PrefSnap, 50., cx)).child(label(t("pixels")))).into_any_element(),
+            heading(t("Guides and Grids")),
+            labelled_row(names[3], name_width, div().flex().items_center().gap_1().child(self.field(FieldId::PrefGridX, 44., cx)).child(label("x")).child(self.field(FieldId::PrefGridY, 44., cx)).child(label(t("pixels")))).into_any_element(),
+            labelled_row(names[4], name_width, div().flex().items_center().gap_2().child(self.swatch(ColorTarget::Grid, 18., cx)).child(label(t("Guides"))).child(self.swatch(ColorTarget::Guides, 18., cx))).into_any_element(),
+            self.check_box(t("Show Grid"), self.show_grid, cx, |this| this.show_grid = !this.show_grid).into_any_element(),
+            self.check_box(t("Snap to Grid"), self.prefs.snap_to_grid, cx, |this| this.prefs.snap_to_grid = !this.prefs.snap_to_grid).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_preferences(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_preferences(false)));
+        Some(self.dialog_frame(300., t("Preferences"), rows, buttons))
+    }
+
+    /// Edit > Keyboard Shortcuts: every menu command with its keys. A command picked in the list can be given new keys by pressing them.
+    pub(crate) fn shortcuts_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (picked, capturing) = self.shortcut_dialog?;
+        let commands = crate::menus::menu_commands();
+        let list: Vec<AnyElement> = commands
+            .iter()
+            .enumerate()
+            .map(|(index, (menu, name, keys, _))| {
+                let changed = self.shortcuts.contains_key(*name);
+                div()
+                    .h(px(18.))
+                    .px_1()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_between()
+                    .when(picked == Some(index), |d| d.bg(rgb(ACCENT)))
+                    .hover(|s| s.bg(rgb(HOVER)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.shortcut_dialog = Some((Some(index), false));
+                            cx.notify();
+                        }),
+                    )
+                    .child(format!("{} > {}", t(menu), t(name).trim_end_matches("...")))
+                    .child(div().when(changed, |d| d.font_weight(FontWeight::BOLD)).child(self.shortcut_of(name, keys)))
+                    .into_any_element()
+            })
+            .collect();
+        let hint = if capturing { t("Press the new shortcut, or Esc to keep the old one.") } else { t("Pick a command, then Change.") };
+        let rows = vec![
+            div().id("shortcut-list").h(px(300.)).flex().flex_col().overflow_y_scroll().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(list).into_any_element(),
+            div().text_color(rgb(TEXT_DIM)).child(hint).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .flex_wrap()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Change"), picked.is_some(), cx, move |this, _, _| this.shortcut_dialog = Some((picked, true))))
+            .child(self.text_button(t("Remove"), picked.is_some(), cx, |this, _, _| this.set_shortcut(Some(String::new()))))
+            .child(self.text_button(t("Reset"), picked.is_some(), cx, |this, _, _| this.set_shortcut(None)))
+            .child(self.text_button(t("Reset All"), !self.shortcuts.is_empty(), cx, move |this, _, _| {
+                this.shortcuts.clear();
+                this.shortcut_dialog = Some((picked, false));
+                this.save_preferences();
+            }))
+            .child(self.text_button(t("Close"), true, cx, |this, _, _| this.shortcut_dialog = None));
+        Some(self.dialog_frame(430., t("Keyboard Shortcuts"), rows, buttons))
+    }
+
     /// Text > Check Spelling: the word not found, what to change it to, the checker's suggestions, and what to do with it.
     pub(crate) fn spell_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let session = self.spell.as_ref()?;

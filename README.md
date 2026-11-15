@@ -42,7 +42,7 @@ Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve aç
 | **Görünüm** | Degrade (12 tür) ve desen dolguları, 45 karışım modu, maskeler, 29 canlı filtre (Düzeyler ve Eğriler dahil), on efektli Photoshop Canlı Efektleri, stiller |
 | **Bitmap** | Boyama, silme, klonlama, doldurma, piksel seçimleri, Geçiş Yumuşatma, Benzerini ve Tersini Seç, seçim çerçevesi komutları, Seçimi ve Katmanları Düzleştir |
 | **Metin** | Kurulu fontlar, kalın, italik, altı çizili, hizalama, Yollara Dönüştür |
-| **Düzen** | Cetveller, ızgara, kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar ile Üst Seç ve Alt Seç |
+| **Düzen** | Cetveller, boyutu ve rengi ayarlanan ızgara ve Izgaraya Bitiştir, kılavuzlar, akıllı kılavuzlar, dilim kılavuzları, gruplar ile Üst Seç ve Alt Seç |
 | **Ekranlar ve animasyon** | Sayfalar, katmanlar, paylaşılan katmanlar, durumlar, soğan zarı, semboller ve kitaplık |
 | **Dışa aktarma** | PNG 8, PNG 24, PNG 32, JPEG (seçmeli kalite ve yumuşatma ile), GIF ve animasyonlu GIF; Önizleme, 2 Yukarı ve 4 Yukarı karşılaştırma; dilimler ve HTML görüntü eşlemleri |
 | **Belgeler** | Kendi `.pisi` dosyaları (Emberframe'in `.ember` dosyaları da açılır), yaygın görüntü biçimlerini açma ve içe aktarma, Tuval Boyutu, Görüntü Boyutu, Tuvali Sığdır ve Tuvali Kes |
@@ -143,7 +143,7 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 ## Bu sürümde olmayanlar
 
-- Menülerde gri görünen komutlar: Şablondan Yeni, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon ve Komutlar menüsü.
+- Menülerde gri görünen komutlar: Şablondan Yeni, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Animasyon ve Komutlar menüsü.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.

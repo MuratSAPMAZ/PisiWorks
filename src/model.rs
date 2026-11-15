@@ -2692,6 +2692,7 @@ pub enum Align {
     Bottom,
 }
 
+/// How many steps Undo keeps unless Preferences says otherwise.
 const HISTORY_LIMIT: usize = 200;
 
 /// A document plus its selection, undo history and clipboard.
@@ -2699,6 +2700,8 @@ pub struct Editor {
     pub doc: Document,
     pub selection: Vec<u64>,
     pub history: Vec<(String, Document)>,
+    /// How many steps are kept for Undo.
+    pub history_limit: usize,
     pub history_pos: usize,
     /// Changes whenever the document's content or the view of it changes.
     pub revision: u64,
@@ -2711,6 +2714,7 @@ impl Editor {
         Self {
             history: vec![(t("New Document").into(), doc.clone())],
             history_pos: 0,
+            history_limit: HISTORY_LIMIT,
             revision: 0,
             saved_doc: doc.clone(),
             selection: Vec::new(),
@@ -2734,7 +2738,7 @@ impl Editor {
         }
         self.history.truncate(self.history_pos + 1);
         self.history.push((label.to_string(), self.doc.clone()));
-        if self.history.len() > HISTORY_LIMIT {
+        while self.history.len() > self.history_limit.max(2) {
             self.history.remove(0);
         }
         self.history_pos = self.history.len() - 1;

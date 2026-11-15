@@ -173,6 +173,8 @@ pub struct Scene {
     caret: Option<(Vec2, f32)>,
     show_rulers: bool,
     show_grid: bool,
+    /// How far apart the grid lines are, and their color.
+    grid: ((f32, f32), crate::model::Color),
     /// The lines drawn across the whole view: whether each runs across, where it is on the page, and its color.
     guide_lines: Vec<(bool, f32, u32)>,
     /// The handles of the selected object's gradient: where it starts and where it ends.
@@ -338,6 +340,7 @@ impl Scene {
             caret,
             show_rulers: w.show_rulers,
             show_grid: w.show_grid,
+            grid: (w.prefs.grid, w.prefs.grid_color),
             guide_lines: w.guide_lines(),
             fill_handles: w.fill_handles(),
             nine_cuts: w.ed.selection_bounds().zip(w.nine_slice_lines()),
@@ -408,7 +411,7 @@ impl Scene {
                     }
                 }
                 if self.show_grid && overlays {
-                    paint_grid(page_bounds, map, window);
+                    paint_grid(page_bounds, map, self.grid, window);
                 }
                 // Web areas sit above all artwork, whatever layer holds them.
                 if overlays {
@@ -827,23 +830,24 @@ fn paint_text(object: &Object, content: &str, text_size: f32, style: &crate::mod
     }
 }
 
-fn paint_grid(page: Bounds<Pixels>, map: ViewMap, window: &mut Window) {
-    let spacing = 36.0 * map.zoom;
-    if spacing < 6.0 {
+fn paint_grid(page: Bounds<Pixels>, map: ViewMap, grid: ((f32, f32), crate::model::Color), window: &mut Window) {
+    let ((across, down), tint) = grid;
+    let (step_x, step_y) = (across.max(1.0) * map.zoom, down.max(1.0) * map.zoom);
+    if step_x < 6.0 || step_y < 6.0 {
         return;
     }
-    let color = Rgba { r: 0.0, g: 1.0, b: 1.0, a: 0.5 };
+    let color = Rgba { r: tint.r as f32 / 255.0, g: tint.g as f32 / 255.0, b: tint.b as f32 / 255.0, a: 0.5 };
     let (x0, y0) = (f32::from(page.origin.x), f32::from(page.origin.y));
     let (w, h) = (f32::from(page.size.width), f32::from(page.size.height));
-    let mut x = spacing;
+    let mut x = step_x;
     while x < w {
         window.paint_quad(fill(Bounds { origin: point(px(x0 + x), px(y0)), size: size(px(1.), px(h)) }, color));
-        x += spacing;
+        x += step_x;
     }
-    let mut y = spacing;
+    let mut y = step_y;
     while y < h {
         window.paint_quad(fill(Bounds { origin: point(px(x0), px(y0 + y)), size: size(px(w), px(1.)) }, color));
-        y += spacing;
+        y += step_y;
     }
 }
 

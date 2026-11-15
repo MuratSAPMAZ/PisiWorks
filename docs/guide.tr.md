@@ -159,3 +159,9 @@ Her sekme satırının sağındaki panel menüsü o grubu daraltır veya kapatı
 ## Dışa aktarmaları karşılaştırma
 
 Önizleme, sayfayı dışa aktarılacağı haliyle gösterir. 2 Yukarı görünümü orijinal sayfayı yanına koyar; 4 Yukarı görünümü orijinal sayfayı üç dışa aktarma ayarı ve dosya boyutlarıyla karşılaştırır. Bu görünümlerde kaydırmak için sürükleyin.
+
+## Tercihler ve Klavye Kısayolları
+
+**Düzenle > Tercihler** (Ctrl+U) geri alma adımı sayısını, işaretçinin bir nesneyi ne kadar yakından seçtiğini, nesnelerin ne kadar yakından bitiştiğini, ızgaranın boyutunu ve rengini ve kılavuzların rengini ayarlar. Metin seçiliyken Ctrl+U altını çizer. **Görünüm > Izgara > Izgaraya Bitiştir** (Ctrl+Alt+Shift+G) ızgara görünürken taşınan nesneleri ızgara çizgilerine bitiştirir.
+
+**Düzenle > Klavye Kısayolları** bütün menü komutlarını tuşlarıyla listeler. Bir komutu seçip **Değiştir**'e, sonra yeni tuşlara basın. Tuşlar başka bir komuttaysa o komuttan alınır. **Kaldır** komutu tuşsuz bırakır, **Sıfırla** ilk tuşlarına döndürür. Değişiklikler ayar dosyasında saklanır.

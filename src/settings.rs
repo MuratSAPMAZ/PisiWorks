@@ -19,6 +19,66 @@ pub struct Settings {
     /// The words Check Spelling was told are right, though no dictionary has them.
     #[serde(default)]
     pub personal_words: Vec<String>,
+    /// What Edit > Preferences sets.
+    #[serde(default)]
+    pub preferences: Preferences,
+    /// Keyboard shortcuts the user has changed: the command, by its English menu name, and the keys it has now. No keys means it has none.
+    #[serde(default)]
+    pub shortcuts: std::collections::HashMap<String, String>,
+}
+
+/// What Edit > Preferences sets.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Preferences {
+    /// How many steps Undo can go back.
+    #[serde(default = "default_undo_steps")]
+    pub undo_steps: u32,
+    /// How near the pointer has to come to an object to pick it, in pixels on screen.
+    #[serde(default = "default_pick_distance")]
+    pub pick_distance: f32,
+    /// How near something has to come to a guide, the grid or another object to snap to it, in pixels on screen.
+    #[serde(default = "default_snap_distance")]
+    pub snap_distance: f32,
+    /// How far apart the lines of the grid are, across and down, in pixels of the page.
+    #[serde(default = "default_grid")]
+    pub grid: (f32, f32),
+    #[serde(default = "default_grid_color")]
+    pub grid_color: crate::model::Color,
+    #[serde(default)]
+    pub snap_to_grid: bool,
+}
+
+fn default_undo_steps() -> u32 {
+    200
+}
+
+fn default_pick_distance() -> f32 {
+    3.0
+}
+
+fn default_snap_distance() -> f32 {
+    5.0
+}
+
+fn default_grid() -> (f32, f32) {
+    (36.0, 36.0)
+}
+
+fn default_grid_color() -> crate::model::Color {
+    crate::model::Color::rgb(0, 255, 255)
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            undo_steps: default_undo_steps(),
+            pick_distance: default_pick_distance(),
+            snap_distance: default_snap_distance(),
+            grid: default_grid(),
+            grid_color: default_grid_color(),
+            snap_to_grid: false,
+        }
+    }
 }
 
 impl Settings {
