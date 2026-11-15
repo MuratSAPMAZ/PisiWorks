@@ -1866,6 +1866,14 @@ impl Workspace {
                             cx.notify();
                         }),
                     )
+                    .on_mouse_down(
+                        MouseButton::Right,
+                        cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                            this.ed.set_active_layer(index);
+                            this.open_context_menu(ev.position, crate::menus::LAYER_MENU);
+                            cx.notify();
+                        }),
+                    )
                     // A guide or a mask is named as one, and the layer it works on is set in under it.
                     .when(timeline.master(index).is_some(), |d| d.pl_5())
                     .child(match timeline.kind(index) {
@@ -1911,6 +1919,15 @@ impl Workspace {
                                 cx.notify();
                             }),
                         )
+                        // A right-click goes to the frame and opens the menu of what can be done with it, as in Flash.
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                                this.show_frame(frame, Some(index));
+                                this.open_context_menu(ev.position, crate::menus::FRAME_MENU);
+                                cx.notify();
+                            }),
+                        )
                         // A keyframe is a dot: filled if it holds something, hollow if it is blank.
                         .children(key.map(|span| {
                             let dot = div().w(px(6.)).h(px(6.)).rounded_full().border_1().border_color(rgb(0x202020));
@@ -1939,11 +1956,7 @@ impl Workspace {
             .border_t_1()
             .border_color(rgb(BORDER))
             .child(self.text_button(t("New Layer"), true, cx, |this, window, cx| this.run(Cmd::AddLayer, window, cx)))
-            .child(self.text_button(t("Delete Layer"), page.layers.len() > 1, cx, |this, _, _| {
-                if this.ed.delete_layer() {
-                    this.ed.commit(t("Delete Layer"));
-                }
-            }))
+            .child(self.text_button(t("Delete Layer"), page.layers.len() > 1, cx, |this, window, cx| this.run(Cmd::Frame(FrameCmd::DeleteLayer), window, cx)))
             .child(div().w(px(8.)))
             .child(button(self, t("Rewind"), FrameCmd::Rewind, cx))
             .child(button(self, if self.frames_playing { t("Stop") } else { t("Play") }, FrameCmd::Play, cx))

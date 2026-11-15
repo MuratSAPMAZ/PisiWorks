@@ -27,7 +27,8 @@ pub fn app_name() -> &'static str {
 
 /// The two letters at the start of the menu bar.
 pub fn app_mark() -> &'static str {
-    if is_sahne() { "Ps" } else { APP_MARK }
+    // Not "Ps": those two letters are the mark of another company's program.
+    if is_sahne() { "Sh" } else { APP_MARK }
 }
 
 /// The extension new documents are saved with.

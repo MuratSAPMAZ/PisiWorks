@@ -1867,6 +1867,8 @@ impl Render for Workspace {
             .on_key_down(cx.listener(Self::key_down))
             .on_key_up(cx.listener(Self::key_up))
             .on_mouse_down(MouseButton::Left, cx.listener(Self::root_mouse_down))
+            // The menu a right-click opened lies over everything, where the click was.
+            .children(self.context_menu.map(|(at, entries)| deferred(self.menu_panel(entries, false, cx).absolute().left(at.x).top(at.y)).with_priority(2)))
             .on_mouse_move(cx.listener(Self::mouse_move))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::mouse_up))
             .child(self.app_bar(window, cx))

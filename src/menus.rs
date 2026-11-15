@@ -406,7 +406,37 @@ pub enum FrameCmd {
     PublishHtml,
     TestMovie,
     ImportSound,
+    DeleteLayer,
 }
+
+/// What a right-click on a frame of the timeline offers, in the order Flash has it: tweens, frames, keyframes.
+pub const FRAME_MENU: &[Entry] = &[
+    cmd("Create Motion Tween", "", Cmd::Frame(FrameCmd::Tween)),
+    cmd("Create Shape Tween", "", Cmd::Frame(FrameCmd::ShapeTween)),
+    cmd("Remove Tween", "", Cmd::Frame(FrameCmd::RemoveTween)),
+    Sep,
+    cmd("Insert Frame", "F5", Cmd::Frame(FrameCmd::InsertFrame)),
+    cmd("Remove Frames", "Shift+F5", Cmd::Frame(FrameCmd::RemoveFrame)),
+    Sep,
+    cmd("Insert Keyframe", "F6", Cmd::Frame(FrameCmd::Keyframe)),
+    cmd("Insert Blank Keyframe", "F7", Cmd::Frame(FrameCmd::BlankKeyframe)),
+    cmd("Clear Keyframe", "Shift+F6", Cmd::Frame(FrameCmd::ClearKeyframe)),
+    Sep,
+    cmd("Add Shape Hint", "Ctrl+Shift+H", Cmd::Frame(FrameCmd::AddHint)),
+    cmd("Remove All Hints", "", Cmd::Frame(FrameCmd::RemoveHints)),
+    Sep,
+    cmd("Import Sound...", "", Cmd::Frame(FrameCmd::ImportSound)),
+];
+
+/// What a right-click on a layer's name in the timeline offers.
+pub const LAYER_MENU: &[Entry] = &[
+    cmd("New Layer", "", Cmd::AddLayer),
+    cmd("Delete Layer", "", Cmd::Frame(FrameCmd::DeleteLayer)),
+    Sep,
+    cmd("Guide Layer", "", Cmd::Frame(FrameCmd::GuideLayer)),
+    cmd("Mask Layer", "", Cmd::Frame(FrameCmd::MaskLayer)),
+    cmd("Tie to Guide or Mask", "", Cmd::Frame(FrameCmd::BindLayer)),
+];
 
 /// The menus the animation program has beside PisiWorks' own, where Flash has them: after Modify.
 pub const SAHNE_MENUS: &[(&str, &[Entry])] = &[

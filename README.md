@@ -118,14 +118,14 @@ Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
 
 ## PisiWorks'te neler yapıldı
 
-PisiWorks, Emberframe 0.1'den çatallandı. Emberframe bize sağlam bir başlangıç verdi: pencere düzeni, araç paleti ve paneller, simgeler, katmanları, sayfaları, durumları ve sembolleriyle nesne modeli, temel çizim ve bitmap araçları, yol işlemleri, Otomatik Şekiller ve dışa aktarma ondan gelir, ve o kodun yaklaşık %92'si hâlâ yerindedir.
+PisiWorks, Emberframe 0.1'den çatallandı. Emberframe bize sağlam bir başlangıç verdi: pencere düzeni, araç paleti ve paneller, simgeler, katmanları, sayfaları, durumları ve sembolleriyle nesne modeli, temel çizim ve bitmap araçları, yol işlemleri, Otomatik Şekiller ve dışa aktarma ondan gelir, ve o kodun yaklaşık %88'i hâlâ yerindedir.
 
 Üzerine, Fireworks'ü derste anlatan bir öğretmenin ihtiyaç duyacağı her şeyi tek tek ekledik. Emberframe'in menülerinde 42 komut gri duruyordu; PisiWorks'te gri komut yok.
 
 | | Emberframe 0.1 | PisiWorks |
 |---|---|---|
-| Kaynak kod | 16 dosyada 12.286 satır | 29 dosyada 32.733 satır |
-| Otomatik test | 141 | 300 |
+| Kaynak kod | 16 dosyada 12.286 satır | 35 dosyada 37.312 satır (iki program) |
+| Otomatik test | 141 | 318 |
 | Menüde çalışmayan (gri) komut | 42 | 0 |
 | Arayüz dili | İngilizce | Türkçe ve İngilizce |
 
@@ -174,6 +174,7 @@ Bu aşamada çalışanlar:
 - Sahneler: Sahneler panelindeki her sayfa bir sahnedir; film sahneleri sırayla oynatır.
 - Ses: MP3, OGG ya da WAV dosyası içe aktarılır ve bir anahtar karede başlatılır.
 - Filmi Test Et (Ctrl+Enter): filmi yayımlayıp tarayıcıda açar.
+- Zaman çizelgesinde sağ tık menüleri: bir kareye sağ tıklayınca ara doldurma, kare ve anahtar kare komutları; katman adına sağ tıklayınca katman komutları.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - Örnekler menüsünde altı hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, düğmeli iki sahne.
 - PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.

@@ -743,6 +743,8 @@ pub struct Workspace {
     pub gif_dialog: Option<GifDialog>,
     /// Whether the timeline is being played.
     pub frames_playing: bool,
+    /// The menu a right-click opened: where the click was, and what the menu offers.
+    pub context_menu: Option<(Point<Pixels>, &'static [crate::menus::Entry])>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
     pub preview_button: Option<(u64, usize)>,
     /// Animate Selection and its Settings: the settings as edited so far.
@@ -1133,6 +1135,7 @@ impl Workspace {
             tween_dialog: None,
             gif_dialog: None,
             frames_playing: false,
+            context_menu: None,
             preview_button: None,
             animate_dialog: None,
             print_dialog: None,
@@ -1902,6 +1905,15 @@ impl Workspace {
         self.open_sub = None;
         self.color_popup = None;
         self.open_combo = None;
+        self.context_menu = None;
+    }
+
+    /// Opens a menu where the mouse was right-clicked.
+    pub fn open_context_menu(&mut self, at: Point<Pixels>, entries: &'static [crate::menus::Entry]) {
+        self.finish_pending();
+        self.close_overlays();
+        self.frames_playing = false;
+        self.context_menu = Some((at, entries));
     }
 
     // ---- Panels ---------------------------------------------------------------------
@@ -2436,6 +2448,11 @@ impl Workspace {
             FrameCmd::Back => self.show_frame(current.saturating_sub(1), None),
             FrameCmd::PublishHtml => self.publish_html(window, cx),
             FrameCmd::TestMovie => self.test_movie(),
+            FrameCmd::DeleteLayer => {
+                if self.ed.delete_layer() {
+                    done(self, t("Delete Layer"));
+                }
+            }
             FrameCmd::ImportSound => self.pick_file(window, cx, |this, path| this.import_sound(&path)),
         }
     }
@@ -3132,6 +3149,11 @@ impl Workspace {
                 crate::menus::ReadyCmd::HideOtherLayers | crate::menus::ReadyCmd::LockOtherLayers => self.ed.doc.page().layers.len() >= 2,
                 crate::menus::ReadyCmd::ReverseStates | crate::menus::ReadyCmd::ReverseStateRange => self.ed.doc.page().states.len() >= 2,
             },
+            Cmd::Frame(crate::menus::FrameCmd::DeleteLayer) => self.ed.doc.page().layers.len() > 1,
+            // A right-click menu greys what does not fit the frame it was opened on.
+            Cmd::Frame(crate::menus::FrameCmd::RemoveTween) => self.current_tween().is_some(),
+            Cmd::Frame(crate::menus::FrameCmd::ClearKeyframe) => self.frame_position().is_some_and(|(frame, _)| frame > 0) && self.current_span().is_some_and(|span| self.frame_position().is_some_and(|(frame, _)| span.start == frame)),
+            Cmd::Frame(crate::menus::FrameCmd::AddHint | crate::menus::FrameCmd::RemoveHints) => self.current_tween().is_some_and(|tween| tween.shape),
             Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some() || self.ed.editing_clip().is_some(),
             Cmd::TweenInstances => self.ed.can_tween(),
             Cmd::AnimateSettings | Cmd::RemoveAnimation => self.ed.selected_animation().is_some(),

@@ -117,14 +117,14 @@ Printing needs the system's print service (CUPS).
 
 ## What was done in PisiWorks
 
-PisiWorks was forked from Emberframe 0.1. Emberframe gave us a sound start: the window layout, the tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from it, and about 92% of that code is still in place.
+PisiWorks was forked from Emberframe 0.1. Emberframe gave us a sound start: the window layout, the tool palette and panels, the icons, the object model with layers, pages, states and symbols, the basic drawing and bitmap tools, path operations, Auto Shapes and export all come from it, and about 88% of that code is still in place.
 
 On top of it we added, piece by piece, everything a teacher who still teaches Fireworks would need. Emberframe's menus had 42 commands greyed out; PisiWorks has none.
 
 | | Emberframe 0.1 | PisiWorks |
 |---|---|---|
-| Source code | 12,286 lines in 16 files | 32,733 lines in 29 files |
-| Automated tests | 141 | 300 |
+| Source code | 12,286 lines in 16 files | 37,312 lines in 35 files (two programs) |
+| Automated tests | 141 | 318 |
 | Menu commands that do nothing (greyed out) | 42 | 0 |
 | Interface language | English | Turkish and English |
 
@@ -173,6 +173,7 @@ Working at this stage:
 - Scenes: every page in the Scenes panel is a scene, and the film plays them one after another.
 - Sound: an MP3, OGG or WAV file is imported and started on a keyframe.
 - Test Movie (Ctrl+Enter) publishes the film and opens it in the browser.
+- Right-click menus in the timeline: on a frame, the tween, frame and keyframe commands; on a layer's name, the layer commands.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - Six ready animations in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, and two scenes with buttons.
 - Exchange with PisiWorks: **PisiSahne > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **PisiWorks > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.

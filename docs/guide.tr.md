@@ -230,6 +230,8 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 | . ve , | Bir kare ileri, bir kare geri |
 | Ctrl+Enter | Filmi Test Et |
 
+**Sağ tık.** Bir kareye sağ tıklamak o kareye gider ve ara doldurma, kare ve anahtar kare komutlarının menüsünü açar; o kareye uymayan komutlar gri görünür. Katman adına sağ tıklamak katman komutlarını (yeni katman, sil, kılavuz, maske, bağla) açar.
+
 **Hareket ara doldurma.** Nesneyi ilk karede çizin, ileri bir karede F6 ile anahtar kare ekleyip nesneyi taşıyın, büyütün ya da döndürün; ilk anahtar kareye dönüp **Zaman Çizelgesi > Hareket Ara Doldurması Oluştur** deyin. Aradaki kareler mavi olur. Altta **Yavaşlama** (−100 yavaş başlar, 100 yavaş biter) ve **Tur** (yol boyunca tam dönüş sayısı) alanları çıkar.
 
 **Şekil ara doldurma.** İlk karede bir şekil, ileride F7 ile açtığınız boş anahtar karede başka bir şekil çizin; ilk karede **Şekil Ara Doldurması Oluştur** deyin. Aradaki kareler yeşil olur. Dönüşüm istediğiniz gibi olmuyorsa **Şekil İpucu Ekle** (Ctrl+Shift+H) ile işaretler koyun: ilk karedeki sarı işareti ve son karedeki yeşil işareti, birbirine dönüşmesini istediğiniz noktalara sürükleyin.
