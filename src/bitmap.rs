@@ -266,8 +266,20 @@ impl Mask {
         if (self.width, self.height) != (other.width, other.height) {
             return;
         }
-        // Adding to or taking from a feathered selection leaves a plain one.
-        self.soft = None;
+        // With a feathered selection on either side it is the parts of each pixel that are added or taken away.
+        if (self.soft.is_some() || other.soft.is_some()) && mode != MaskMode::Replace {
+            let weights: Vec<u8> = (0..self.cells.len())
+                .map(|cell| {
+                    let (mine, theirs) = (self.weight(cell), other.weight(cell));
+                    let kept = if mode == MaskMode::Add { mine.max(theirs) } else { mine.min(1.0 - theirs) };
+                    (kept * 255.0).round() as u8
+                })
+                .collect();
+            self.cells = weights.iter().map(|w| *w >= 128).collect();
+            self.soft = Some(weights);
+            return;
+        }
+        self.soft = if mode == MaskMode::Replace { other.soft.clone() } else { None };
         for (cell, new) in self.cells.iter_mut().zip(&other.cells) {
             *cell = match mode {
                 MaskMode::Replace => *new,
@@ -325,20 +337,38 @@ impl Mask {
         }
     }
 
-    /// The selection grown by `by` pixels all around.
+    /// How wide the soft edge of a feathered selection is, as the radius it was feathered by; none for a plain one.
+    fn softness(&self) -> Option<f32> {
+        let soft = self.soft.as_ref()?;
+        // Partly selected pixels lie in a band about three radii wide along the edge.
+        let partly = soft.iter().filter(|w| **w > 12 && **w < 243).count() as f32;
+        let edge = self.edges().len().max(1) as f32;
+        Some((partly / edge / 2.0).max(0.5))
+    }
+
+    /// A plain result made soft again, if the selection it was made from was.
+    fn softened_like(self, from: &Mask) -> Mask {
+        match from.softness() {
+            Some(radius) => self.feathered(radius),
+            None => self,
+        }
+    }
+
+    /// The selection grown by `by` pixels all around. A feathered one stays feathered.
     pub fn expanded(&self, by: u32) -> Mask {
-        self.with_cells(self.distance_to(true).iter().map(|d| *d <= by as f32).collect())
+        self.with_cells(self.distance_to(true).iter().map(|d| *d <= by as f32).collect()).softened_like(self)
     }
 
     /// The selection shrunk by `by` pixels all around. The edge of the bitmap is not an edge of the selection.
     pub fn contracted(&self, by: u32) -> Mask {
-        self.with_cells(self.distance_to(false).iter().map(|d| *d > by as f32).collect())
+        self.with_cells(self.distance_to(false).iter().map(|d| *d > by as f32).collect()).softened_like(self)
     }
 
     /// A band `width` pixels wide along the edge of the selection, half of it to each side.
     pub fn border(&self, width: u32) -> Mask {
-        let (outer, inner) = (self.expanded(width.div_ceil(2)), self.contracted(width / 2));
-        self.with_cells(outer.cells.iter().zip(&inner.cells).map(|(o, i)| *o && !*i).collect())
+        let grown = self.with_cells(self.distance_to(true).iter().map(|d| *d <= width.div_ceil(2) as f32).collect());
+        let shrunk = self.with_cells(self.distance_to(false).iter().map(|d| *d > (width / 2) as f32).collect());
+        self.with_cells(grown.cells.iter().zip(&shrunk.cells).map(|(o, i)| *o && !*i).collect()).softened_like(self)
     }
 
     /// The selection with its edge evened out: a pixel is selected if most of the
@@ -1082,9 +1112,20 @@ mod tests {
         // Inverted it is the other part of every pixel; moved, it keeps its softness; added to, it is plain again.
         assert!((soft.inverted().weight(20 * 40 + 10) + weight(10, 20) - 1.0).abs() < 0.01);
         assert!((soft.shifted(5, 0).weight(20 * 40 + 15) - weight(10, 20)).abs() < 0.01);
-        let mut plain = soft.clone();
-        plain.combine(&square, MaskMode::Add);
-        assert!(!plain.is_feathered());
+        // Added to, it takes the larger part of each pixel and stays soft; subtracted from, what is taken leaves a soft hole.
+        let other = Mask::rect(40, 40, Vec2 { x: 20.0, y: 10.0 }, Vec2 { x: 38.0, y: 30.0 });
+        let mut added = soft.clone();
+        added.combine(&other, MaskMode::Add);
+        assert!(added.is_feathered() && added.weight(20 * 40 + 35) == 1.0 && (added.weight(20 * 40 + 10) - weight(10, 20)).abs() < 0.01);
+        let mut taken = soft.clone();
+        taken.combine(&soft.shifted(8, 0), MaskMode::Subtract);
+        assert!(taken.is_feathered() && taken.weight(20 * 40 + 25) < 0.05 && taken.weight(20 * 40 + 11) > 0.5);
+        // Grown or shrunk it is still feathered, about as softly as before.
+        let grown = soft.expanded(4);
+        assert!(grown.is_feathered() && grown.weight(20 * 40 + 6) > weight(6, 20) + 0.2);
+        let edge = grown.weight(20 * 40 + 6);
+        assert!(edge > 0.2 && edge < 0.8, "{edge}");
+        assert!(soft.contracted(3).is_feathered() && !square.expanded(4).is_feathered());
     }
 
     #[test]

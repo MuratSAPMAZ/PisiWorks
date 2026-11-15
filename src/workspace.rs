@@ -208,6 +208,9 @@ pub struct ToolOptions {
     pub precision: f32,
     /// The Path Scrubbers: how fast they change the stroke, in percent.
     pub rate: f32,
+    /// How unlike the pixel clicked a pixel may be and still be taken by the Magic Wand, or filled by the Paint Bucket.
+    pub wand_tolerance: f32,
+    pub bucket_tolerance: f32,
 }
 
 impl Default for ToolOptions {
@@ -226,6 +229,8 @@ impl Default for ToolOptions {
             sides: 5.0,
             precision: 5.0,
             rate: 20.0,
+            wand_tolerance: FILL_TOLERANCE as f32,
+            bucket_tolerance: FILL_TOLERANCE as f32,
         }
     }
 }
@@ -329,6 +334,8 @@ pub enum FieldId {
     PolygonSides,
     PathPrecision,
     ScrubRate,
+    WandTolerance,
+    BucketTolerance,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -2387,7 +2394,7 @@ impl Workspace {
             Cmd::FitSelection => self.fit_selection(),
             Cmd::SelectSimilar => {
                 if let Some((id, mask)) = &pixels {
-                    let similar = self.ed.object(*id).and_then(|o| o.bitmap()).and_then(|bitmap| bitmap.similar(mask, FILL_TOLERANCE));
+                    let similar = self.ed.object(*id).and_then(|o| o.bitmap()).and_then(|bitmap| bitmap.similar(mask, self.tool_options.wand_tolerance as u8));
                     self.set_pixel_selection(*id, similar, MaskMode::Replace);
                 }
             }
@@ -3461,7 +3468,7 @@ impl Workspace {
             return;
         };
         let Some(object) = self.ed.object(id) else { return };
-        let region = object.pixel_at(p).and_then(|(x, y)| object.bitmap()?.region(x, y, FILL_TOLERANCE));
+        let region = object.pixel_at(p).and_then(|(x, y)| object.bitmap()?.region(x, y, self.tool_options.wand_tolerance as u8));
         self.set_pixel_selection(id, region, selection_mode(ev.modifiers));
     }
 
@@ -3900,10 +3907,11 @@ impl Workspace {
                 return;
             };
             let mask = self.mask_for(id);
+            let tolerance = self.tool_options.bucket_tolerance as u8;
             let Some(object) = self.ed.object_mut(id) else { return };
             let Some((x, y)) = object.pixel_at(p) else { return };
             object.edit_pixels(mask.as_deref(), |bitmap| {
-                bitmap.flood_fill(x, y, color, FILL_TOLERANCE);
+                bitmap.flood_fill(x, y, color, tolerance);
             });
             self.ed.commit(t("Paint Bucket"));
             return;
@@ -5072,6 +5080,8 @@ impl Workspace {
             FieldId::PolygonSides => number(self.tool_options.sides),
             FieldId::PathPrecision => number(self.tool_options.precision),
             FieldId::ScrubRate => number(self.tool_options.rate),
+            FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
+            FieldId::BucketTolerance => number(self.tool_options.bucket_tolerance),
             FieldId::FreeformSize => number(self.freeform_size),
             FieldId::Url => match first.map(|o| &o.shape) {
                 Some(Shape::Web { url, .. }) => url.clone(),
@@ -5250,9 +5260,14 @@ impl Workspace {
                     _ => self.tool_options.red_strength = v,
                 }
             }
-            FieldId::ReplaceTolerance => {
+            FieldId::ReplaceTolerance | FieldId::WandTolerance | FieldId::BucketTolerance => {
                 let Some(v) = number.filter(|v| *v >= 0.0) else { return };
-                self.tool_options.replace_tolerance = v.min(255.0);
+                let v = v.round().min(255.0);
+                match field.id {
+                    FieldId::ReplaceTolerance => self.tool_options.replace_tolerance = v,
+                    FieldId::WandTolerance => self.tool_options.wand_tolerance = v,
+                    _ => self.tool_options.bucket_tolerance = v,
+                }
             }
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };

@@ -932,6 +932,8 @@ impl Workspace {
             }
             Tool::VectorPath | Tool::RedrawPath => rows.push(option(self, t("Precision:"), FieldId::PathPrecision, cx)),
             Tool::ReshapeArea => rows.push(option(self, t("Size:"), FieldId::FreeformSize, cx)),
+            Tool::Wand => rows.push(option(self, t("Tolerance:"), FieldId::WandTolerance, cx)),
+            Tool::Bucket => rows.push(option(self, t("Tolerance:"), FieldId::BucketTolerance, cx)),
             Tool::ScrubAdd | Tool::ScrubSubtract => {
                 rows.push(option(self, t("Size:"), FieldId::FreeformSize, cx));
                 rows.push(option(self, t("Rate:"), FieldId::ScrubRate, cx));
