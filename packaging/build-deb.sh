@@ -66,7 +66,7 @@ Architecture: $arch
 Maintainer: $maintainer
 Installed-Size: $installed
 Depends: libc6 (>= $glibc), libgcc-s1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libvulkan1
-Recommends: mesa-vulkan-drivers, libwayland-client0, fonts-noto-core | fonts-dejavu-core, cups-client, zenity
+Recommends: mesa-vulkan-drivers, libwayland-client0, fonts-noto-core | fonts-dejavu-core, cups-client, zenity, enchant-2 | hunspell, hunspell-tr
 Homepage: https://github.com/MuratSAPMAZ/PisiWorks
 Description: Fireworks-like screen design editor with a Turkish interface
  PisiWorks draws vector shapes and edits bitmaps in one docked workspace,

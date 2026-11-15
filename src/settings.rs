@@ -16,6 +16,9 @@ pub struct Settings {
     /// What File > Page Setup was last set to.
     #[serde(default)]
     pub print: crate::print::PrintSetup,
+    /// The words Check Spelling was told are right, though no dictionary has them.
+    #[serde(default)]
+    pub personal_words: Vec<String>,
 }
 
 impl Settings {

@@ -1565,6 +1565,64 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// Text > Check Spelling: the word not found, what to change it to, the checker's suggestions, and what to do with it.
+    pub(crate) fn spell_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let session = self.spell.as_ref()?;
+        let (_, _, _, word) = self.spell_current()?;
+        let suggestions: Vec<AnyElement> = session
+            .wrong
+            .get(&word)
+            .into_iter()
+            .flatten()
+            .take(8)
+            .map(|suggestion| {
+                let picked = suggestion.clone();
+                div()
+                    .h(px(18.))
+                    .px_1()
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .when(*suggestion == session.replacement, |d| d.bg(rgb(ACCENT)))
+                    .hover(|s| s.bg(rgb(HOVER)))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.field = None;
+                            if let Some(session) = this.spell.as_mut() {
+                                session.replacement = picked.clone();
+                            }
+                            cx.notify();
+                        }),
+                    )
+                    .child(suggestion.clone())
+                    .into_any_element()
+            })
+            .collect();
+        let names = [t("Word not found:"), t("Change to:"), t("Suggestions:")];
+        let name_width = label_width(&names, 80.);
+        let rows = vec![
+            labelled_row(names[0], name_width, div().font_weight(FontWeight::BOLD).child(word)).into_any_element(),
+            labelled_row(names[1], name_width, self.field(FieldId::SpellChange, 170., cx)).into_any_element(),
+            labelled_row(names[2], name_width, div().w(px(170.)).h(px(146.)).flex().flex_col().bg(rgb(INPUT)).border_1().border_color(rgb(INPUT_BORDER)).children(suggestions)).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .flex_wrap()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Add to Personal"), true, cx, |this, _, _| this.spell_add()))
+            .child(self.text_button(t("Ignore"), true, cx, |this, _, _| this.spell_ignore(false)))
+            .child(self.text_button(t("Ignore All"), true, cx, |this, _, _| this.spell_ignore(true)))
+            .child(self.text_button(t("Change"), true, cx, |this, _, _| this.spell_change(false)))
+            .child(self.text_button(t("Change All"), true, cx, |this, _, _| this.spell_change(true)))
+            .child(self.text_button(t("Close"), true, cx, |this, _, _| {
+                this.field = None;
+                this.spell = None;
+            }));
+        Some(self.dialog_frame(330., t("Check Spelling"), rows, buttons))
+    }
+
     /// Move Guide: the place of the guide that was double-clicked, in pixels from the edge of the page.
     pub(crate) fn guide_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.guide_dialog?;

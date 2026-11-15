@@ -122,6 +122,8 @@ With a text object selected, Properties shows its font and size, buttons for bol
 
 Text > Attach to Path (Ctrl+Shift+Y) sets the selected text along the selected path or shape, which then belongs to the text and moves with it. Around a closed shape the text starts at the left and runs over the top. Properties shows how its letters stand (Text > Orientation: Rotate Around Path, Vertical, Skew Vertical, Skew Horizontal) and a Text offset that starts it further along. Reverse Direction runs it the other way, and Detach from Path gives the text and the path back.
 
+Text > Check Spelling (Shift+F7) goes through the selected texts, or every text on the page, and stops at each word the dictionary does not have. Change puts the word in the field in its place, and Change All does so everywhere; Ignore passes over this one place and Ignore All over the word; Add to Personal makes the word right from now on. It checks in the language of the interface, with the spelling dictionaries installed on the system (the `enchant-2` or `hunspell` program and a dictionary such as `hunspell-tr`).
+
 ## Guides
 
 Drag out of the ruler along the top or down the side to put a guide on the page. With the Pointer, drag a guide to move it, and drag it back onto a ruler to remove it. Objects being moved, drawn or resized snap to guides. Double-click a guide to type its place. The Pen and points dragged with the Subselection tool snap to guides too. View > Guides shows or hides them (Ctrl+;), locks them, turns snapping off, and clears them all; Edit Guides there also sets their color.

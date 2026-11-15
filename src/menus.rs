@@ -284,6 +284,7 @@ pub enum Cmd {
     AttachToPath,
     DetachFromPath,
     ReversePathText,
+    CheckSpelling,
     PathOrientation(crate::model::PathOrientation),
 }
 
@@ -460,6 +461,7 @@ pub const DOCK_GROUPS: [&[Panel]; 7] = [
 pub fn panel_shortcut(key: &str, control: bool, shift: bool, alt: bool) -> Option<Cmd> {
     let panel = match (key, control, shift, alt) {
         ("f4", false, false, false) => return Some(Cmd::HidePanels),
+        ("f7", false, true, false) => return Some(Cmd::CheckSpelling),
         ("f8", false, false, false) => return Some(Cmd::ConvertToSymbol),
         ("f2", true, false, false) => Panel::Tools,
         ("f3", true, false, false) => Panel::Properties,
@@ -805,7 +807,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Reverse Direction", "", Cmd::ReversePathText),
             cmd("Convert to Paths", "", Cmd::TextToPaths),
             Sep,
-            na("Check Spelling..."),
+            cmd("Check Spelling...", "Shift+F7", Cmd::CheckSpelling),
         ],
     ),
     ("Commands", &[na("Manage Saved Commands..."), na("Run Script...")]),

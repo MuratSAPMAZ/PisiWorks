@@ -20,6 +20,7 @@ mod print;
 mod pseffects;
 mod paths;
 mod settings;
+mod spell;
 mod theme;
 mod ui;
 mod workspace;

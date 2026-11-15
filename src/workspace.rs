@@ -177,6 +177,16 @@ impl NumericMode {
 }
 
 /// The Numeric Transform dialog while it is open.
+/// Text > Check Spelling while it runs: the misspelled words with what the checker suggests for
+/// each, what has been set aside, and what the word on show is to be changed to.
+pub struct SpellSession {
+    pub wrong: std::collections::HashMap<String, Vec<String>>,
+    /// Words to pass over wherever they are, and single places to pass over: a text and where in it the word starts.
+    pub ignored: std::collections::HashSet<String>,
+    pub skipped: std::collections::HashSet<(u64, usize)>,
+    pub replacement: String,
+}
+
 /// File > Image Preview: the export settings beside the image they give, before it is saved.
 pub struct ImagePreview {
     /// The part of the page to export; all of it when there is none.
@@ -345,6 +355,8 @@ pub enum FieldId {
     TextureAmount,
     /// How far along its path text on a path starts.
     PathOffset,
+    /// What Check Spelling changes the word on show to.
+    SpellChange,
     GuidePosition,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
@@ -624,6 +636,7 @@ pub struct Workspace {
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
     pub print_dialog: Option<PrintDialog>,
     pub image_preview: Option<ImagePreview>,
+    pub spell: Option<SpellSession>,
     /// The dialog that edits a gradient or pattern fill, holding the fill to go back to on Cancel.
     pub fill_dialog: Option<Arc<FillStyle>>,
     /// The bitmap filter last used from the Filters menu, for Repeat Filter.
@@ -889,6 +902,7 @@ impl Workspace {
             page_setup_dialog: None,
             print_dialog: None,
             image_preview: None,
+            spell: None,
             fill_dialog: None,
             last_filter: None,
             marquee_dialog: None,
@@ -2548,6 +2562,7 @@ impl Workspace {
                 }
             }
             Cmd::ImagePreview => self.open_image_preview(None),
+            Cmd::CheckSpelling => self.check_spelling(),
             Cmd::AttachToPath => {
                 if self.ed.attach_text_to_path() {
                     self.ed.commit(t("Attach to Path"));
@@ -2801,6 +2816,125 @@ impl Workspace {
             }
         })
         .detach();
+    }
+
+    /// The texts Check Spelling goes through: the selected ones, or with none selected every text on the page.
+    fn spell_targets(&self) -> Vec<u64> {
+        let is_text = |o: &&Object| matches!(o.shape, Shape::Text { .. });
+        let selected: Vec<u64> = self.ed.selected().into_iter().filter(is_text).map(|o| o.id).collect();
+        if !selected.is_empty() {
+            return selected;
+        }
+        self.ed.doc.page().objects().filter(is_text).map(|o| o.id).collect()
+    }
+
+    fn text_of(&self, id: u64) -> Option<&str> {
+        match &self.ed.object(id)?.shape {
+            Shape::Text { content, .. } => Some(content.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The next misspelled word that has not been dealt with: its text, where it starts and ends there, and the word.
+    pub fn spell_current(&self) -> Option<(u64, usize, usize, String)> {
+        let session = self.spell.as_ref()?;
+        self.spell_targets().into_iter().find_map(|id| {
+            crate::spell::words(self.text_of(id)?)
+                .into_iter()
+                .find(|(from, _, word)| session.wrong.contains_key(word) && !session.ignored.contains(word) && !session.skipped.contains(&(id, *from)))
+                .map(|(from, to, word)| (id, from, to, word))
+        })
+    }
+
+    /// Text > Check Spelling: checks every word of the texts and opens the dialog at the first one not found.
+    pub fn check_spelling(&mut self) {
+        self.finish_pending();
+        let personal = Settings::load().personal_words;
+        let mut words: Vec<String> = self.spell_targets().into_iter().filter_map(|id| self.text_of(id)).flat_map(crate::spell::words).map(|(_, _, word)| word).collect();
+        words.sort();
+        words.dedup();
+        words.retain(|word| !personal.contains(word));
+        match crate::spell::check(&words, crate::spell::dictionary()) {
+            Ok(wrong) => {
+                self.spell = Some(SpellSession { wrong, ignored: Default::default(), skipped: Default::default(), replacement: String::new() });
+                self.spell_advance();
+            }
+            Err(error) => self.status = error.to_string(),
+        }
+    }
+
+    /// Goes on to the next word, offering the checker's first suggestion for it, or finishes when none is left.
+    fn spell_advance(&mut self) {
+        self.field = None;
+        match self.spell_current() {
+            Some((id, _, _, word)) => {
+                self.ed.selection = vec![id];
+                if let Some(session) = self.spell.as_mut() {
+                    session.replacement = session.wrong.get(&word).and_then(|list| list.first()).cloned().unwrap_or(word);
+                }
+            }
+            None => {
+                self.spell = None;
+                self.status = t("Spelling check complete.").into();
+            }
+        }
+    }
+
+    /// Ignore passes over this one place; Ignore All passes over the word wherever it is.
+    pub fn spell_ignore(&mut self, everywhere: bool) {
+        self.commit_field();
+        let Some((id, from, _, word)) = self.spell_current() else { return };
+        if let Some(session) = self.spell.as_mut() {
+            if everywhere {
+                session.ignored.insert(word);
+            } else {
+                session.skipped.insert((id, from));
+            }
+        }
+        self.spell_advance();
+    }
+
+    /// Add to Personal: the word is right from now on, in every document.
+    pub fn spell_add(&mut self) {
+        self.commit_field();
+        let Some((_, _, _, word)) = self.spell_current() else { return };
+        let mut settings = Settings::load();
+        if !settings.personal_words.contains(&word) {
+            settings.personal_words.push(word.clone());
+            if let Err(error) = settings.save() {
+                self.status = error.to_string();
+            }
+        }
+        if let Some(session) = self.spell.as_mut() {
+            session.ignored.insert(word);
+        }
+        self.spell_advance();
+    }
+
+    /// Change puts the replacement in place of the word on show; Change All in place of the word wherever it is.
+    pub fn spell_change(&mut self, everywhere: bool) {
+        self.commit_field();
+        let (Some((id, from, to, word)), Some(replacement)) = (self.spell_current(), self.spell.as_ref().map(|session| session.replacement.clone())) else { return };
+        let targets = if everywhere { self.spell_targets() } else { vec![id] };
+        for target in targets {
+            let Some(object) = self.ed.object_mut(target) else { continue };
+            let Shape::Text { content, .. } = &mut object.shape else { continue };
+            // From the end of the text backward, so the places still to change do not move.
+            let places: Vec<(usize, usize)> = match everywhere {
+                true => crate::spell::words(content).into_iter().filter(|(_, _, found)| *found == word).map(|(a, b, _)| (a, b)).rev().collect(),
+                false => vec![(from, to)],
+            };
+            for (a, b) in places {
+                content.replace_range(a..b, &replacement);
+            }
+            object.refit_text();
+        }
+        self.ed.commit(t("Check Spelling"));
+        // What it was changed to is taken as right, even if the checker does not know it either.
+        if let Some(session) = self.spell.as_mut() {
+            session.wrong.remove(&replacement);
+        }
+        self.spell_advance();
     }
 
     /// Fireworks' Revert: asks, then opens the file again as it was last saved.
@@ -4964,6 +5098,15 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.spell.is_some() {
+            match key {
+                "enter" => self.spell_change(false),
+                "escape" => {
+                    self.field = None;
+                    self.spell = None;
+                }
+                _ => {}
+            }
         } else if self.image_preview.is_some() {
             match key {
                 "enter" => self.export_image_preview(window, cx),
@@ -5226,6 +5369,7 @@ impl Workspace {
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
+            FieldId::SpellChange => self.spell.as_ref().map_or_else(String::new, |session| session.replacement.clone()),
             FieldId::TextureAmount => number(self.current_fill_look().texture_amount),
             FieldId::GuidePosition => self.guide_dialog.map_or_else(String::new, |(_, _, place)| number(place)),
             FieldId::BucketTolerance => number(self.tool_options.bucket_tolerance),
@@ -5419,6 +5563,11 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::SpellChange => {
+                if let Some(session) = self.spell.as_mut() {
+                    session.replacement = text.to_string();
+                }
             }
             FieldId::PathOffset => {
                 let Some(v) = number else { return };

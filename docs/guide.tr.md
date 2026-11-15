@@ -124,6 +124,8 @@ Bir metin nesnesi seçiliyken Özellikler'de fontu ve boyutu, kalın, italik ve 
 
 Metin > Yola Ekle (Ctrl+Shift+Y), seçili metni seçili yol veya şekil boyunca dizer; yol artık metne aittir ve onunla birlikte taşınır. Kapalı bir şeklin çevresinde metin soldan başlar ve üstten dolaşır. Özellikler'de harflerin nasıl duracağı (Metin > Metin Yönlendirmesi: Yolun Etrafında Döndür, Dikey, Dikey Eğrilt, Yatay Eğrilt) ve metni yol boyunca ileriden başlatan Metin kaydırma görünür. Yönü Ters Çevir metni öbür yöne çevirir; Metni Yoldan Ayır metni ve yolu geri verir.
 
+Metin > Yazım Denetimi (Shift+F7), seçili metinleri veya sayfadaki bütün metinleri gözden geçirir ve sözlükte olmayan her sözcükte durur. Değiştir, alandaki sözcüğü onun yerine koyar; Tümünü Değiştir bunu her yerde yapar. Yoksay yalnızca bu yeri, Tümünü Yoksay sözcüğün tamamını geçer; Kişisel Sözlüğe Ekle sözcüğü bundan sonra doğru sayar. Denetim arayüzün dilinde, sistemde kurulu yazım sözlükleriyle yapılır (`enchant-2` veya `hunspell` programı ve `hunspell-tr` gibi bir sözlük).
+
 ## Kılavuzlar
 
 Sayfaya kılavuz koymak için üstteki veya yandaki cetvelden sürükleyin. İşaretçi ile bir kılavuzu sürükleyerek taşıyın; kaldırmak için cetvelin üzerine geri sürükleyin. Taşınan, çizilen veya yeniden boyutlandırılan nesneler kılavuzlara bitişir. Konumunu yazmak için kılavuza çift tıklayın. Kalem ve Alt Seçim aracıyla sürüklenen noktalar da kılavuzlara bitişir. Görünüm > Kılavuzlar onları gösterir veya gizler (Ctrl+;), kilitler, bitiştirmeyi kapatır ve hepsini temizler; oradaki Kılavuzları Düzenle renklerini de belirler.

@@ -143,7 +143,7 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 ## Bu sürümde olmayanlar
 
-- Menülerde gri görünen komutlar: Şablondan Yeni, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon, Yazım Denetimi ve Komutlar menüsü.
+- Menülerde gri görünen komutlar: Şablondan Yeni, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon ve Komutlar menüsü.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.
