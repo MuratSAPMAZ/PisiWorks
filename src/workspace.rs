@@ -1865,12 +1865,36 @@ impl Workspace {
     /// Makes a previewed transform permanent, as Enter and a double-click do.
     pub fn apply_transform(&mut self) {
         let Some(session) = self.transform.take() else { return };
-        if session.warp == Warp::identity() {
+        // In PisiSahne the point the box turns around stays with the object, as Flash's transformation point
+        // does: a motion tween turns the object around it.
+        let kept = self.kept_pivot(&session);
+        if session.warp == Warp::identity() && kept.is_none() {
             return;
+        }
+        if let Some((id, point)) = kept {
+            if let Some(object) = self.ed.object_mut(id) {
+                object.set_pivot_point(Some(point));
+            }
         }
         self.ed.commit(t("Transform"));
         let skipped = session.originals.iter().filter(|o| !o.warpable()).count();
         self.report_transform(skipped);
+    }
+
+    /// The object a session's center point is to stay with, and where the point is.
+    fn kept_pivot(&self, session: &TransformSession) -> Option<(u64, Vec2)> {
+        match (&session.originals[..], session.pivot) {
+            ([only], Some(point)) if crate::theme::is_sahne() => Some((only.id, point)),
+            _ => None,
+        }
+    }
+
+    /// Where the one selected object's transformation point is, in PisiSahne, if it has one of its own.
+    fn own_pivot(&self) -> Option<Vec2> {
+        match &self.ed.selected()[..] {
+            [only] if crate::theme::is_sahne() => only.pivot_point(),
+            _ => None,
+        }
     }
 
     /// Drops a previewed transform and puts the artwork back, as Esc does.
@@ -1889,7 +1913,7 @@ impl Workspace {
         }
         match &self.transform {
             Some(session) => Some((session.quad(), session.pivot())),
-            None => self.ed.selection_bounds().map(|bounds| (rect_corners(bounds), bounds.center())),
+            None => self.ed.selection_bounds().map(|bounds| (rect_corners(bounds), self.own_pivot().unwrap_or(bounds.center()))),
         }
     }
 
@@ -5046,7 +5070,8 @@ impl Workspace {
         if self.transform.is_none() {
             let Some(origin) = self.ed.selection_bounds() else { return };
             let originals = self.ed.selected().into_iter().cloned().collect();
-            self.transform = Some(TransformSession { origin, warp: Warp::identity(), originals, pivot: None });
+            let pivot = self.own_pivot();
+            self.transform = Some(TransformSession { origin, warp: Warp::identity(), originals, pivot });
         }
         let from = self.transform.as_ref().map_or(Warp::identity(), |s| s.warp);
         self.drag = Some(Drag::Transform { kind, handle, start: p, from, pivot });
@@ -5623,6 +5648,7 @@ impl Workspace {
             points,
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,

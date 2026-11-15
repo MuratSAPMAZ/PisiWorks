@@ -842,6 +842,11 @@ pub struct Object {
     /// is then the upright box around the result.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub placement: Option<Placement>,
+    /// The point a motion tween turns the object around, as Flash's transformation point is: where it lies
+    /// in the object's own frame (see `anchor`), so that it follows the object however it is moved or turned.
+    /// None is the middle of the object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pivot: Option<Vec2>,
     /// How the object's colors mix with the artwork under it.
     #[serde(default, skip_serializing_if = "BlendMode::is_normal")]
     pub blend: BlendMode,
@@ -901,6 +906,7 @@ impl Object {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -929,6 +935,7 @@ impl Object {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -1303,6 +1310,7 @@ impl Object {
                     points,
                     handles: Vec::new(),
                     placement: None,
+                    pivot: None,
                     blend: crate::blend::BlendMode::Normal,
                     mask: None,
                     mask_of: None,
@@ -1640,6 +1648,55 @@ impl Object {
     }
 
     /// Flattened outline used by canvas drawing, PNG export and hit testing.
+    /// A frame of the object's own that follows whatever is done to it: a point and two arms from it.
+    /// A shape that records its transform has the middle of its box and the box's half sides, carried by
+    /// the transform. A path or a line keeps no record, so it has the middle of its points and the arm to
+    /// its first point, which turn as it turns. Anything else has its upright box.
+    fn anchor(&self) -> (Vec2, Vec2, Vec2) {
+        let sound = |arm: Vec2| arm.x.hypot(arm.y) > 1e-3;
+        match &self.shape {
+            Shape::Text { .. } | Shape::Instance { .. } | Shape::Rect { .. } | Shape::Ellipse | Shape::Auto { .. } => {
+                let frame = self.placement.map_or(self.bounds, |p| p.frame);
+                let carry = |p: Vec2| self.placement.map_or(p, |placement| placement.warp.apply(p));
+                let (o, x, y) = (carry(frame.center()), carry(v2(frame.right(), frame.center().y)), carry(v2(frame.center().x, frame.bottom())));
+                let (x, y) = (v2(x.x - o.x, x.y - o.y), v2(y.x - o.x, y.y - o.y));
+                if sound(x) && sound(y) {
+                    return (o, x, y);
+                }
+            }
+            Shape::Line | Shape::Path { .. } if self.points.len() >= 2 => {
+                let count = self.points.len() as f32;
+                let o = v2(self.points.iter().map(|p| p.x).sum::<f32>() / count, self.points.iter().map(|p| p.y).sum::<f32>() / count);
+                if let Some(x) = self.points.iter().map(|p| v2(p.x - o.x, p.y - o.y)).find(|arm| sound(*arm)) {
+                    return (o, x, v2(-x.y, x.x));
+                }
+            }
+            _ => {}
+        }
+        (self.bounds.center(), v2((self.bounds.w / 2.0).max(1.0), 0.0), v2(0.0, (self.bounds.h / 2.0).max(1.0)))
+    }
+
+    /// Where a point of the object's own frame is in the document.
+    fn anchored(&self, at: Vec2) -> Vec2 {
+        let (o, x, y) = self.anchor();
+        v2(o.x + at.x * x.x + at.y * y.x, o.y + at.x * x.y + at.y * y.y)
+    }
+
+    /// Where the object's transformation point is in the document, if it has been taken off the middle.
+    pub fn pivot_point(&self) -> Option<Vec2> {
+        self.pivot.map(|at| self.anchored(at))
+    }
+
+    /// Puts the transformation point on a point of the document, or, with None, back in the middle.
+    pub fn set_pivot_point(&mut self, point: Option<Vec2>) {
+        self.pivot = point.and_then(|p| {
+            let (o, x, y) = self.anchor();
+            let det = x.x * y.y - x.y * y.x;
+            let (dx, dy) = (p.x - o.x, p.y - o.y);
+            (det.abs() > 1e-6).then(|| v2((dx * y.y - dy * y.x) / det, (dy * x.x - dx * x.y) / det))
+        });
+    }
+
     pub fn outline(&self) -> Vec<Vec2> {
         let upright = self.upright_outline();
         match &self.placement {
@@ -3253,8 +3310,9 @@ pub const MAX_FRAMES: usize = 20_000;
 /// of each. A shape turned by a command that redraws it as a path (Rotate 90°, a flip of
 /// a symmetrical shape) carries no record of the turn; its outline still tells it.
 fn turned_between(from: &[Vec2], to: &[Vec2]) -> Option<(f32, f32, Vec2, Vec2)> {
+    // Two points, a line's, are enough to tell a turn.
     let count = from.len();
-    if count < 3 || count != to.len() {
+    if count < 2 || count != to.len() {
         return None;
     }
     let middle = |points: &[Vec2]| v2(points.iter().map(|p| p.x).sum::<f32>() / count as f32, points.iter().map(|p| p.y).sum::<f32>() / count as f32);
@@ -3301,8 +3359,24 @@ fn turned_between(from: &[Vec2], to: &[Vec2]) -> Option<(f32, f32, Vec2, Vec2)> 
     best.filter(|(off, _)| *off < 1e-3).map(|(_, angle)| (angle, scale, ca, cb))
 }
 
-/// An object on its way from how one keyframe has it to how the next has it.
+/// An object on its way from how one keyframe has it to how the next has it. It turns around its
+/// transformation point, as in Flash: that point goes straight from where the first keyframe has it to where
+/// the next has it, and the object turns and changes size around it. So an arm whose point has been put on
+/// the shoulder stays on the shoulder.
 fn between(from: &Object, to: &Object, part: f32, turns: i32) -> Object {
+    let mut object = between_middles(from, to, part, turns);
+    if let Some(at) = from.pivot {
+        let (a, b, now) = (from.anchored(at), to.anchored(at), object.anchored(at));
+        let (dx, dy) = (a.x + (b.x - a.x) * part - now.x, a.y + (b.y - a.y) * part - now.y);
+        if dx.abs() > 1e-4 || dy.abs() > 1e-4 {
+            object.translate(dx, dy);
+        }
+    }
+    object
+}
+
+/// The same with the middle of the object going straight from keyframe to keyframe.
+fn between_middles(from: &Object, to: &Object, part: f32, turns: i32) -> Object {
     // A shape that was turned between the keyframes without a record of it, or is asked to make whole turns, is
     // carried round by what its outline shows: turned, resized and moved a part of the way.
     if from.placement.is_none() && to.placement.is_none() && !matches!(from.shape, Shape::Text { .. } | Shape::Instance { .. } | Shape::Group { .. } | Shape::Image { .. }) {
@@ -4975,6 +5049,7 @@ impl Editor {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -5747,6 +5822,7 @@ impl Editor {
             points: Vec::new(),
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -6561,6 +6637,7 @@ mod tests {
             points: vec![],
             handles: Vec::new(),
             placement: None,
+            pivot: None,
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -6990,6 +7067,41 @@ mod tests {
         // and every point passes through the middle.
         let turned = morphed(&square, &square, 0.5, &[(v2(0.0, 0.0), v2(40.0, 40.0)), (v2(40.0, 0.0), v2(0.0, 40.0))]);
         assert!(turned.points.iter().all(|p| (p.x - 20.0).abs() < 0.01 && (p.y - 20.0).abs() < 0.01), "{:?}", &turned.points[..3]);
+    }
+
+    #[test]
+    fn a_tween_turns_an_object_around_its_transformation_point() {
+        // An arm hanging from a shoulder at 100, 100, swung up to the right on the next keyframe.
+        let arm = |to: Vec2, pivot: bool| {
+            let mut object = rect(1, 100.0, 100.0, 0.0, 40.0);
+            (object.shape, object.points) = (Shape::Line, vec![v2(100.0, 100.0), to]);
+            object.bounds = Rect::of_points(&object.points);
+            if pivot {
+                object.set_pivot_point(Some(v2(100.0, 100.0)));
+            }
+            object
+        };
+        let (down, across) = (arm(v2(100.0, 140.0), true), arm(v2(140.0, 100.0), true));
+        assert_eq!(down.pivot_point().map(|p| (p.x.round(), p.y.round())), Some((100.0, 100.0)));
+        let half = between(&down, &across, 0.5, 0);
+        let (shoulder, hand) = (half.points[0], half.points[1]);
+        assert!((shoulder.x - 100.0).abs() < 0.01 && (shoulder.y - 100.0).abs() < 0.01, "the shoulder stays where it is: {shoulder:?}");
+        assert!((hand.x - 128.28).abs() < 0.1 && (hand.y - 128.28).abs() < 0.1, "the hand is halfway round: {hand:?}");
+        // Without a point of its own it turns around its middle, as before, and the shoulder wanders.
+        let loose = between(&arm(v2(100.0, 140.0), false), &arm(v2(140.0, 100.0), false), 0.5, 0).points[0];
+        assert!((loose.x - 100.0).abs() > 3.0);
+        // The point follows the object: moved and turned, it is still on the same end.
+        let mut moved = down.clone();
+        moved.warp(&Warp::rotation(v2(0.0, 0.0), 1.0).then(&Warp::translation(30.0, -20.0)));
+        let (point, end) = (moved.pivot_point().unwrap(), moved.points[0]);
+        assert!((point.x - end.x).abs() < 0.01 && (point.y - end.y).abs() < 0.01);
+        // A symbol's copy, a rectangle or a text keeps it through a turn too, by the transform it records.
+        let mut plate = rect(2, 0.0, 0.0, 40.0, 10.0);
+        plate.set_pivot_point(Some(v2(0.0, 5.0)));
+        let mut turned = plate.clone();
+        turned.warp(&Warp::rotation(v2(0.0, 5.0), std::f32::consts::FRAC_PI_2));
+        let half = between(&plate, &turned, 0.5, 0).pivot_point().unwrap();
+        assert!(half.x.abs() < 0.01 && (half.y - 5.0).abs() < 0.01, "{half:?}");
     }
 
     #[test]

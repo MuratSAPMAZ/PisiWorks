@@ -176,7 +176,8 @@ Working at this stage:
 - Right-click menus: in the timeline, on a frame, the tween, frame and keyframe commands, and on a layer's name the layer commands; on the stage, on an object or an empty spot, the editing, arranging, transforming and symbol commands. PisiWorks' canvas has the same menu.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - Playing once to the end as Flash does, with Loop Playback as an option; boxes to go straight to a frame or a second, second marks on the ruler, and a timeline that follows the playhead through long films.
-- Seven ready animations in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, one after another (layers with times of their own), and two scenes with buttons.
+- A transformation point, as in Flash: moved with the Scale tool, it stays with the object, and a motion tween turns the object around it, so an arm turns at the shoulder.
+- Eight ready animations in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, one after another (layers with times of their own), a stick-figure fight, and two scenes with buttons. The guide has the fight as a lesson, step by step.
 - Exchange with PisiWorks: **PisiSahne > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **PisiWorks > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.

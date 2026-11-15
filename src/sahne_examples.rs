@@ -6,7 +6,7 @@
 use crate::autoshape::AutoKind;
 use crate::examples::{add, bold, boxed, centered, finish, gradient, layer, rect, Example, BLUE, INK, ORANGE, PALE, TEAL, WHITE, YELLOW};
 use crate::i18n::t;
-use crate::model::{Action, Color, Document, Editor, FillKind, LayerKind, Shape, Stroke, SymbolKind, TextStyle, Tween, Vec2};
+use crate::model::{Action, Color, Document, Editor, FillKind, LayerKind, Object, Shape, Span, Stroke, SymbolKind, TextStyle, Tween, Vec2, WebKind};
 
 pub const EXAMPLES: &[Example] = &[
     Example { name: "Bouncing ball", about: "Motion tweens with easing: the ball speeds up as it falls and slows as it rises", build: bouncing_ball },
@@ -15,6 +15,7 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "Spotlight", about: "A mask layer: a moving circle lets the bright words show", build: spotlight },
     Example { name: "Turning gears", about: "A movie clip with a timeline of its own, placed twice on the stage", build: turning_gears },
     Example { name: "One after another", about: "Layers with times of their own: the car drives for four seconds and stops, then the sun rises, then the words appear", build: one_after_another },
+    Example { name: "Stick fight", about: "Pose to pose: figures of lines that turn at their joints, a punch, a kick, and enemies that come and go at their own times", build: stick_fight },
     Example { name: "Two scenes with buttons", about: "Scenes, frame actions that stop the film, and buttons that lead from scene to scene", build: two_scenes },
 ];
 
@@ -224,6 +225,234 @@ fn one_after_another() -> Document {
     finish(e)
 }
 
+/// How a stick figure stands on one frame. Angles are in degrees. A limb's angle is 0 hanging straight down
+/// the body and grows as the limb swings forward, the way the figure faces; an elbow's or a knee's is
+/// measured from the limb above it. The first arm and leg are the far ones, drawn behind the body.
+#[derive(Clone, Copy)]
+struct Pose {
+    /// Where the hips are along the ground, and how high above it.
+    x: f32,
+    up: f32,
+    /// How far the whole body leans forward.
+    lean: f32,
+    arms: [(f32, f32); 2],
+    legs: [(f32, f32); 2],
+    opacity: f32,
+}
+
+const GROUND: f32 = 250.0;
+const BODY: f32 = 46.0;
+const ARM: f32 = 22.0;
+const LEG: f32 = 27.0;
+const HEAD: f32 = 11.0;
+
+impl Pose {
+    /// Standing on the ground: the hips are as high as the leg that reaches lowest.
+    fn standing(x: f32, lean: f32, arms: [(f32, f32); 2], legs: [(f32, f32); 2]) -> Pose {
+        let reach = |(hip, knee): (f32, f32)| LEG * ((hip - lean).to_radians().cos() + (hip + knee - lean).to_radians().cos());
+        Pose { x, up: reach(legs[0]).max(reach(legs[1])), lean, arms, legs, opacity: 1.0 }
+    }
+
+    fn mixed(&self, to: &Pose, part: f32) -> Pose {
+        let mix = |a: f32, b: f32| a + (b - a) * part;
+        let both = |a: (f32, f32), b: (f32, f32)| (mix(a.0, b.0), mix(a.1, b.1));
+        Pose {
+            x: mix(self.x, to.x),
+            up: mix(self.up, to.up),
+            lean: mix(self.lean, to.lean),
+            arms: [both(self.arms[0], to.arms[0]), both(self.arms[1], to.arms[1])],
+            legs: [both(self.legs[0], to.legs[0]), both(self.legs[1], to.legs[1])],
+            opacity: mix(self.opacity, to.opacity),
+        }
+    }
+
+    /// The figure's lines, each from the joint it turns at to its far end, in the order they are drawn in,
+    /// and the middle of the head. `facing` is 1 for a figure that looks right and -1 for one that looks left.
+    fn lines(&self, facing: f32) -> ([(Vec2, Vec2); 9], Vec2) {
+        let hips = Vec2 { x: self.x, y: GROUND - self.up };
+        let reach = |from: Vec2, angle: f32, length: f32| {
+            let (sin, cos) = (angle - self.lean).to_radians().sin_cos();
+            Vec2 { x: from.x + facing * sin * length, y: from.y + cos * length }
+        };
+        let neck = reach(hips, 180.0, BODY);
+        let limb = |from: Vec2, (upper, lower): (f32, f32), length: f32| {
+            let joint = reach(from, upper, length);
+            [(from, joint), (joint, reach(joint, upper + lower, length))]
+        };
+        let (far_arm, near_arm) = (limb(neck, self.arms[0], ARM), limb(neck, self.arms[1], ARM));
+        let (far_leg, near_leg) = (limb(hips, self.legs[0], LEG), limb(hips, self.legs[1], LEG));
+        ([far_arm[0], far_arm[1], far_leg[0], far_leg[1], (hips, neck), near_leg[0], near_leg[1], near_arm[0], near_arm[1]], reach(neck, 180.0, HEAD + 1.0))
+    }
+}
+
+/// How often a figure gets a keyframe: on every second frame, as hand-drawn animation is shot "on twos".
+/// On the frame between, the motion tween turns each line around its joint.
+const ON_TWOS: usize = 2;
+
+/// A layer with a stick figure that goes from pose to pose. `poses` name the frames the figure must be in a
+/// pose on; between them it gets a keyframe on every second frame, and a motion tween from each to the next.
+/// Before its first pose and after its last, unless it is the film's last, the layer is empty.
+fn figure(e: &mut Editor, name: &str, color: Color, facing: f32, poses: &[(usize, Pose)], leaves: bool) {
+    layer(e, name);
+    let ids: Vec<u64> = (0..10).map(|_| e.alloc_id()).collect();
+    let names = [t("Arm"), t("Arm"), t("Leg"), t("Leg"), t("Body"), t("Leg"), t("Leg"), t("Arm"), t("Arm")];
+    let drawn = |pose: &Pose| -> Vec<Object> {
+        let (lines, head) = pose.lines(facing);
+        let mut objects: Vec<Object> = lines
+            .iter()
+            .enumerate()
+            .map(|(index, (from, to))| {
+                let mut object = Object::new_web(ids[index], WebKind::Slice, crate::model::Rect::of_points(&[*from, *to]));
+                (object.name, object.shape, object.fill, object.stroke) = (names[index].to_string(), Shape::Line, None, Some(Stroke { color, width: 6.0 }));
+                object.points = vec![*from, *to];
+                // Each line turns at the joint it starts from: the shoulder, the elbow, the hip, the knee.
+                object.set_pivot_point(Some(*from));
+                object.opacity = pose.opacity;
+                object
+            })
+            .collect();
+        let mut top = Object::new_web(ids[9], WebKind::Slice, rect(head.x - HEAD, head.y - HEAD, HEAD * 2.0, HEAD * 2.0));
+        (top.name, top.shape, top.fill, top.stroke, top.opacity) = (t("Head").to_string(), Shape::Ellipse, Some(color), None, pose.opacity);
+        objects.insert(5, top);
+        objects
+    };
+    let (first, last) = (poses[0].0, poses[poses.len() - 1].0);
+    let at = |frame: usize| -> Pose {
+        let next = poses.iter().position(|(on, _)| *on >= frame).unwrap_or(poses.len() - 1);
+        let (to_frame, to) = poses[next];
+        if next == 0 || to_frame == frame {
+            return to;
+        }
+        let (from_frame, from) = poses[next - 1];
+        // Slow out of a pose and slow into the next.
+        let part = (frame - from_frame) as f32 / (to_frame - from_frame) as f32;
+        from.mixed(&to, part * part * (3.0 - 2.0 * part))
+    };
+    let mut spans = Vec::new();
+    if first > 0 {
+        spans.push(Span { start: 0, length: first, ..Default::default() });
+    }
+    // A blow is too fast for that: where a limb swings far in two frames, each frame gets a keyframe of its own,
+    // or the forearm, which goes straight from keyframe to keyframe, would leave the elbow, which goes round.
+    let fast = |a: &Pose, b: &Pose| {
+        let swing = |p: (f32, f32), q: (f32, f32)| (p.0 - q.0).abs().max((p.1 - q.1).abs());
+        (0..2).any(|side| swing(a.arms[side], b.arms[side]) > 30.0 || swing(a.legs[side], b.legs[side]) > 30.0) || (a.lean - b.lean).abs() > 30.0
+    };
+    let mut frame = first;
+    while frame <= last {
+        let length = if frame + ON_TWOS > last || fast(&at(frame), &at(frame + ON_TWOS)) { 1 } else { ON_TWOS };
+        spans.push(Span { start: frame, length, objects: drawn(&at(frame)), tween: (frame < last).then(Tween::default), ..Default::default() });
+        frame += length;
+    }
+    if leaves {
+        spans.push(Span { start: last + 1, length: 1, ..Default::default() });
+    }
+    e.doc.page_mut().edit_timeline(|timeline| {
+        let top = timeline.layers.len() - 1;
+        timeline.layers[top] = spans;
+    });
+}
+
+fn stick_fight() -> Document {
+    let mut e = start(520, 300, t("Background"), 24.0);
+    let sky = boxed(&mut e, t("Sky"), rect(0.0, 0.0, 520.0, 300.0), 0.0, PALE);
+    gradient(&mut e, sky, FillKind::Linear, Color::rgb(0xf4, 0xe4, 0xc0), WHITE, (0.5, 0.0), (0.5, 1.0));
+    boxed(&mut e, t("Ground"), rect(0.0, GROUND + 3.0, 520.0, 50.0), 0.0, Color::rgb(0xc8, 0xb4, 0x90));
+    // The poses the figures go through. Everything else is these with other numbers.
+    let guard = |x: f32| Pose::standing(x, 8.0, [(30.0, 110.0), (55.0, 95.0)], [(-22.0, -12.0), (28.0, -30.0)]);
+    let low = |x: f32| Pose::standing(x, 12.0, [(34.0, 112.0), (58.0, 100.0)], [(-26.0, -16.0), (32.0, -40.0)]);
+    let stride = |x: f32, other: bool| {
+        let (a, b) = ((48.0, -18.0), (-24.0, -78.0));
+        let (c, d) = ((-44.0, 80.0), (46.0, 76.0));
+        let pose = Pose::standing(x, 16.0, if other { [d, c] } else { [c, d] }, if other { [b, a] } else { [a, b] });
+        Pose { up: pose.up + 4.0, ..pose }
+    };
+    // Running in from the right edge to where the fight is, a stride every six frames.
+    let run_in = |from: usize, to: usize, stop: f32| -> Vec<(usize, Pose)> {
+        let strides = (to - from) / 6;
+        (0..=strides).map(|step| (from + step * 6, stride(560.0 + (stop - 560.0) * step as f32 / strides as f32, step % 2 == 1))).collect()
+    };
+    let hurled = |x: f32, up: f32, lean: f32| Pose { x, up, lean, arms: [(70.0, 30.0), (110.0, 20.0)], legs: [(30.0, -30.0), (60.0, -50.0)], opacity: 1.0 };
+    let lying = |x: f32, opacity: f32| Pose { x, up: 5.0, lean: -90.0, arms: [(4.0, 6.0), (-185.0, -8.0)], legs: [(-6.0, 0.0), (12.0, -18.0)], opacity };
+
+    // The first enemy runs in, squares up, and is knocked flat by the punch on frame 36.
+    let mut first = run_in(0, 24, 256.0);
+    first.extend([(30, guard(252.0)), (36, guard(252.0)), (38, hurled(276.0, 62.0, -30.0)), (44, hurled(340.0, 66.0, -70.0)), (50, hurled(400.0, 30.0, -88.0)), (54, lying(420.0, 1.0)), (60, lying(420.0, 1.0)), (68, lying(420.0, 0.0))]);
+    figure(&mut e, t("Enemy 1"), Color::rgb(0xc8, 0x30, 0x30), -1.0, &first, true);
+    // The second is not there until frame 54. The kick on frame 88 sends it spinning off the stage.
+    let mut second = run_in(54, 78, 258.0);
+    second.extend([(82, guard(254.0)), (88, guard(254.0)), (90, hurled(285.0, 80.0, -40.0)), (96, hurled(370.0, 125.0, -220.0)), (102, hurled(465.0, 150.0, -400.0)), (108, hurled(590.0, 150.0, -580.0))]);
+    figure(&mut e, t("Enemy 2"), Color::rgb(0x30, 0x58, 0xc0), -1.0, &second, true);
+
+    // The hero waits on guard, punches, waits, kicks, and throws both arms up.
+    let punch = Pose::standing(190.0, 20.0, [(-30.0, 70.0), (72.0, 0.0)], [(-34.0, -6.0), (36.0, -42.0)]);
+    let drawn_back = Pose::standing(156.0, 0.0, [(40.0, 100.0), (-20.0, 130.0)], [(-20.0, -14.0), (26.0, -28.0)]);
+    let knee_up = Pose::standing(186.0, -8.0, [(-40.0, 80.0), (40.0, 100.0)], [(-4.0, -6.0), (95.0, -110.0)]);
+    let kick = Pose::standing(196.0, -24.0, [(-60.0, 60.0), (30.0, 100.0)], [(-8.0, -4.0), (112.0, -4.0)]);
+    let cheer = |up: f32| {
+        let pose = Pose::standing(150.0, 0.0, [(-150.0, -20.0), (150.0, 20.0)], [(-14.0, -4.0), (14.0, -6.0)]);
+        Pose { up: pose.up + up, ..pose }
+    };
+    let hero = [
+        (0, guard(150.0)),
+        (10, low(150.0)),
+        (20, guard(150.0)),
+        (30, low(150.0)),
+        (34, drawn_back),
+        (36, punch),
+        (40, punch),
+        (46, guard(150.0)),
+        (56, low(150.0)),
+        (66, guard(150.0)),
+        (76, low(150.0)),
+        (82, low(160.0)),
+        (86, knee_up),
+        (88, kick),
+        (92, kick),
+        (98, guard(160.0)),
+        (110, Pose::standing(150.0, 0.0, [(-10.0, 14.0), (12.0, 16.0)], [(-12.0, -4.0), (12.0, -6.0)])),
+        (118, cheer(0.0)),
+        (124, cheer(22.0)),
+        (130, cheer(0.0)),
+        (136, cheer(22.0)),
+        (142, cheer(0.0)),
+        (156, cheer(0.0)),
+    ];
+    figure(&mut e, t("Hero"), INK, 1.0, &hero, false);
+
+    // A star bursts where each blow lands, and is gone four frames later.
+    let blank = |e: &mut Editor, frame: usize| {
+        e.goto_frame(frame);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, true));
+    };
+    layer(&mut e, t("Hit"));
+    for (frame, x, y) in [(36, 246.0, 150.0), (88, 248.0, 158.0)] {
+        blank(&mut e, frame);
+        let star = add(&mut e, t("Star"), Shape::Auto { kind: AutoKind::Star, a: 0.45, b: 0.0, count: 8 }, rect(x - 10.0, y - 10.0, 20.0, 20.0), Some(YELLOW), Some(Stroke { color: ORANGE, width: 2.0 }));
+        keyframe(&mut e, frame + 4, &[star], |o| {
+            o.set_bounds(rect(x - 34.0, y - 34.0, 68.0, 68.0));
+            o.opacity = 0.0;
+        });
+        tween(&mut e, frame, Tween { ease: 100.0, ..Tween::default() });
+        blank(&mut e, frame + 5);
+    }
+    e.goto_frame(0);
+    layer(&mut e, t("Words"));
+    for (frame, word, x, y) in [(36, t("Pow!"), 270.0, 80.0), (88, t("Wham!"), 280.0, 70.0)] {
+        blank(&mut e, frame);
+        centered(&mut e, word, x, y, 34.0, ORANGE, bold());
+        blank(&mut e, frame + 10);
+    }
+    blank(&mut e, 130);
+    let end = centered(&mut e, t("The end"), 330.0, 110.0, 44.0, INK, bold());
+    e.selection = vec![end];
+    e.for_selected(|o| o.opacity = 0.0);
+    keyframe(&mut e, 144, &[end], |o| o.opacity = 1.0);
+    tween(&mut e, 130, Tween::default());
+    fill_out(&mut e);
+    finish(e)
+}
+
 fn two_scenes() -> Document {
     let mut e = start(480, 300, t("Background"), 24.0);
     // A button that leads to a scene: a symbol with an Over look, and an action on its copy.
@@ -297,6 +526,34 @@ mod tests {
         }
     }
 
+    /// Writes frames of an example as pictures, to look at them:
+    /// `EXAMPLE="Stick fight" FRAMES=0,36,78 cargo test -- --ignored example_frames`.
+    #[test]
+    #[ignore]
+    fn example_frames() {
+        let name = std::env::var("EXAMPLE").unwrap_or_else(|_| "Stick fight".to_string());
+        let doc = (EXAMPLES.iter().find(|e| e.name == name).unwrap().build)();
+        let frames = std::env::var("FRAMES").unwrap_or_else(|_| "0".to_string());
+        for frame in frames.split(',').filter_map(|f| f.trim().parse::<usize>().ok()) {
+            let picture = crate::export::render_page(&doc.pages[0].at_frame(frame).played()).unwrap();
+            picture.save_png(format!(concat!(env!("CARGO_MANIFEST_DIR"), "/target/example-{:03}.png"), frame)).unwrap();
+        }
+    }
+
+    #[test]
+    fn the_examples_menu_lists_every_example_under_its_own_name() {
+        let listed: Vec<(&str, u8)> = crate::menus::SAHNE_EXTRA_MENUS[0]
+            .1
+            .iter()
+            .filter_map(|entry| match entry {
+                crate::menus::Entry::Item(label, _, Some(crate::menus::Cmd::SahneExample(which))) => Some((*label, *which)),
+                _ => None,
+            })
+            .collect();
+        let wanted: Vec<(&str, u8)> = EXAMPLES.iter().enumerate().map(|(index, example)| (example.name, index as u8)).collect();
+        assert_eq!(listed, wanted);
+    }
+
     #[test]
     fn the_animation_examples_show_what_they_say() {
         let find = |name: &str| (EXAMPLES.iter().find(|e| e.name == name).unwrap().build)();
@@ -328,6 +585,27 @@ mod tests {
         assert!(sun(47).is_empty() && sun(48).len() == 1 && sun(72)[0].bounds.y < sun(60)[0].bounds.y && sun(95)[0].bounds.y == sun(72)[0].bounds.y);
         assert!(car(0) < car(24) && car(24) < car(48) && car(48) == car(95));
         assert!(words(71).is_empty() && words(72)[0].opacity == 0.0 && words(78)[0].opacity > 0.3 && words(95)[0].opacity == 1.0);
+        // The fight: on a frame between two keyframes every forearm still starts where its upper arm ends, and every
+        // shin where its thigh ends, because each line turns at its joint. The enemies are there only for their part.
+        let doc = find("Stick fight");
+        let page = &doc.pages[0];
+        for frame in [9, 35, 37, 87, 89, 95, 121] {
+            for layer in 1..=3 {
+                let lines: Vec<Vec<Vec2>> = page.at_frame(frame).layers[layer].objects.iter().filter(|o| matches!(o.shape, Shape::Line | Shape::Path { .. })).map(|o| o.points.clone()).collect();
+                for (upper, lower) in [(0, 1), (2, 3), (5, 6), (7, 8)] {
+                    if let (Some(a), Some(b)) = (lines.get(upper), lines.get(lower)) {
+                        let gap = (a[1].x - b[0].x).hypot(a[1].y - b[0].y);
+                        assert!(gap < 2.5, "frame {frame}, layer {layer}: a joint has come apart by {gap}");
+                        let length = (a[1].x - a[0].x).hypot(a[1].y - a[0].y);
+                        assert!((length - if upper == 0 || upper == 7 { ARM } else { LEG }).abs() < 0.5, "frame {frame}: a limb has changed length to {length}");
+                    }
+                }
+            }
+        }
+        let there = |layer: usize, frame: usize| !page.at_frame(frame).layers[layer].objects.is_empty();
+        assert!(there(1, 0) && there(1, 60) && !there(1, 80) && !there(2, 10) && there(2, 70) && !there(2, 120) && there(3, 0) && there(3, 155));
+        let fist = |frame: usize| page.at_frame(frame).layers[3].objects[9].points[1].x;
+        assert!(fist(36) > fist(30) + 25.0 && fist(36) > fist(46) + 25.0, "the punch reaches furthest on frame 36");
         // Two scenes, each stopping on its frame, each with a button that leads to the other.
         let doc = find("Two scenes with buttons");
         assert_eq!(doc.scenes().len(), 2);
