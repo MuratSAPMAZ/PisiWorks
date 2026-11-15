@@ -1748,6 +1748,8 @@ impl Render for Workspace {
             .children(self.numeric_dialog_view(cx))
             .children(self.marquee_dialog_view(cx))
             .children(self.print_dialog_view(cx))
+            .children(self.guide_dialog_view(cx))
+            .children(self.guides_dialog_view(cx))
             .children(self.image_preview_view(cx))
             .children(self.fill_dialog_view(cx))
             .children(self.page_setup_dialog_view(cx))

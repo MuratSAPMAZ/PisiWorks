@@ -77,6 +77,8 @@ pub enum ColorTarget {
     /// The colors of the Replace Color tool: the one to change, and what it becomes.
     ReplaceFrom,
     ReplaceTo,
+    /// The color guides are drawn in.
+    Guides,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -336,6 +338,7 @@ pub enum FieldId {
     ScrubRate,
     WandTolerance,
     BucketTolerance,
+    GuidePosition,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -665,6 +668,12 @@ pub struct Workspace {
     pub show_slice_guides: bool,
     /// The smart guides the selection being moved is lined up on: whether each runs across, and where it is.
     pub smart_lines: Vec<(bool, f32)>,
+    /// The color guides are drawn in.
+    pub guide_color: Color,
+    /// Move Guide: the guide that was double-clicked (whether it runs across, and which), and the place typed for it.
+    pub guide_dialog: Option<(bool, usize, f32)>,
+    /// View > Guides > Edit Guides, while it is open.
+    pub guides_dialog: bool,
     pub space_held: bool,
     pub status: String,
     /// Set by overlays during a click so the root handler keeps them open.
@@ -909,6 +918,9 @@ impl Workspace {
             snap_smart_guides: true,
             show_slice_guides: true,
             smart_lines: Vec::new(),
+            guide_color: Color::rgb(0, 192, 0),
+            guide_dialog: None,
+            guides_dialog: false,
             space_held: false,
             status: String::new(),
             keep_overlays: false,
@@ -2320,6 +2332,7 @@ impl Workspace {
                 crate::menus::TextStyleCmd::Underline => style.underline = !style.underline,
             }),
             Cmd::TextAlign(align) => self.change_text_style(|style| style.align = align),
+            Cmd::Guides(GuideCmd::Edit) => self.guides_dialog = true,
             Cmd::Guides(GuideCmd::Show) => self.show_guides = !self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides = !self.lock_guides,
             Cmd::Guides(GuideCmd::Snap) => self.snap_guides = !self.snap_guides,
@@ -2761,6 +2774,16 @@ impl Workspace {
         self.pan = v2((page.width as f32 / 2.0 - center.x) * self.zoom, (page.height as f32 / 2.0 - center.y) * self.zoom);
     }
 
+    /// OK in Move Guide: the guide goes to the place typed.
+    pub fn apply_guide_dialog(&mut self) {
+        self.commit_field();
+        let Some((horizontal, index, place)) = self.guide_dialog.take() else { return };
+        if let Some(guide) = self.ed.doc.page_mut().guides.list_mut(horizontal).get_mut(index) {
+            *guide = place.round();
+            self.ed.commit(t("Guides"));
+        }
+    }
+
     /// OK in the dialog of a marquee command: the marquee is grown, shrunk, turned into a band along its edge, or evened out.
     pub fn apply_marquee_dialog(&mut self) {
         self.commit_field();
@@ -3054,7 +3077,7 @@ impl Workspace {
         }
         let p = self.view_map().to_doc(ev.position);
         let tool = self.active_tool();
-        if self.guide_down(ev.position, p, tool) {
+        if self.guide_down(ev.position, p, tool, ev.click_count) {
             cx.notify();
             return;
         }
@@ -3179,7 +3202,7 @@ impl Workspace {
     }
 
     /// A press on a ruler pulls a new guide out of it, and a press with the Pointer on a guide takes hold of that one.
-    fn guide_down(&mut self, at: Point<Pixels>, p: Vec2, tool: Tool) -> bool {
+    fn guide_down(&mut self, at: Point<Pixels>, p: Vec2, tool: Tool, clicks: usize) -> bool {
         if !self.show_guides {
             return false;
         }
@@ -3195,6 +3218,13 @@ impl Workspace {
             return false;
         }
         let Some((horizontal, index)) = self.ed.doc.page().guides.near(p, 3.0 / self.zoom) else { return false };
+        // A double-click on a guide asks for its place in numbers.
+        if clicks >= 2 {
+            let guides = &self.ed.doc.page().guides;
+            let place = if horizontal { guides.horizontal[index] } else { guides.vertical[index] };
+            self.guide_dialog = Some((horizontal, index, place));
+            return true;
+        }
         self.drag = Some(Drag::Guide { horizontal, index: Some(index), at: if horizontal { p.y } else { p.x }.round() });
         true
     }
@@ -3202,7 +3232,9 @@ impl Workspace {
     /// Every line to draw across the view: the page's guides, the one being dragged,
     /// the guides along the edges of the slices, and the smart guides of the move under way.
     pub fn guide_lines(&self) -> Vec<(bool, f32, u32)> {
-        const GUIDE: u32 = 0x00c000;
+        let guide_color = (self.guide_color.r as u32) << 16 | (self.guide_color.g as u32) << 8 | self.guide_color.b as u32;
+        #[allow(non_snake_case)]
+        let GUIDE = guide_color;
         const SLICE_GUIDE: u32 = 0xff4040;
         const SMART_GUIDE: u32 = 0xff00ff;
         let page = self.ed.doc.page();
@@ -3956,7 +3988,7 @@ impl Workspace {
     }
 
     fn pen_click(&mut self, p: Vec2, clicks: usize) {
-        let p = snap(p);
+        let p = self.guide_snapped(p);
         if let Some(first) = self.pen.first().copied() {
             let reach = 5.0 / self.zoom;
             if self.pen.len() > 2 && (first.x - p.x).abs() <= reach && (first.y - p.y).abs() <= reach {
@@ -4227,7 +4259,7 @@ impl Workspace {
                 if let Some(object) = self.ed.object_mut(id) {
                     object.to_path();
                     let Some(from) = object.points.get(index).copied() else { return };
-                    let to = snap(p);
+                    let to = on_guides;
                     object.points[index] = to;
                     for other in others {
                         if let Some(point) = object.points.get_mut(other) {
@@ -4858,6 +4890,16 @@ impl Workspace {
                 "escape" => self.print_dialog = None,
                 _ => {}
             }
+        } else if self.guide_dialog.is_some() {
+            match key {
+                "enter" => self.apply_guide_dialog(),
+                "escape" => self.guide_dialog = None,
+                _ => {}
+            }
+        } else if self.guides_dialog {
+            if matches!(key, "enter" | "escape") {
+                self.guides_dialog = false;
+            }
         } else if self.marquee_dialog.is_some() {
             match key {
                 "enter" => self.apply_marquee_dialog(),
@@ -5081,6 +5123,7 @@ impl Workspace {
             FieldId::PathPrecision => number(self.tool_options.precision),
             FieldId::ScrubRate => number(self.tool_options.rate),
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
+            FieldId::GuidePosition => self.guide_dialog.map_or_else(String::new, |(_, _, place)| number(place)),
             FieldId::BucketTolerance => number(self.tool_options.bucket_tolerance),
             FieldId::FreeformSize => number(self.freeform_size),
             FieldId::Url => match first.map(|o| &o.shape) {
@@ -5272,6 +5315,10 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::GuidePosition => {
+                let (Some(v), Some(dialog)) = (number, self.guide_dialog.as_mut()) else { return };
+                dialog.2 = v;
             }
             FieldId::ScrubRate => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
@@ -5470,6 +5517,7 @@ impl Workspace {
             ColorTarget::PsEffect(effect) => self.edited_filter().map(|(_, filter)| filter.ps_color(effect)),
             ColorTarget::GradientStop => self.picked_stop().map(|stop| Color { a: 255, ..stop.1 }),
             ColorTarget::ReplaceFrom => self.tool_options.replace_from,
+            ColorTarget::Guides => Some(self.guide_color),
             ColorTarget::ReplaceTo => Some(self.tool_options.replace_to),
         }
     }
@@ -5510,6 +5558,7 @@ impl Workspace {
             }
             // "None" for the color to change means: the one the stroke starts on.
             ColorTarget::ReplaceFrom => self.tool_options.replace_from = color,
+            ColorTarget::Guides => self.guide_color = color.unwrap_or(self.guide_color),
             ColorTarget::ReplaceTo => self.tool_options.replace_to = color.unwrap_or(self.tool_options.replace_to),
             ColorTarget::GradientStop => {
                 // The stop keeps how opaque it is; only its color changes.

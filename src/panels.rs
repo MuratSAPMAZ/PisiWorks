@@ -1521,6 +1521,46 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// Move Guide: the place of the guide that was double-clicked, in pixels from the edge of the page.
+    pub(crate) fn guide_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.guide_dialog?;
+        let rows = vec![div().flex().items_center().gap_1().child(label(t("Position:"))).child(self.field(FieldId::GuidePosition, 60., cx)).child(label(t("pixels"))).into_any_element()];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.apply_guide_dialog()))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| {
+                this.field = None;
+                this.guide_dialog = None;
+            }));
+        Some(self.dialog_frame(230., t("Move Guide"), rows, buttons))
+    }
+
+    /// View > Guides > Edit Guides: their color, whether they show, snap and are locked, and a button that clears them.
+    pub(crate) fn guides_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.guides_dialog {
+            return None;
+        }
+        let rows = vec![
+            div().flex().items_center().gap_1().child(label(t("Color:"))).child(self.swatch(ColorTarget::Guides, 18., cx)).into_any_element(),
+            self.check_box(t("Show Guides"), self.show_guides, cx, |this| this.show_guides = !this.show_guides).into_any_element(),
+            self.check_box(t("Snap to Guides"), self.snap_guides, cx, |this| this.snap_guides = !this.snap_guides).into_any_element(),
+            self.check_box(t("Lock Guides"), self.lock_guides, cx, |this| this.lock_guides = !this.lock_guides).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Clear All"), !self.ed.doc.page().guides.is_empty(), cx, |this, _, _| {
+                this.ed.doc.page_mut().guides = Default::default();
+                this.ed.commit(t("Clear Guides"));
+            }))
+            .child(div().flex_1())
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.guides_dialog = false));
+        Some(self.dialog_frame(240., t("Guides"), rows, buttons))
+    }
+
     /// File > Page Setup: the paper, which way it is turned, the margins, and whether the page is scaled to fit.
     pub(crate) fn page_setup_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.page_setup_dialog?;

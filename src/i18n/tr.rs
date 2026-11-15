@@ -933,4 +933,7 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Rate:", "Hız:"),
     ("Press on a path that has a stroke to change how heavy it is.", "Kalınlığını değiştirmek için konturu olan bir yola basın."),
     ("Image Preview", "Görüntü Önizleme"),
+    ("Edit Guides...", "Kılavuzları Düzenle..."),
+    ("Move Guide", "Kılavuzu Taşı"),
+    ("Clear All", "Tümünü Temizle"),
 ];
