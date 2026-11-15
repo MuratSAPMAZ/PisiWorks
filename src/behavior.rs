@@ -102,7 +102,7 @@ impl BehaviorKind {
     /// What the kind's two numbers are, in English, and what they start as. A kind with one number has no second name.
     pub const fn settings(self) -> ((&'static str, f32), Option<(&'static str, f32)>) {
         match self {
-            BehaviorKind::Spin => (("Seconds for one turn:", 2.0), None),
+            BehaviorKind::Spin => (("Seconds for one turn:", 2.0), Some(("Counterclockwise (1: yes, 0: no):", 0.0))),
             BehaviorKind::Bounce => (("Height (pixels):", 60.0), Some(("Seconds for one bounce:", 0.8))),
             BehaviorKind::BackAndForth => (("Distance (pixels):", 120.0), Some(("Seconds there and back:", 2.0))),
             BehaviorKind::UpAndDown => (("Distance (pixels):", 60.0), Some(("Seconds there and back:", 2.0))),
@@ -178,7 +178,7 @@ pub fn moved(behaviors: &[Behavior], tick: usize, fps: f32, bounds: Rect, stage:
     for behavior in behaviors {
         let (a, b) = (behavior.a, behavior.b);
         match behavior.kind {
-            BehaviorKind::Spin => moved.angle += TAU * t / span(a),
+            BehaviorKind::Spin => moved.angle += TAU * t / span(a) * if b != 0.0 { -1.0 } else { 1.0 },
             BehaviorKind::Bounce => moved.dy -= a * (PI * t / span(b)).sin().abs(),
             BehaviorKind::BackAndForth => moved.dx += a * (1.0 - (TAU * t / span(b)).cos()) / 2.0,
             BehaviorKind::UpAndDown => moved.dy -= a * (1.0 - (TAU * t / span(b)).cos()) / 2.0,
@@ -224,6 +224,7 @@ mod tests {
     fn each_behavior_does_what_its_name_says() {
         // One turn in two seconds: a quarter of a turn after half a second.
         assert!((after(BehaviorKind::Spin, 2.0, 0.0, 5).angle - std::f32::consts::FRAC_PI_2).abs() < 1e-4);
+        assert!((after(BehaviorKind::Spin, 2.0, 1.0, 5).angle + std::f32::consts::FRAC_PI_2).abs() < 1e-4, "the other way round");
         // A bounce of 60 pixels in a second is highest after half a second and down again after one.
         assert!((after(BehaviorKind::Bounce, 60.0, 1.0, 5).dy + 60.0).abs() < 1e-3 && after(BehaviorKind::Bounce, 60.0, 1.0, 10).dy.abs() < 1e-3);
         // There and back in two seconds: there after one, back after two.

@@ -1623,4 +1623,8 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("there is no behavior called {}", "{} adında bir davranış yok"),
     ("Bounce off the Edges", "Kenarlardan Sek"),
     ("Marble", "Bilye"),
+    ("Keep an object spinning", "Nesneyi sürekli döndür"),
+    ("Turns a second:", "Saniyede tur:"),
+    ("make {} spin {} turns a second", "{} nesnesi saniyede {} tur dönsün"),
+    ("Counterclockwise (1: yes, 0: no):", "Saat yönünün tersine (1: evet, 0: hayır):"),
 ];

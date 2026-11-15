@@ -155,6 +155,7 @@ fn turning_and_giving_behaviors_read_in_turkish() {
     let text = "\
 Düğme nesnesine tıklanınca:
     Elips nesnesini 45 derece döndür
+    Elips nesnesi saniyede 2 tur dönsün
     Elips nesnesini yüzde 150 boyuta getir
     Elips nesnesini yüzde 40 opak yap
     Elips nesnesine Dön davranışını ver
@@ -164,8 +165,8 @@ Düğme nesnesine tıklanınca:
 ";
     let found = read(text).unwrap();
     let steps = &found.rules[0].steps;
-    assert_eq!(steps.iter().map(|s| s.b.as_str()).collect::<Vec<_>>(), vec!["", "", "", "spin", "ricochet", "gravity", "Fare"]);
-    assert_eq!((steps[0].x, steps[1].x, steps[2].x, steps[6].x), (45.0, 150.0, 40.0, 120.0));
+    assert_eq!(steps.iter().map(|s| s.b.as_str()).collect::<Vec<_>>(), vec!["", "", "", "", "spin", "ricochet", "gravity", "Fare"]);
+    assert_eq!((steps[0].x, steps[1].x, steps[2].x, steps[3].x, steps[7].x), (45.0, 2.0, 150.0, 40.0, 120.0));
     assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
     let told = read("Film başlayınca:\n    Top nesnesine Uç davranışını ver\n").unwrap_err();
     assert_eq!((told[0].line, told[0].what.as_str()), (2, "Uç adında bir davranış yok"));

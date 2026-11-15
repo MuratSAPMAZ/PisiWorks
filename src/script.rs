@@ -397,7 +397,8 @@ enum Gap {
 
 /// The sentences a step can be: the kind each gives, what its gaps hold in the order they stand, and
 /// whether the first number is taken away ("decrease", "slower").
-const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 34] = [
+const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 35] = [
+    ("make {} spin {} turns a second", StepKind::Whirl, &[Gap::A, Gap::X], false),
     ("turn {} by {} degrees", StepKind::Turn, &[Gap::A, Gap::X], false),
     ("make {} {} percent of its size", StepKind::Resize, &[Gap::A, Gap::X], false),
     ("make {} {} percent opaque", StepKind::Opacity, &[Gap::A, Gap::X], false),
@@ -1122,6 +1123,7 @@ When Coin is clicked:
         let text = "\
 When Button is clicked:
     turn Box by 45 degrees
+    make Box spin -2 turns a second
     make Box 150 percent of its size
     make Box 40 percent opaque
     give Box the behavior Spin
@@ -1130,12 +1132,12 @@ When Button is clicked:
 ";
         let found = read(text).unwrap();
         let steps = &found.rules[0].steps;
-        assert_eq!(steps.iter().map(|s| s.kind).collect::<Vec<_>>(), vec![StepKind::Turn, StepKind::Resize, StepKind::Opacity, StepKind::Give, StepKind::Take, StepKind::Chase]);
+        assert_eq!(steps.iter().map(|s| s.kind).collect::<Vec<_>>(), vec![StepKind::Turn, StepKind::Whirl, StepKind::Resize, StepKind::Opacity, StepKind::Give, StepKind::Take, StepKind::Chase]);
         // A behavior is kept by its own word, whatever the language it was written in.
-        assert_eq!((steps[3].b.as_str(), steps[4].b.as_str(), steps[5].b.as_str(), steps[5].x), ("spin", "gravity", "Box", 120.0));
+        assert_eq!((steps[4].b.as_str(), steps[5].b.as_str(), steps[6].b.as_str(), steps[6].x, steps[1].x), ("spin", "gravity", "Box", 120.0, -2.0));
         assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
         // Both objects of "send after" are objects the page must be able to move.
-        assert_eq!(crate::rules::objects_of(steps).iter().filter(|name| **name == "Box").count(), 5);
+        assert_eq!(crate::rules::objects_of(steps).iter().filter(|name| **name == "Box").count(), 6);
         let told = read("When Box is clicked:\n    give Box the behavior Dance\n").unwrap_err();
         assert_eq!((told[0].line, told[0].what.as_str()), (2, "there is no behavior called Dance"));
         // The page carries the steps, and the numbers a behavior given by a rule starts with.
@@ -1143,7 +1145,7 @@ When Button is clicked:
         doc.page_mut().start_timeline(20.0);
         doc.rules = found.rules;
         let page = crate::publish::html(&doc, "x").unwrap();
-        assert!(page.contains(r#"["give","Box",0,0,"spin"]"#) && page.contains(r#""spin":[2,0]"#) && page.contains(r#""ricochet":[220,50]"#), "{}", &page[page.find("rules:").unwrap()..][..600]);
+        assert!(page.contains(r#"["give","Box",0,0,"spin"]"#) && page.contains(r#""spin":[2,0]"#) && page.contains(r#"["whirl","Box",-2,0,""]"#) && page.contains(r#""ricochet":[220,50]"#), "{}", &page[page.find("rules:").unwrap()..][..600]);
     }
 
     #[test]

@@ -167,6 +167,8 @@ pub enum StepKind {
     Give,
     /// Takes the behavior whose word is `b` from the object.
     Take,
+    /// Keeps the object spinning at `x` turns a second, clockwise; below zero the other way, and at 0 it stops.
+    Whirl,
     /// Sends the object after the object `b` at `x` pixels a second; at 0 it stops going after anything.
     Chase,
     /// Waits `x` seconds before the steps that follow it.
@@ -186,7 +188,7 @@ pub enum StepKind {
     Restart,
 }
 
-pub const STEPS: [StepKind; 31] = [
+pub const STEPS: [StepKind; 32] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -202,6 +204,7 @@ pub const STEPS: [StepKind; 31] = [
     StepKind::RandomTop,
     StepKind::Jump,
     StepKind::Turn,
+    StepKind::Whirl,
     StepKind::Resize,
     StepKind::Opacity,
     StepKind::Give,
@@ -249,6 +252,7 @@ impl StepKind {
             StepKind::Opacity => "Make an object see-through",
             StepKind::Give => "Give an object a behavior",
             StepKind::Take => "Take a behavior from an object",
+            StepKind::Whirl => "Keep an object spinning",
             StepKind::Chase => "Send an object after another",
             StepKind::Wait => "Wait",
             StepKind::Call => "Do a command",
@@ -288,6 +292,7 @@ impl StepKind {
             StepKind::Opacity => "alpha",
             StepKind::Give => "give",
             StepKind::Take => "take",
+            StepKind::Whirl => "whirl",
             StepKind::Chase => "chase",
             StepKind::Wait => "wait",
             StepKind::Call => "call",
@@ -317,6 +322,7 @@ impl StepKind {
             StepKind::Resize => (Some(Pick::Object), None, Some(("Percent:", 150.0)), None),
             StepKind::Opacity => (Some(Pick::Object), None, Some(("Percent:", 50.0)), None),
             StepKind::Give | StepKind::Take => (Some(Pick::Object), Some(Pick::Behavior), None, None),
+            StepKind::Whirl => (Some(Pick::Object), None, Some(("Turns a second:", 1.0)), None),
             StepKind::Chase => (Some(Pick::Object), Some(Pick::Object), Some(("Speed:", 100.0)), None),
             StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
             StepKind::Call => (Some(Pick::Command), None, None, None),
@@ -650,6 +656,7 @@ impl Step {
             StepKind::Opacity => tf("make {} {} percent opaque", &[a, &x]),
             StepKind::Give => tf("give {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
             StepKind::Take => tf("take from {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
+            StepKind::Whirl => tf("make {} spin {} turns a second", &[a, &x]),
             StepKind::Chase => tf("send {} after {} at {}", &[a, &self.b, &x]),
             StepKind::Wait => tf("wait {} seconds", &[&x]),
             StepKind::Call if !self.args.is_empty() => tf("do the command {} with {}", &[a, &self.args.join(", ")]),

@@ -507,7 +507,7 @@ function moved(key, b) {
     var k = l[0], p = l[1], q = l[2];
     // A behavior a rule gave starts when it was given, not when the object came on.
     t = l[3] ? whole - l[3] / movie.fps : whole;
-    if (k === "spin") m.angle += TAU * t / span(p);
+    if (k === "spin") m.angle += TAU * t / span(p) * (q ? -1 : 1);
     else if (k === "bounce") m.dy -= p * Math.abs(Math.sin(Math.PI * t / span(q)));
     else if (k === "swing") m.dx += p * (1 - Math.cos(TAU * t / span(q))) / 2;
     else if (k === "rise") m.dy -= p * (1 - Math.cos(TAU * t / span(q))) / 2;
@@ -530,6 +530,8 @@ function step(key, b) {
   // An object a rule has made faster does everything faster: its own time runs quicker.
   var a = actor(key), dt = a.rate * pace / movie.fps, box = b.box;
   a.n += a.rate * pace;
+  // What a rule keeps spinning turns on by so much of a turn each time.
+  if (a.whirl) a.turn = (a.turn || 0) + Math.PI * 2 * a.whirl * dt;
   // What is to disappear after a while is gone when its time is up; a copy is gone for good.
   var list = acts(key, b);
   if (list.some(function (l) { return l[0] === "expire" && (a.n - (l[3] || 0)) / movie.fps >= l[1]; })) {
@@ -718,6 +720,7 @@ function take(step, who, players) {
     }
     else if (k === "flash") a.flash = ticks + movie.fps * 1.2;
     else if (k === "turn") a.turn = (a.turn || 0) + x * Math.PI / 180;
+    else if (k === "whirl") a.whirl = x;
     else if (k === "size") a.size = Math.max(0, x / 100);
     else if (k === "alpha") a.alpha = Math.max(0, Math.min(x / 100, 1));
     else if (k === "give") {
@@ -729,7 +732,7 @@ function take(step, who, players) {
     else if (k === "take") {
       var gone = step[4];
       // What stops spinning stays turned the way it was.
-      acts(p.key, p.b).forEach(function (l) { if (l[0] === gone && gone === "spin") a.turn = (a.turn || 0) + Math.PI * 2 * (a.n - (l[3] || 0)) / movie.fps / span(l[1]); });
+      acts(p.key, p.b).forEach(function (l) { if (l[0] === gone && gone === "spin") a.turn = (a.turn || 0) + Math.PI * 2 * (a.n - (l[3] || 0)) / movie.fps / span(l[1]) * (l[2] ? -1 : 1); });
       (a.off = a.off || {})[gone] = true;
       if (a.extra) a.extra = a.extra.filter(function (l) { return l[0] !== gone; });
       if (gone === "ricochet") { a.rx = undefined; a.ry = undefined; }

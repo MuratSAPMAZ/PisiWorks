@@ -255,7 +255,10 @@ impl ScriptEdit {
         let before: String = line.chars().take(self.col).collect();
         let after: String = line.chars().skip(self.col).collect();
         let typed = before.trim_start();
-        if typed.is_empty() || !after.trim().is_empty() {
+        // In the middle of a line only names are offered, and only at the end of the word being typed:
+        // a sentence would take the place of what is already written after it.
+        let inside = !after.trim().is_empty();
+        if typed.is_empty() || (inside && after.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_')) {
             return Vec::new();
         }
         let edge = !before.starts_with(' ');
@@ -282,7 +285,7 @@ impl ScriptEdit {
             Opens::NewName => !figure && number.is_none() && object.is_none(),
         };
         let written = number.clone().or(command.clone()).or(object.clone()).or(sound.clone()).or(key.clone()).unwrap_or_else(|| first.to_string());
-        for (pattern, opens) in crate::script::offers(edge) {
+        for (pattern, opens) in crate::script::offers(edge).into_iter().filter(|_| !inside) {
             let sentence = if pattern.starts_with('?') {
                 if !fits(opens) {
                     continue;
@@ -465,7 +468,13 @@ mod tests {
         assert_eq!((edit.lines[1].as_str(), edit.col), ("    put  at ?, ?", 8));
         // In a gap the beginning of a name brings the name.
         edit.insert("Ba");
-        assert_eq!(edit.offers(&names), Vec::new(), "nothing is offered in the middle of a line");
+        assert_eq!(shown(&edit), vec!["Basket"], "in the middle of a line the name is offered, and no sentence");
+        let offer = edit.offers(&names)[0].clone();
+        edit.accept(&offer);
+        assert_eq!((edit.lines[1].as_str(), edit.col), ("    put Basket at ?, ?", 14));
+        // Not inside a word, though: there the rest of the word is already written.
+        edit.col = 6;
+        assert_eq!(edit.offers(&names), Vec::new());
         edit.end();
         edit.insert(" Sc");
         assert_eq!(shown(&edit), vec!["Score"]);
