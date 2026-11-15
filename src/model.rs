@@ -2360,7 +2360,7 @@ impl Page {
     pub fn start_timeline(&mut self, fps: f32) {
         if self.timeline.is_none() {
             let layers = self.layers.iter().map(|layer| vec![Span { start: 0, length: 1, objects: layer.objects.clone(), tween: None }]).collect();
-            self.timeline = Some(Timeline { fps, current: 0, layers });
+            self.timeline = Some(Timeline { fps, current: 0, layers, kinds: Vec::new() });
         }
     }
 
@@ -2421,6 +2421,38 @@ impl Page {
     pub fn at_frame(&self, frame: usize) -> Page {
         let mut page = self.clone();
         page.goto_frame(frame);
+        page
+    }
+
+    /// The page as the finished animation shows the frame: guide layers are left out,
+    /// and a mask layer lets the layer beneath it show only where the mask has something
+    /// drawn. The copy has no timeline, so nothing done to it can find its way back.
+    pub fn played(&self) -> Page {
+        let mut page = self.clone();
+        let Some(timeline) = page.timeline.take() else { return page };
+        for index in 0..page.layers.len() {
+            match timeline.kind(index) {
+                LayerKind::Normal => {}
+                LayerKind::Guide => page.layers[index].objects.clear(),
+                LayerKind::Mask => {
+                    let shapes = std::mem::take(&mut page.layers[index].objects);
+                    if index == 0 || !page.layers[index].visible {
+                        continue;
+                    }
+                    let bundle = |objects: Vec<Object>, id: u64| {
+                        let bounds = objects.iter().map(|o| o.bounds).reduce(Rect::union)?;
+                        let mut group = Object::new_web(id, WebKind::Slice, bounds);
+                        group.shape = Shape::Group { objects: Arc::new(objects) };
+                        Some(group)
+                    };
+                    let masked = std::mem::take(&mut page.layers[index - 1].objects);
+                    // With nothing in the mask, nothing of the layer beneath shows.
+                    let (Some(mut content), Some(mask)) = (bundle(masked, u64::MAX - index as u64 * 2), bundle(shapes, u64::MAX - index as u64 * 2 - 1)) else { continue };
+                    content.mask = Some(Arc::new(ObjectMask { object: mask, kind: MaskKind::Alpha, show_fill_stroke: false, enabled: true, linked: true }));
+                    page.layers[index - 1].objects = vec![content];
+                }
+            }
+        }
         page
     }
 
@@ -2829,6 +2861,20 @@ pub struct Tween {
     /// Whole turns made on the way, on top of the turn from one keyframe to the next; clockwise if positive.
     #[serde(default)]
     pub turns: i32,
+    /// A shape tween: the outlines and colors of the keyframe's shapes change into those of the next keyframe's.
+    #[serde(default)]
+    pub shape: bool,
+}
+
+/// What a layer of a timeline is for.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LayerKind {
+    #[default]
+    Normal,
+    /// Holds a path that the tweened objects of the layer beneath it travel along. It is not part of the finished animation.
+    Guide,
+    /// The layer beneath it shows only where this layer has something drawn.
+    Mask,
 }
 
 impl Tween {
@@ -2864,6 +2910,115 @@ pub struct Timeline {
     pub current: usize,
     /// For each layer of the page, bottom-most first.
     pub layers: Vec<Vec<Span>>,
+    /// What each layer is for; a layer not listed is an ordinary one.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub kinds: Vec<LayerKind>,
+}
+
+/// How many points an outline is given for a shape tween.
+const MORPH_POINTS: usize = 64;
+
+/// An outline as evenly spaced points: `count` of them, the same distance apart along it.
+fn resampled(outline: &[Vec2], closed: bool, count: usize) -> Vec<Vec2> {
+    let mut line = outline.to_vec();
+    if closed {
+        line.extend(outline.first().copied());
+    }
+    if line.len() < 2 {
+        return vec![line.first().copied().unwrap_or_default(); count];
+    }
+    let lengths: Vec<f32> = line.windows(2).map(|pair| (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y)).collect();
+    let total: f32 = lengths.iter().sum();
+    let steps = if closed { count } else { count - 1 };
+    let mut points = Vec::with_capacity(count);
+    let (mut piece, mut before) = (0, 0.0);
+    for index in 0..count {
+        let at = total * index as f32 / steps.max(1) as f32;
+        while piece + 1 < lengths.len() && before + lengths[piece] < at {
+            before += lengths[piece];
+            piece += 1;
+        }
+        let part = if lengths[piece] > 0.0 { ((at - before) / lengths[piece]).clamp(0.0, 1.0) } else { 0.0 };
+        points.push(v2(line[piece].x + (line[piece + 1].x - line[piece].x) * part, line[piece].y + (line[piece + 1].y - line[piece].y) * part));
+    }
+    points
+}
+
+fn mixed_color(from: Color, to: Color, part: f32) -> Color {
+    let mix = |a: u8, b: u8| (a as f32 + (b as f32 - a as f32) * part).round().clamp(0.0, 255.0) as u8;
+    Color { r: mix(from.r, to.r), g: mix(from.g, to.g), b: mix(from.b, to.b), a: mix(from.a, to.a) }
+}
+
+/// A shape on its way to becoming another: its outline, colors and stroke part of the way there.
+fn morphed(from: &Object, to: &Object, part: f32) -> Object {
+    let drawn = |object: &Object| matches!(object.shape, Shape::Rect { .. } | Shape::Ellipse | Shape::Line | Shape::Path { .. } | Shape::Auto { .. });
+    if !drawn(from) || !drawn(to) {
+        // What has no outline of its own to change, such as text or a copy of a symbol, moves as in a motion tween.
+        return between(from, to, part, 0);
+    }
+    let closed = from.is_closed() && to.is_closed();
+    let a = resampled(&from.outline(), from.is_closed(), MORPH_POINTS);
+    let mut b = resampled(&to.outline(), to.is_closed(), MORPH_POINTS);
+    if closed {
+        // The second outline is begun at the point, and gone round the way, that keeps every point's journey shortest.
+        let journey = |b: &[Vec2], shift: usize| -> f32 { (0..MORPH_POINTS).map(|i| (a[i].x - b[(i + shift) % MORPH_POINTS].x).powi(2) + (a[i].y - b[(i + shift) % MORPH_POINTS].y).powi(2)).sum() };
+        let mut backward = b.clone();
+        backward.reverse();
+        let best = |b: &[Vec2]| (0..MORPH_POINTS).map(|shift| (journey(b, shift), shift)).min_by(|x, y| x.0.total_cmp(&y.0)).unwrap_or((0.0, 0));
+        let (forth, back) = (best(&b), best(&backward));
+        if back.0 < forth.0 {
+            b = backward;
+        }
+        b.rotate_left(if back.0 < forth.0 { back.1 } else { forth.1 });
+    }
+    let points: Vec<Vec2> = a.iter().zip(&b).map(|(p, q)| v2(p.x + (q.x - p.x) * part, p.y + (q.y - p.y) * part)).collect();
+    let nearer = if part < 0.5 { from } else { to };
+    let mut object = from.clone();
+    (object.placement, object.handles, object.stroke_profile) = (None, Vec::new(), Vec::new());
+    object.shape = Shape::Path { closed };
+    object.bounds = Rect::of_points(&points);
+    object.points = points;
+    object.fill = match (from.fill, to.fill) {
+        (Some(x), Some(y)) => Some(mixed_color(x, y, part)),
+        _ => nearer.fill,
+    };
+    object.stroke = match (from.stroke, to.stroke) {
+        (Some(x), Some(y)) => Some(Stroke { color: mixed_color(x.color, y.color, part), width: x.width + (y.width - x.width) * part }),
+        _ => nearer.stroke,
+    };
+    object.fill_style = nearer.fill_style.clone();
+    object.opacity = from.opacity + (to.opacity - from.opacity) * part;
+    object
+}
+
+/// Where a place lies along a path, as a distance from its start: the nearest point of the path to it.
+fn along_path(path: &[Vec2], place: Vec2) -> f32 {
+    let (mut best, mut at, mut before) = (f32::MAX, 0.0, 0.0);
+    for pair in path.windows(2) {
+        let (dx, dy) = (pair[1].x - pair[0].x, pair[1].y - pair[0].y);
+        let length = dx.hypot(dy);
+        let part = if length > 0.0 { (((place.x - pair[0].x) * dx + (place.y - pair[0].y) * dy) / (length * length)).clamp(0.0, 1.0) } else { 0.0 };
+        let distance = (pair[0].x + dx * part - place.x).hypot(pair[0].y + dy * part - place.y);
+        if distance < best {
+            (best, at) = (distance, before + length * part);
+        }
+        before += length;
+    }
+    at
+}
+
+/// The point of a path a distance along it.
+fn point_along(path: &[Vec2], distance: f32) -> Vec2 {
+    let mut before = 0.0;
+    for pair in path.windows(2) {
+        let length = (pair[1].x - pair[0].x).hypot(pair[1].y - pair[0].y);
+        if before + length >= distance && length > 0.0 {
+            let part = ((distance - before) / length).clamp(0.0, 1.0);
+            return v2(pair[0].x + (pair[1].x - pair[0].x) * part, pair[0].y + (pair[1].y - pair[0].y) * part);
+        }
+        before += length;
+    }
+    path.last().copied().unwrap_or_default()
 }
 
 /// The most frames a timeline may have.
@@ -2927,8 +3082,56 @@ impl Timeline {
             return span.objects.clone();
         }
         let part = tween.eased((frame - span.start) as f32 / span.length as f32);
+        if tween.shape {
+            // Shapes change into those of the next keyframe one for one, in the order they lie in.
+            // A shape with no partner fades away, and one that appears only in the next keyframe fades in.
+            let mut shown: Vec<Object> = span
+                .objects
+                .iter()
+                .enumerate()
+                .map(|(index, object)| match next.objects.get(index) {
+                    Some(other) => morphed(object, other, part),
+                    None => Object { opacity: object.opacity * (1.0 - part), ..object.clone() },
+                })
+                .collect();
+            shown.extend(next.objects.iter().skip(span.objects.len()).map(|object| Object { opacity: object.opacity * part, ..object.clone() }));
+            return shown;
+        }
+        // The path of a guide layer lying on this one, if there is one: the first thing drawn there.
+        let guide: Option<Vec<Vec2>> = (self.kind(layer) == LayerKind::Normal && self.kind(layer + 1) == LayerKind::Guide)
+            .then(|| self.objects_at(layer + 1, frame).into_iter().map(|object| object.outline()).find(|line| line.len() >= 2))
+            .flatten();
         // An object goes over to the one with its number in the next keyframe; one that has none there stays as it is.
-        span.objects.iter().map(|object| next.objects.iter().find(|other| other.id == object.id).map_or_else(|| object.clone(), |other| between(object, other, part, tween.turns))).collect()
+        span.objects
+            .iter()
+            .map(|object| {
+                let Some(other) = next.objects.iter().find(|other| other.id == object.id) else { return object.clone() };
+                let mut moved = between(object, other, part, tween.turns);
+                if let Some(path) = &guide {
+                    // Along a guide the object keeps to the path, from the point nearest where it starts to the one nearest where it ends.
+                    let (start, end) = (along_path(path, object.bounds.center()), along_path(path, other.bounds.center()));
+                    let place = point_along(path, start + (end - start) * part);
+                    let center = moved.bounds.center();
+                    moved.translate(place.x - center.x, place.y - center.y);
+                }
+                moved
+            })
+            .collect()
+    }
+
+    /// What a layer is for.
+    pub fn kind(&self, layer: usize) -> LayerKind {
+        self.kinds.get(layer).copied().unwrap_or_default()
+    }
+
+    /// Makes a layer an ordinary one, a guide or a mask.
+    pub fn set_kind(&mut self, layer: usize, kind: LayerKind) {
+        if layer < self.layers.len() {
+            if self.kinds.len() <= layer {
+                self.kinds.resize(layer + 1, LayerKind::Normal);
+            }
+            self.kinds[layer] = kind;
+        }
     }
 
     /// Puts the starts of a layer's spans in line with their lengths again.
@@ -3909,6 +4112,9 @@ impl Editor {
             // A new layer of an animation is empty for as long as the scene lasts.
             let frames = timeline.frame_count().max(1);
             timeline.layers.insert(at.min(timeline.layers.len()), vec![Span { start: 0, length: frames, objects: Vec::new(), tween: None }]);
+            if at < timeline.kinds.len() {
+                timeline.kinds.insert(at, LayerKind::Normal);
+            }
         }
         for state in page.inactive_states_mut() {
             state.objects.insert(at, Vec::new());
@@ -4076,6 +4282,9 @@ impl Editor {
         let at = page.active_layer;
         page.layers.remove(at);
         if let Some(timeline) = page.timeline.as_mut().filter(|timeline| at < timeline.layers.len()) {
+            if at < timeline.kinds.len() {
+                timeline.kinds.remove(at);
+            }
             timeline.layers.remove(at);
         }
         for state in page.inactive_states_mut() {
@@ -5899,7 +6108,7 @@ mod tests {
         assert_eq!((halfway.bounds.x, halfway.opacity), (50.0, 0.5));
         assert_eq!(e.object(101).unwrap().bounds.x, 50.0, "what does not change between the keyframes stays put");
         // Easing out is ahead of an even pace at the middle; easing in is behind it.
-        assert!(Tween { ease: 100.0, turns: 0 }.eased(0.5) > 0.7 && Tween { ease: -100.0, turns: 0 }.eased(0.5) < 0.3);
+        assert!(Tween { ease: 100.0, ..Tween::default() }.eased(0.5) > 0.7 && Tween { ease: -100.0, ..Tween::default() }.eased(0.5) < 0.3);
         // Changing an object inside the tween makes a keyframe of that frame, and the tween goes through it.
         e.selection = vec![100];
         e.for_selected(|o| o.translate(0.0, 40.0));
@@ -5933,6 +6142,91 @@ mod tests {
     }
 
     #[test]
+    fn a_shape_tween_changes_one_shape_into_another() {
+        let mut e = Editor::new(Document::new(300, 200));
+        let mut square = rect(1, 0.0, 0.0, 40.0, 40.0);
+        square.fill = Some(Color::rgb(255, 0, 0));
+        e.add_object(square);
+        e.doc.page_mut().start_timeline(12.0);
+        // On frame 10 a blank keyframe with a wider, blue box further right: another object altogether.
+        e.goto_frame(10);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, true));
+        let mut wide = rect(2, 200.0, 100.0, 80.0, 40.0);
+        wide.fill = Some(Color::rgb(0, 0, 255));
+        e.add_object(wide);
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween { shape: true, ..Tween::default() })));
+        let halfway = e.doc.page().at_frame(5);
+        let shape = halfway.objects().next().unwrap();
+        // Halfway it is a path halfway between the two boxes in place, size and color.
+        assert!(matches!(shape.shape, Shape::Path { closed: true }));
+        assert_eq!(shape.bounds, Rect { x: 100.0, y: 50.0, w: 60.0, h: 40.0 });
+        assert_eq!(shape.fill, Some(Color::rgb(128, 0, 128)));
+        assert_eq!(shape.points.len(), 64);
+        // The keyframes themselves stay what they were.
+        assert!(matches!(e.doc.page().at_frame(0).objects().next().unwrap().shape, Shape::Rect { .. }));
+        assert_eq!(e.doc.page().at_frame(10).objects().next().unwrap().id, 2);
+        // A shape with no partner in the next keyframe fades away.
+        e.goto_frame(0);
+        e.add_object(rect(3, 250.0, 150.0, 10.0, 10.0));
+        let faded = e.doc.page().at_frame(5);
+        assert_eq!((faded.objects().count(), faded.objects().nth(1).unwrap().opacity), (2, 0.5));
+        // Evenly spaced points go all the way round a closed outline, and from end to end of an open one.
+        let round = resampled(&[v2(0.0, 0.0), v2(10.0, 0.0), v2(10.0, 10.0), v2(0.0, 10.0)], true, 8);
+        assert_eq!((round[0], round[2], round[7]), (v2(0.0, 0.0), v2(10.0, 0.0), v2(0.0, 5.0)));
+        let line = resampled(&[v2(0.0, 0.0), v2(10.0, 0.0)], false, 3);
+        assert_eq!(line, [v2(0.0, 0.0), v2(5.0, 0.0), v2(10.0, 0.0)]);
+    }
+
+    #[test]
+    fn guide_and_mask_layers_do_their_work() {
+        let mut e = Editor::new(Document::new(300, 200));
+        e.add_object(rect(1, 0.0, 90.0, 20.0, 20.0));
+        e.doc.page_mut().start_timeline(12.0);
+        e.goto_frame(10);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.selection = vec![1];
+        e.for_selected(|o| o.translate(200.0, 0.0));
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween::default())));
+        // Straight across without a guide: halfway the box is at the same height.
+        assert_eq!(e.doc.page().at_frame(5).objects().next().unwrap().bounds.center(), v2(110.0, 100.0));
+        // A guide layer above, with a path that goes up to the top in the middle and down again.
+        e.add_layer();
+        let mut path = rect(2, 10.0, 20.0, 200.0, 80.0);
+        (path.shape, path.points) = (Shape::Path { closed: false }, vec![v2(10.0, 100.0), v2(110.0, 20.0), v2(210.0, 100.0)]);
+        e.add_object(path);
+        e.doc.page_mut().edit_timeline(|timeline| {
+            timeline.insert_frames(1, 0, 10);
+            timeline.set_kind(1, LayerKind::Guide);
+        });
+        let middle = e.doc.page().at_frame(5);
+        let center = middle.layers[0].objects[0].bounds.center();
+        assert!((center.x - 110.0).abs() < 0.5 && (center.y - 20.0).abs() < 0.5, "halfway the box is at the top of the path, not {center:?}");
+        // Played, the guide's path is not drawn.
+        assert_eq!(middle.played().objects().count(), 1);
+        assert!(middle.played().timeline.is_none());
+        // As a mask, the upper layer lets the lower one show only where it has something.
+        e.doc.page_mut().edit_timeline(|timeline| timeline.set_kind(1, LayerKind::Mask));
+        e.goto_frame(0);
+        e.doc.page_mut().layers[1].objects = vec![rect(3, 0.0, 90.0, 10.0, 20.0)];
+        e.object_mut(1).unwrap().fill = Some(Color::rgb(255, 0, 0));
+        e.object_mut(3).unwrap().fill = Some(Color::BLACK);
+        let played = e.doc.page().played();
+        assert_eq!(played.objects().count(), 1);
+        assert!(played.objects().next().unwrap().mask.is_some());
+        let drawn = crate::export::render_page(&played).unwrap();
+        // The box reaches from 0 to 20; the mask covers 0 to 10. Inside the mask the red shows, outside it the white canvas.
+        assert_eq!(drawn.pixel(5, 100).unwrap().green(), 0);
+        assert_eq!(drawn.pixel(15, 100).unwrap().green(), 255);
+        // New layers and deleted ones keep each layer's kind with it.
+        e.doc.page_mut().active_layer = 0;
+        e.add_layer();
+        let timeline = e.doc.page().timeline.as_ref().unwrap();
+        assert_eq!((timeline.kind(0), timeline.kind(1), timeline.kind(2)), (LayerKind::Normal, LayerKind::Normal, LayerKind::Mask));
+    }
+
+    #[test]
     fn a_tween_turns_and_resizes_on_its_way() {
         let mut e = editor();
         e.doc.page_mut().start_timeline(24.0);
@@ -5942,7 +6236,7 @@ mod tests {
         e.for_selected(|o| o.set_bounds(Rect { x: 0.0, y: 10.0, w: 80.0, h: 80.0 }));
         e.goto_frame(0);
         // One whole turn on the way, though the two keyframes stand the same way up.
-        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween { ease: 0.0, turns: 1 })));
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween { turns: 1, ..Tween::default() })));
         let quarter = e.doc.page().at_frame(1);
         let object = quarter.objects().next().unwrap();
         assert!((object.placement.unwrap().warp.turn() - std::f32::consts::FRAC_PI_2).abs() < 0.001);

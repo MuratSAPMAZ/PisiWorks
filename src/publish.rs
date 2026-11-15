@@ -30,7 +30,8 @@ pub fn html(page: &Page, title: &str) -> Result<String> {
     let mut seen: HashMap<Vec<u8>, usize> = HashMap::new();
     let mut order = Vec::with_capacity(frames);
     for frame in 0..frames {
-        let png = crate::export::render_page(&page.at_frame(frame))?.encode_png()?;
+        // Each frame as the finished animation shows it: guides left out, masks at work.
+        let png = crate::export::render_page(&page.at_frame(frame).played())?.encode_png()?;
         let index = *seen.entry(png.clone()).or_insert_with(|| {
             pictures.push(STANDARD.encode(&png));
             pictures.len() - 1
