@@ -70,7 +70,7 @@ Her sahnede doğru yanıtın kutusunun adı **Doğru**, öbür ikisinin adı **Y
 !stuck Takıldıysan
 - **Film sahneler arasında durmadan dönüyor.** Sahnelerde **Durdur** kare eylemi yok. Her sahnede Kare eylemi kutusundan Durdur'u seç.
 - **Bitiş sahnesinde puan 0 görünüyor.** `{Puan}` adını yanlış yazmış olabilirsin; ya da "Baştan başla" fazladan çalışmıştır.
-- **"Yeniden" düğmesi çalışmıyor.** Üstündeki yazıya değil, altındaki dikdörtgene ad verdiğinden emin ol. Yazı üstte durduğu için tıklamayı o alabilir: yazıya da aynı adı ver ya da ikisini grupla ve gruba ad ver.
+- **"Yeniden" düğmesi çalışmıyor.** Adı dikdörtgene verdiğinden ve kuraldaki adla aynı yazdığından emin ol. Üstündeki yazıya ayrıca bir davranış verdiysen tıklamayı o alır: ikisini grupla ve adı gruba ver.
 
 ## Sıra sende
 
