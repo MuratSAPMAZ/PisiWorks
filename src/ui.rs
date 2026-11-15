@@ -1660,6 +1660,7 @@ impl Render for Workspace {
             )
             .children(self.size_dialog_view(cx))
             .children(self.numeric_dialog_view(cx))
+            .children(self.marquee_dialog_view(cx))
             .children(self.jpeg_dialog_view(cx))
             .children(self.filter_dialog_view(cx))
             .children(self.color_popup_view(cx))

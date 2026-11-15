@@ -444,7 +444,7 @@ fn shifted(source: &[f32], w: usize, h: usize, dx: f32, dy: f32, beyond: f32) ->
 }
 
 /// How far each pixel is from the shape in a channel: 0 on it, and growing with the distance from its edge.
-fn distances(source: &[f32], w: usize, h: usize) -> Vec<f32> {
+pub(crate) fn distances(source: &[f32], w: usize, h: usize) -> Vec<f32> {
     const FAR: f32 = 1e12;
     // The squared distance to the nearest pixel of the shape, first along each column, then along each row.
     fn pass(line: &[f32], out: &mut [f32], hull: &mut Vec<usize>, starts: &mut Vec<f32>) {

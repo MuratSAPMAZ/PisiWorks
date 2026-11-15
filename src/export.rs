@@ -219,6 +219,30 @@ fn mask_coverage(mask: &ObjectMask, width: u32, height: u32) -> Option<Vec<f32>>
 }
 
 /// One object drawn on nothing, as a bitmap, with where it sits in the document.
+/// Draws several objects together, the first lowest, onto nothing: the image, and where on the page it lies.
+pub fn render_objects(objects: &[Object]) -> Option<(Bitmap, Rect)> {
+    let area = objects
+        .iter()
+        .map(|object| {
+            let reach = (object.stroke.map_or(0.0, |s| s.width / 2.0) + object.filters.iter().filter(|f| f.enabled).map(crate::effects::reach).sum::<f32>()).ceil();
+            let b = object.bounds;
+            Rect::from_corners(Vec2 { x: (b.x - reach).floor(), y: (b.y - reach).floor() }, Vec2 { x: (b.right() + reach).ceil(), y: (b.bottom() + reach).ceil() })
+        })
+        .reduce(Rect::union)?;
+    let (width, height) = (area.w.max(1.0) as u32, area.h.max(1.0) as u32);
+    let mut pixmap = Pixmap::new(width, height)?;
+    for object in objects {
+        let mut moved = object.clone();
+        moved.translate(-area.x, -area.y);
+        draw_object(&mut pixmap, &moved);
+    }
+    let rgba: Vec<u8> = pixmap.pixels().iter().flat_map(|px| {
+        let c = px.demultiply();
+        [c.red(), c.green(), c.blue(), c.alpha()]
+    }).collect();
+    Some((Bitmap::from_rgba(width, height, rgba)?, Rect { x: area.x, y: area.y, w: width as f32, h: height as f32 }))
+}
+
 pub fn render_object(object: &Object) -> Option<(Bitmap, Rect)> {
     let b = object.bounds;
     let reach = (object.stroke.map_or(0.0, |s| s.width / 2.0) + object.filters.iter().filter(|f| f.enabled).map(crate::effects::reach).sum::<f32>()).ceil();

@@ -236,6 +236,61 @@ impl Mask {
         }
     }
 
+    /// How far each cell is from the nearest cell that is set, or that is not.
+    fn distance_to(&self, set: bool) -> Vec<f32> {
+        let weights: Vec<f32> = self.cells.iter().map(|cell| if *cell == set { 1.0 } else { 0.0 }).collect();
+        crate::pseffects::distances(&weights, self.width as usize, self.height as usize)
+    }
+
+    fn with_cells(&self, cells: Vec<bool>) -> Mask {
+        Mask { width: self.width, height: self.height, cells }
+    }
+
+    /// The selection with everything else selected instead.
+    pub fn inverted(&self) -> Mask {
+        self.with_cells(self.cells.iter().map(|cell| !cell).collect())
+    }
+
+    /// The selection grown by `by` pixels all around.
+    pub fn expanded(&self, by: u32) -> Mask {
+        self.with_cells(self.distance_to(true).iter().map(|d| *d <= by as f32).collect())
+    }
+
+    /// The selection shrunk by `by` pixels all around. The edge of the bitmap is not an edge of the selection.
+    pub fn contracted(&self, by: u32) -> Mask {
+        self.with_cells(self.distance_to(false).iter().map(|d| *d > by as f32).collect())
+    }
+
+    /// A band `width` pixels wide along the edge of the selection, half of it to each side.
+    pub fn border(&self, width: u32) -> Mask {
+        let (outer, inner) = (self.expanded(width.div_ceil(2)), self.contracted(width / 2));
+        self.with_cells(outer.cells.iter().zip(&inner.cells).map(|(o, i)| *o && !*i).collect())
+    }
+
+    /// The selection with its edge evened out: a pixel is selected if most of the
+    /// pixels within `radius` of it, in a square, are.
+    pub fn smoothed(&self, radius: u32) -> Mask {
+        let (w, h, r) = (self.width as i64, self.height as i64, radius as i64);
+        // How many cells are set above and to the left of each corner.
+        let mut sums = vec![0u32; ((w + 1) * (h + 1)) as usize];
+        for y in 0..h {
+            for x in 0..w {
+                let set = self.cells[(y * w + x) as usize] as u32;
+                sums[((y + 1) * (w + 1) + x + 1) as usize] = set + sums[(y * (w + 1) + x + 1) as usize] + sums[((y + 1) * (w + 1) + x) as usize] - sums[(y * (w + 1) + x) as usize];
+            }
+        }
+        let cells = (0..h)
+            .flat_map(|y| (0..w).map(move |x| (x, y)))
+            .map(|(x, y)| {
+                let (left, top, right, bottom) = ((x - r).max(0), (y - r).max(0), (x + r + 1).min(w), (y + r + 1).min(h));
+                let at = |x: i64, y: i64| sums[(y * (w + 1) + x) as usize];
+                let set = at(right, bottom) + at(left, top) - at(right, top) - at(left, bottom);
+                set * 2 > ((right - left) * (bottom - top)) as u32
+            })
+            .collect();
+        self.with_cells(cells)
+    }
+
     /// Returns x, y, width and height of the smallest box around the selection.
     fn bounds(&self) -> Option<(u32, u32, u32, u32)> {
         let w = self.width as usize;
@@ -495,6 +550,22 @@ impl Bitmap {
     }
 
     /// Fills the region around a pixel. Returns false if out of range.
+    /// Every pixel whose color is like those selected: each channel within
+    /// `tolerance` of the range the selected pixels span.
+    pub fn similar(&self, mask: &Mask, tolerance: u8) -> Option<Mask> {
+        if !mask.fits(self) || mask.is_empty() {
+            return None;
+        }
+        let (mut low, mut high) = ([255u8; 4], [0u8; 4]);
+        for (px, _) in self.rgba.chunks_exact(4).zip(&mask.cells).filter(|(_, set)| **set) {
+            for channel in 0..4 {
+                (low[channel], high[channel]) = (low[channel].min(px[channel]), high[channel].max(px[channel]));
+            }
+        }
+        let alike = |px: &[u8]| (0..4).all(|c| px[c] >= low[c].saturating_sub(tolerance) && px[c] <= high[c].saturating_add(tolerance));
+        Some(Mask { width: self.width, height: self.height, cells: self.rgba.chunks_exact(4).map(alike).collect() })
+    }
+
     pub fn flood_fill(&mut self, x: u32, y: u32, color: Color, tolerance: u8) -> bool {
         let Some(mask) = self.region(x, y, tolerance) else { return false };
         let replacement = [color.r, color.g, color.b, color.a];
@@ -726,6 +797,50 @@ impl<'de> Deserialize<'de> for Bitmap {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_marquee_can_be_grown_shrunk_bordered_inverted_and_smoothed() {
+        // A square of 10 in the middle of a bitmap of 30.
+        let square = Mask::rect(30, 30, Vec2 { x: 10.0, y: 10.0 }, Vec2 { x: 20.0, y: 20.0 });
+        let count = |mask: &Mask| mask.cells.iter().filter(|c| **c).count();
+        assert_eq!(count(&square), 100);
+        // Grown by 3 it reaches 3 further each way, with round corners.
+        let bigger = square.expanded(3);
+        assert!(bigger.is_set(7, 15) && !bigger.is_set(6, 15) && bigger.is_set(22, 15) && !bigger.is_set(23, 15));
+        assert!(bigger.is_set(15, 7) && !bigger.is_set(7, 7));
+        // Shrunk by 3 it is a square of 4.
+        let smaller = square.contracted(3);
+        assert_eq!(count(&smaller), 16);
+        assert!(smaller.is_set(13, 13) && !smaller.is_set(12, 13));
+        assert!(square.contracted(5).is_empty());
+        // A selection of the whole bitmap has no edge to shrink from.
+        assert_eq!(count(&Mask::from_fn(8, 8, |_, _| true).contracted(2)), 64);
+        // A border of 4 is 2 to each side of the edge.
+        let band = square.border(4);
+        assert!(band.is_set(8, 15) && band.is_set(11, 15) && !band.is_set(12, 15) && !band.is_set(7, 15));
+        // Inverted, everything else is selected; twice, it is back.
+        assert_eq!(count(&square.inverted()), 800);
+        assert_eq!(square.inverted().inverted(), square);
+        // Smoothing drops a stray pixel and fills a pinhole.
+        let mut rough = square.clone();
+        rough.cells[2 * 30 + 2] = true;
+        rough.cells[15 * 30 + 15] = false;
+        let even = rough.smoothed(2);
+        assert!(!even.is_set(2, 2) && even.is_set(15, 15) && even.is_set(12, 12));
+    }
+
+    #[test]
+    fn similar_pixels_are_found_all_over_the_bitmap() {
+        // Red on the left and the right, blue between them.
+        let rgba: Vec<u8> = (0..9).flat_map(|i| if (3..6).contains(&(i % 9)) { [0, 0, 255, 255] } else { [250 - i as u8, 0, 0, 255] }).collect();
+        let bitmap = Bitmap::from_rgba(9, 1, rgba).unwrap();
+        let picked = Mask::from_fn(9, 1, |x, _| x == 0);
+        let alike = bitmap.similar(&picked, 32).unwrap();
+        assert_eq!((0..9).map(|x| alike.is_set(x, 0)).collect::<Vec<_>>(), [true, true, true, false, false, false, true, true, true]);
+        // With no room for difference only the same color is taken.
+        assert_eq!(bitmap.similar(&picked, 0).unwrap().cells.iter().filter(|c| **c).count(), 1);
+        assert!(bitmap.similar(&Mask::empty(9, 1), 32).is_none());
+    }
 
     #[test]
     fn rect_mask_clamps_and_outlines_with_four_edges() {

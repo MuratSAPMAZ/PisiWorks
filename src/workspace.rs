@@ -223,6 +223,8 @@ pub enum FieldId {
     OptimizeSelective,
     /// A number of the live filter being edited, by its place among the settings.
     FilterValue(usize),
+    /// The number of pixels in the dialog of a marquee command.
+    MarqueeAmount,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -471,6 +473,10 @@ pub struct Workspace {
     pub curve_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The effect whose settings show in the Photoshop Live Effects dialog.
     pub ps_effect: usize,
+    /// The bitmap filter last used from the Filters menu, for Repeat Filter.
+    pub last_filter: Option<crate::bitmap::Filter>,
+    /// The dialog of a marquee command that is open, and the number of pixels in it.
+    pub marquee_dialog: Option<(crate::menus::MarqueeOp, f32)>,
     /// The stop picked in the gradient of Photoshop Live Effects, and the one being dragged.
     pub gradient_stop: Option<usize>,
     pub gradient_drag: Option<usize>,
@@ -701,6 +707,8 @@ impl Workspace {
             curve_point: None,
             curve_bounds: Rc::new(Cell::new(Bounds::default())),
             ps_effect: 0,
+            last_filter: None,
+            marquee_dialog: None,
             gradient_stop: None,
             gradient_drag: None,
             gradient_bounds: Rc::new(Cell::new(Bounds::default())),
@@ -1903,6 +1911,13 @@ impl Workspace {
             Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
+            Cmd::Revert => (self.path.is_some() || self.source_image.is_some()) && self.ed.is_dirty(),
+            Cmd::Clone | Cmd::FitSelection => has_selection,
+            Cmd::PasteAttributes => has_selection && self.ed.has_clipboard(),
+            Cmd::InsertWeb(_) | Cmd::FlattenSelection => self.ed.selected().iter().any(|o| !o.is_web()),
+            Cmd::SelectSimilar | Cmd::Marquee(_) => self.active_pixels().is_some(),
+            Cmd::MergeDown => self.ed.can_merge_down(),
+            Cmd::RepeatFilter => self.last_filter.is_some() && self.ed.has_selected_bitmap(),
             _ => true,
         }
     }
@@ -1988,6 +2003,84 @@ impl Workspace {
             Cmd::Filter(filter) => {
                 self.ed.apply_filter(filter, pixels.as_ref().map(|(id, mask)| (*id, mask.as_ref())));
                 self.ed.commit(filter.label());
+                self.last_filter = Some(filter);
+            }
+            Cmd::RepeatFilter => {
+                if let Some(filter) = self.last_filter {
+                    self.ed.apply_filter(filter, pixels.as_ref().map(|(id, mask)| (*id, mask.as_ref())));
+                    self.ed.commit(filter.label());
+                }
+            }
+            Cmd::Revert => self.confirm_revert(window, cx),
+            Cmd::Clone => {
+                // A copy right on top of the original, selected in its place.
+                self.ed.duplicate(0.0);
+                self.ed.commit(t("Clone"));
+            }
+            Cmd::PasteAttributes => {
+                if self.ed.paste_attributes() {
+                    self.ed.commit(t("Paste Attributes"));
+                }
+            }
+            Cmd::InsertWeb(kind) => {
+                if self.ed.selected().iter().filter(|o| !o.is_web()).count() > 1 {
+                    self.insert_web_asking(kind, window, cx);
+                } else {
+                    self.insert_web(kind, true);
+                }
+            }
+            Cmd::InsertBitmap => {
+                if self.ed.insert_empty_bitmap() {
+                    self.ed.commit(t("Empty Bitmap"));
+                } else {
+                    self.status = t("All layers are locked").into();
+                    self.ed.rollback();
+                }
+            }
+            Cmd::AddState => {
+                self.ed.selection.clear();
+                self.ed.doc.page_mut().add_state();
+                self.ed.commit(t("New State"));
+            }
+            Cmd::FitSelection => self.fit_selection(),
+            Cmd::SelectSimilar => {
+                if let Some((id, mask)) = &pixels {
+                    let similar = self.ed.object(*id).and_then(|o| o.bitmap()).and_then(|bitmap| bitmap.similar(mask, FILL_TOLERANCE));
+                    self.set_pixel_selection(*id, similar, MaskMode::Replace);
+                }
+            }
+            Cmd::SelectInverse => match &pixels {
+                Some((id, mask)) => self.set_pixel_selection(*id, Some(mask.inverted()), MaskMode::Replace),
+                // Without a marquee it is the objects that change places: those not selected become the selection.
+                None => {
+                    let page = self.ed.doc.page();
+                    let others: Vec<u64> =
+                        page.layers.iter().filter(|l| l.visible && !l.locked).flat_map(|l| &l.objects).filter(|o| o.visible && !self.ed.is_selected(o.id)).map(|o| o.id).collect();
+                    self.ed.selection = others;
+                }
+            },
+            Cmd::Marquee(op) => self.marquee_dialog = Some((op, 10.0)),
+            Cmd::TrimCanvas => {
+                if self.ed.trim_canvas() {
+                    self.pixel_sel = None;
+                    self.ed.commit(t("Trim Canvas"));
+                } else {
+                    self.status = t("There is nothing to trim away").into();
+                }
+            }
+            Cmd::FlattenSelection | Cmd::MergeDown | Cmd::FlattenLayers => {
+                let (done, label) = match cmd {
+                    Cmd::FlattenSelection => (self.ed.flatten_selection(), t("Flatten Selection")),
+                    Cmd::MergeDown => (self.ed.merge_down(), t("Merge Down")),
+                    _ => (self.ed.flatten_layers(), t("Flatten Layers")),
+                };
+                if done {
+                    self.pixel_sel = None;
+                    self.ed.commit(label);
+                } else {
+                    self.status = t("There is nothing to flatten").into();
+                    self.ed.rollback();
+                }
             }
             Cmd::ShowWeb(visible) => {
                 self.ed.set_web_visible(visible);
@@ -2123,6 +2216,86 @@ impl Workspace {
             }
         }
         cx.notify();
+    }
+
+    /// Fireworks' Revert: asks, then opens the file again as it was last saved.
+    fn confirm_revert(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(path) = self.path.clone().or_else(|| self.source_image.clone()) else { return };
+        let question = t("Revert to the last saved version? The changes made since will be lost.");
+        let answer = window.prompt(PromptLevel::Warning, question, None, &[t("Revert"), t("Cancel")], cx);
+        self.awaiting_answer = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let answer = answer.await;
+            this.update_in(cx, |this, _, cx| {
+                this.awaiting_answer = false;
+                if let Ok(0) = answer {
+                    this.open_file(path);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn insert_web(&mut self, kind: WebKind, single: bool) {
+        if self.ed.insert_web(kind, single) {
+            self.ed.commit(if kind == WebKind::Hotspot { t("Hotspot") } else { t("Slice") });
+        } else {
+            self.status = t("All layers are locked").into();
+            self.ed.rollback();
+        }
+    }
+
+    /// With several objects selected, Fireworks asks whether they get one hotspot or slice together, or one each.
+    fn insert_web_asking(&mut self, kind: WebKind, window: &mut Window, cx: &mut Context<Self>) {
+        let question = if kind == WebKind::Hotspot { t("Multiple items are selected. Do you want to create one hotspot, or more than one?") } else { t("Multiple items are selected. Do you want to create one slice, or more than one?") };
+        let answer = window.prompt(PromptLevel::Info, question, None, &[t("Single"), t("Multiple"), t("Cancel")], cx);
+        self.awaiting_answer = true;
+        cx.spawn_in(window, async move |this, cx| {
+            let answer = answer.await;
+            this.update_in(cx, |this, _, cx| {
+                this.awaiting_answer = false;
+                if let Ok(choice @ (0 | 1)) = answer {
+                    this.insert_web(kind, choice == 0);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    /// Zooms and scrolls so the selection fills the view.
+    fn fit_selection(&mut self) {
+        let Some(area) = self.ed.selection_bounds() else { return };
+        let (bounds, page) = (self.canvas_bounds.get(), self.ed.doc.page());
+        let margin = 48.0;
+        let fit_w = (f32::from(bounds.size.width) - margin) / area.w.max(1.0);
+        let fit_h = (f32::from(bounds.size.height) - margin) / area.h.max(1.0);
+        self.zoom = fit_w.min(fit_h).clamp(MIN_ZOOM, MAX_ZOOM);
+        // The view is centered on the page; panning by how far the selection is from the middle of it centers the selection.
+        let center = area.center();
+        self.pan = v2((page.width as f32 / 2.0 - center.x) * self.zoom, (page.height as f32 / 2.0 - center.y) * self.zoom);
+    }
+
+    /// OK in the dialog of a marquee command: the marquee is grown, shrunk, turned into a band along its edge, or evened out.
+    pub fn apply_marquee_dialog(&mut self) {
+        self.commit_field();
+        let Some((op, amount)) = self.marquee_dialog.take() else { return };
+        let Some((id, mask)) = self.active_pixels().map(|s| (s.object, s.mask.clone())) else { return };
+        let by = amount.round().clamp(1.0, 1000.0) as u32;
+        let changed = match op {
+            crate::menus::MarqueeOp::Expand => mask.expanded(by),
+            crate::menus::MarqueeOp::Contract => mask.contracted(by),
+            crate::menus::MarqueeOp::Border => mask.border(by),
+            crate::menus::MarqueeOp::Smooth => mask.smoothed(by),
+        };
+        if changed.is_empty() {
+            self.status = t("Nothing would be left of the marquee").into();
+            return;
+        }
+        self.set_pixel_selection(id, Some(changed), MaskMode::Replace);
     }
 
     fn confirm_discard(&mut self, cmd: Cmd, window: &mut Window, cx: &mut Context<Self>) {
@@ -3572,6 +3745,12 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.marquee_dialog.is_some() {
+            match key {
+                "enter" => self.apply_marquee_dialog(),
+                "escape" => self.marquee_dialog = None,
+                _ => {}
+            }
         } else if self.numeric_dialog.is_some() {
             match key {
                 "enter" => self.apply_numeric_dialog(),
@@ -3614,6 +3793,14 @@ impl Workspace {
             ("c", false, false) => Cmd::Copy,
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,
+            ("d", true, false) => Cmd::Clone,
+            ("v", true, true) => Cmd::PasteAttributes,
+            ("0", false, true) => Cmd::FitSelection,
+            ("i", true, false) => Cmd::SelectInverse,
+            ("z", true, true) => Cmd::FlattenSelection,
+            ("e", false, false) => Cmd::MergeDown,
+            ("f", true, true) => Cmd::RepeatFilter,
+            ("u", true, false) => Cmd::InsertWeb(WebKind::Hotspot),
             ("a", false, false) => Cmd::SelectAll,
             ("d", false, false) => Cmd::Deselect,
             ("=", _, false) | ("+", _, false) => Cmd::ZoomIn,
@@ -3780,6 +3967,7 @@ impl Workspace {
             FieldId::OptimizeQuality => page.export.quality.to_string(),
             FieldId::OptimizeSelective => page.export.selective_quality.to_string(),
             FieldId::FilterValue(setting) => self.edited_filter().map_or_else(String::new, |(_, filter)| number(filter.value(setting))),
+            FieldId::MarqueeAmount => self.marquee_dialog.map_or_else(String::new, |(_, amount)| number(amount)),
             FieldId::GradientPlace => self.picked_stop().map_or_else(String::new, |stop| number((stop.0 * 100.0).round())),
             FieldId::GradientOpacity => self.picked_stop().map_or_else(String::new, |stop| number((stop.1.a as f32 / 2.55).round())),
             FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
@@ -4002,6 +4190,10 @@ impl Workspace {
             FieldId::FilterValue(setting) => {
                 let Some(v) = number else { return };
                 self.set_filter_value(setting, v);
+            }
+            FieldId::MarqueeAmount => {
+                let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.marquee_dialog.as_mut()) else { return };
+                dialog.1 = v.round().min(1000.0);
             }
             FieldId::GradientPlace => {
                 let Some(v) = number else { return };

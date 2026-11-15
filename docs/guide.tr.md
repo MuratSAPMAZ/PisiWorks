@@ -26,7 +26,13 @@ Kaydet, açılan görüntünün üzerine hiçbir zaman yazmaz. Nesnelerinizi kor
 
 Seçim Çerçevesi (M), Kement (L) ve Sihirli Değnek (W) bir bitmap üzerinde piksel seçer. Seçime eklemek için Shift'i, seçimden çıkarmak için Alt'ı basılı tutun. Boyama, doldurma ve filtreler seçimin içinde kalır. Kes, Kopyala ve Sil seçili piksellere uygulanır; Yapıştır bunları yeni bir bitmap olarak ekler. Seçili pikselleri taşımak için İşaretçi ile seçimin içinden sürükleyin veya ok tuşlarına basın; geride bir kopya bırakmak için Alt'ı basılı tutun. Seçim Çerçevesi veya Kement ile seçimin içinden sürüklemek yalnızca seçim sınırını taşır; Ctrl basılıyken pikselleri taşır. Ctrl+D veya Esc seçimi kaldırır.
 
+Seç menüsü piksel seçimini değiştirir. Benzerini Seç, bitmap'in her yerindeki benzer renkli pikselleri seçime katar; Tersini Seç (Ctrl+Shift+I) geri kalan her şeyi seçer. Seçim Çerçevesini Genişlet ve Daralt, seçimi verilen piksel kadar büyütür veya küçültür; Seçim Çerçevesine Kenarlık Ekle onu kenarı boyunca bir şeride çevirir; Seçim Çerçevesini Düzgünleştir pürüzlü kenarı düzeltir. Piksel seçili değilken Tersini Seç, seçili olmayan nesneleri seçer.
+
 Lastik Damgası (S): kaynağı belirlemek için Alt+tıklayın, ardından oradan klonlamak için sürükleyin.
+
+Değiştir > Seçimi Düzleştir (Ctrl+Alt+Shift+Z) seçili nesneleri tek bir bitmap yapar. Aşağıda Birleştir (Ctrl+E) onları hemen altlarındaki bitmap ile birleştirir. Katmanları Düzleştir, görünen katmanlardaki her şeyi tek katmanda tek bir bitmap yapar; gizli katmanlar silinir, dilimler ve sıcak noktalar korunur. Değiştir > Tuval > Tuvali Kes, tuvali çizime kadar kırpar.
+
+Düzenle > Ekle > Boş Bitmap, üzerine boyamak için tuval boyutunda saydam bir bitmap ekler. Düzenle > Klonla (Ctrl+Shift+D) seçimi yerinde kopyalar; Nitelikleri Yapıştır (Ctrl+Alt+Shift+V) seçime, kopyalanan nesnenin dolgusunu, konturunu, opaklığını, karışım modunu ve filtrelerini verir. Filtreler > Filtreyi Tekrarla (Ctrl+Alt+Shift+F) son filtreyi yeniden uygular. Dosya > Geri Dön, dosyanın son kaydedilen haline döner. Görünüm > Seçimi Sığdır (Ctrl+Alt+0) seçime yakınlaşır.
 
 ## Vektörleri yeniden biçimlendirme
 
@@ -74,7 +80,7 @@ Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı oldu�
 
 ## Web alanları
 
-Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.
+Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Düzenle > Ekle > Sıcak Nokta (Ctrl+Shift+U) ve Dikdörtgen Dilim, seçili nesnenin üzerine bir tane koyar; birden fazla nesne seçiliyse hepsi için bir tane mi yoksa her biri için ayrı mı oluşturulacağı sorulur. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.
 
 Bu alanlar düzleştirilmiş görüntüde hiçbir zaman görünmez. `ad.png` dışa aktarılırken dilimler için `ad_slice1.png`, `ad_slice2.png` ve devamı, sıcak noktalar için de görüntü haritası içeren `ad_map.html` yazılır.
 

@@ -1310,6 +1310,42 @@ impl Workspace {
         )
     }
 
+    /// The dialog of Expand, Contract, Border and Smooth Marquee: one number of pixels.
+    pub(crate) fn marquee_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (op, _) = self.marquee_dialog?;
+        Some(
+            deferred(
+                div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                    div()
+                        .w(px(260.))
+                        .p_3()
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .bg(rgb(PANEL))
+                        .border_1()
+                        .border_color(rgb(BORDER))
+                        .shadow_lg()
+                        .child(div().font_weight(FontWeight::BOLD).child(op.label()))
+                        .child(div().flex().items_center().gap_1().child(label(op.prompt())).child(self.field(FieldId::MarqueeAmount, 60., cx)).child(label(t("pixels"))))
+                        .child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap_1()
+                                .child(self.text_button(t("OK"), true, cx, |this, _, _| this.apply_marquee_dialog()))
+                                .child(self.text_button(t("Cancel"), true, cx, |this, _, _| {
+                                    this.field = None;
+                                    this.marquee_dialog = None;
+                                })),
+                        ),
+                ),
+            )
+            .with_priority(1)
+            .into_any_element(),
+        )
+    }
+
     pub(crate) fn numeric_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let dialog = self.numeric_dialog?;
         let names = [t("Width:"), t("Height:"), t("Angle:")];

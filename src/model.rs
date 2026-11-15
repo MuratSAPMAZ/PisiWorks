@@ -2251,6 +2251,140 @@ impl Editor {
         self.selection = added;
     }
 
+    /// Fireworks' Paste Attributes: the selected objects take the fill, stroke,
+    /// opacity, blend mode and live filters of what was copied.
+    pub fn paste_attributes(&mut self) -> bool {
+        let Some(source) = self.clipboard.first().cloned() else { return false };
+        self.for_selected(|o| {
+            if o.takes_color() && source.takes_color() {
+                (o.fill, o.stroke) = (source.fill, source.stroke);
+            }
+            (o.opacity, o.blend, o.filters) = (source.opacity, source.blend, source.filters.clone());
+        });
+        !self.selection.is_empty()
+    }
+
+    /// Fireworks' Insert Hotspot and Insert Rectangular Slice: one web object over
+    /// each selected object, or with `single` one over all of them.
+    pub fn insert_web(&mut self, kind: WebKind, single: bool) -> bool {
+        let areas: Vec<Rect> = self.selected().iter().filter(|o| !o.is_web()).map(|o| o.bounds).collect();
+        let areas = if single { areas.into_iter().reduce(Rect::union).into_iter().collect() } else { areas };
+        let mut added = Vec::new();
+        for area in areas {
+            let object = Object::new_web(self.alloc_id(), kind, area);
+            added.push(object.id);
+            if !self.add_object(object) {
+                return false;
+            }
+        }
+        if added.is_empty() {
+            return false;
+        }
+        self.selection = added;
+        true
+    }
+
+    /// Fireworks' Insert Empty Bitmap: a clear bitmap the size of the canvas, to paint on.
+    pub fn insert_empty_bitmap(&mut self) -> bool {
+        let (width, height) = (self.doc.page().width, self.doc.page().height);
+        let Some(bitmap) = Bitmap::from_rgba(width, height, vec![0; width as usize * height as usize * 4]) else { return false };
+        let object = Object::new_bitmap(self.alloc_id(), t("Bitmap"), bitmap, 0.0, 0.0);
+        self.add_object(object)
+    }
+
+    /// Fireworks' Trim Canvas: the canvas is cut back to the artwork. It never grows.
+    pub fn trim_canvas(&mut self) -> bool {
+        let page = self.doc.page();
+        let Some(art) = page.objects().filter(|o| !o.is_web() && o.visible).map(|o| o.bounds).reduce(Rect::union) else { return false };
+        let edges = Rect::from_corners(v2(art.x.floor(), art.y.floor()), v2(art.right().ceil(), art.bottom().ceil()));
+        match page.rect().intersect(edges) {
+            Some(area) if area != page.rect() => self.crop_canvas(area),
+            _ => false,
+        }
+    }
+
+    /// Where the selected artwork is on the page: layer and place in it, lowest first.
+    fn selected_places(&self) -> Vec<(usize, usize)> {
+        let page = self.doc.page();
+        let mut places = Vec::new();
+        for (layer_index, layer) in page.layers.iter().enumerate() {
+            for (index, object) in layer.objects.iter().enumerate() {
+                if self.selection.contains(&object.id) && !object.is_web() {
+                    places.push((layer_index, index));
+                }
+            }
+        }
+        places
+    }
+
+    /// Turns the objects at `places`, lowest first, into one bitmap where the topmost of them was.
+    fn flatten_places(&mut self, places: &[(usize, usize)]) -> bool {
+        let Some(&(top_layer, top_index)) = places.last() else { return false };
+        let page = self.doc.page();
+        let objects: Vec<Object> = places.iter().map(|(layer, index)| page.layers[*layer].objects[*index].clone()).collect();
+        if page.layers[top_layer].locked {
+            return false;
+        }
+        let Some((bitmap, area)) = crate::export::render_objects(&objects) else { return false };
+        let flat = Object::new_bitmap(self.alloc_id(), t("Bitmap"), bitmap, area.x, area.y);
+        let id = flat.id;
+        let page = self.doc.page_mut();
+        page.layers[top_layer].objects[top_index] = flat;
+        // From the top down, so the places of those still to go do not shift.
+        for (layer, index) in places[..places.len() - 1].iter().rev() {
+            page.layers[*layer].objects.remove(*index);
+        }
+        self.selection = vec![id];
+        true
+    }
+
+    /// Fireworks' Flatten Selection: the selected objects become one bitmap.
+    pub fn flatten_selection(&mut self) -> bool {
+        let places = self.selected_places();
+        self.flatten_places(&places)
+    }
+
+    /// The bitmap right under the lowest selected object, which Merge Down merges into.
+    fn merge_target(&self) -> Option<(usize, usize)> {
+        let &(layer, index) = self.selected_places().first()?;
+        let below = self.doc.page().layers[layer].objects.get(index.checked_sub(1)?)?;
+        (below.is_image() && !self.selection.contains(&below.id)).then_some((layer, index - 1))
+    }
+
+    pub fn can_merge_down(&self) -> bool {
+        self.merge_target().is_some()
+    }
+
+    /// Fireworks' Merge Down: the selected objects are flattened into the bitmap right under them.
+    pub fn merge_down(&mut self) -> bool {
+        let Some(target) = self.merge_target() else { return false };
+        let mut places = self.selected_places();
+        places.insert(0, target);
+        self.flatten_places(&places)
+    }
+
+    /// Fireworks' Flatten Layers: everything on the layers that show becomes one
+    /// bitmap on one layer. Hidden layers go; slices and hotspots stay as they are.
+    pub fn flatten_layers(&mut self) -> bool {
+        let page = self.doc.page();
+        let shown: Vec<Object> = page.layers.iter().filter(|l| l.visible).flat_map(|l| &l.objects).filter(|o| !o.is_web() && o.visible).cloned().collect();
+        let web: Vec<Object> = page.layers.iter().flat_map(|l| &l.objects).filter(|o| o.is_web()).cloned().collect();
+        let Some((bitmap, area)) = crate::export::render_objects(&shown) else { return false };
+        let flat = Object::new_bitmap(self.alloc_id(), t("Bitmap"), bitmap, area.x, area.y);
+        let id = flat.id;
+        let page = self.doc.page_mut();
+        let mut layer = Layer::new(tf("Layer {}", &[&1]));
+        layer.objects = std::iter::once(flat).chain(web).collect();
+        page.layers = vec![layer];
+        page.active_layer = 0;
+        // The other states keep their objects, gathered on the one layer that is left.
+        for state in page.inactive_states_mut() {
+            state.objects = vec![std::mem::take(&mut state.objects).into_iter().flatten().collect()];
+        }
+        self.selection = vec![id];
+        true
+    }
+
     pub fn arrange(&mut self, op: Arrange) {
         let ids = self.selection.clone();
         for layer in &mut self.doc.page_mut().layers {
@@ -3022,6 +3156,145 @@ mod tests {
         e.resize_image(400, 100);
         let first = e.doc.page().objects().next().unwrap().bounds;
         assert_eq!(first, Rect { x: 20.0, y: 5.0, w: 40.0, h: 10.0 });
+    }
+
+    /// An editor with a 100 by 80 page and three boxes on it: red, green over it, and blue apart.
+    fn three_boxes() -> Editor {
+        let mut e = Editor::new(Document::new(100, 80));
+        for (x, color) in [(10.0, Color::rgb(255, 0, 0)), (20.0, Color::rgb(0, 255, 0)), (60.0, Color::rgb(0, 0, 255))] {
+            let id = e.alloc_id();
+            let mut object = rect(id, x, 10.0, 20.0, 20.0);
+            object.fill = Some(color);
+            e.add_object(object);
+        }
+        e
+    }
+
+    fn ids(e: &Editor) -> Vec<u64> {
+        e.doc.page().objects().map(|o| o.id).collect()
+    }
+
+    #[test]
+    fn trim_canvas_cuts_back_to_the_artwork_and_never_grows() {
+        let mut e = three_boxes();
+        assert!(e.trim_canvas());
+        assert_eq!((e.doc.page().width, e.doc.page().height), (70, 20));
+        assert_eq!(e.doc.page().objects().next().unwrap().bounds, Rect { x: 0.0, y: 0.0, w: 20.0, h: 20.0 });
+        assert!(!e.trim_canvas(), "there is nothing left to trim");
+        // Artwork hanging over the edge stays as it is: the canvas is not made bigger for it.
+        let over = e.doc.page().objects().next().unwrap().id;
+        e.selection = vec![over];
+        e.for_selected(|o| o.translate(-5.0, 0.0));
+        assert!(!e.trim_canvas());
+        assert_eq!(e.doc.page().width, 70);
+        assert!(!Editor::new(Document::new(10, 10)).trim_canvas());
+    }
+
+    #[test]
+    fn flatten_selection_makes_one_bitmap_where_the_topmost_was() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[0], all[1]];
+        assert!(e.flatten_selection());
+        let page = e.doc.page();
+        let objects: Vec<&Object> = page.objects().collect();
+        // The red and green boxes are one bitmap now, under the blue one as before.
+        assert_eq!((objects.len(), objects[1].id), (2, all[2]));
+        let flat = objects[0];
+        assert!(flat.is_image() && e.selection == vec![flat.id]);
+        assert_eq!(flat.bounds, Rect { x: 10.0, y: 10.0, w: 30.0, h: 20.0 });
+        let bitmap = flat.bitmap().unwrap();
+        // Red where only red was, green where green lay over it.
+        assert_eq!((bitmap.pixel(2, 5), bitmap.pixel(15, 5)), (Some([255, 0, 0, 255]), Some([0, 255, 0, 255])));
+        // With nothing selected there is nothing to flatten.
+        e.selection.clear();
+        assert!(!e.flatten_selection());
+    }
+
+    #[test]
+    fn merge_down_needs_a_bitmap_right_under_the_selection() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[1]];
+        assert!(!e.can_merge_down() && !e.merge_down(), "what lies under it is not a bitmap");
+        // Once the red box is a bitmap, the green one merges into it.
+        e.selection = vec![all[0]];
+        assert!(e.flatten_selection());
+        e.selection = vec![all[1]];
+        assert!(e.can_merge_down() && e.merge_down());
+        let merged: Vec<&Object> = e.doc.page().objects().collect();
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].bitmap().unwrap().pixel(15, 5), Some([0, 255, 0, 255]));
+        // The lowest object has nothing under it.
+        e.selection = vec![merged[0].id];
+        assert!(!e.can_merge_down());
+    }
+
+    #[test]
+    fn flatten_layers_leaves_one_layer_with_one_bitmap_and_the_slices() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.add_layer();
+        let hidden = e.alloc_id();
+        e.add_object(rect(hidden, 0.0, 50.0, 10.0, 10.0));
+        e.doc.page_mut().layers[1].visible = false;
+        e.doc.page_mut().active_layer = 0;
+        e.selection = vec![all[2]];
+        assert!(e.insert_web(WebKind::Slice, true));
+        e.doc.page_mut().add_state();
+        e.doc.page_mut().goto_state(0);
+        assert!(e.flatten_layers());
+        let page = e.doc.page();
+        assert_eq!((page.layers.len(), page.layers[0].objects.len()), (1, 2));
+        // The hidden layer went with what was on it; the bitmap spans the boxes that showed.
+        assert!(page.layers[0].objects[0].is_image() && page.layers[0].objects[1].is_web());
+        assert_eq!(page.layers[0].objects[0].bounds, Rect { x: 10.0, y: 10.0, w: 70.0, h: 20.0 });
+        assert!(page.states.iter().all(|state| state.objects.len() <= 1), "the other states have one layer too");
+        assert!(!Editor::new(Document::new(10, 10)).flatten_layers());
+    }
+
+    #[test]
+    fn hotspots_and_slices_are_inserted_over_the_selection() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[0], all[2]];
+        // One for all of them spans them all.
+        assert!(e.insert_web(WebKind::Hotspot, true));
+        let one = e.selected();
+        assert_eq!((one.len(), one[0].bounds, one[0].is_web()), (1, Rect { x: 10.0, y: 10.0, w: 70.0, h: 20.0 }, true));
+        // One each sits on each.
+        e.selection = vec![all[0], all[2]];
+        assert!(e.insert_web(WebKind::Slice, false));
+        let each: Vec<Rect> = e.selected().iter().map(|o| o.bounds).collect();
+        assert_eq!(each, [Rect { x: 10.0, y: 10.0, w: 20.0, h: 20.0 }, Rect { x: 60.0, y: 10.0, w: 20.0, h: 20.0 }]);
+        // A slice does not get a slice of its own.
+        assert!(!e.insert_web(WebKind::Slice, false));
+        // An empty bitmap is as big as the canvas and clear.
+        assert!(e.insert_empty_bitmap());
+        let bitmap = e.selected()[0];
+        assert_eq!((bitmap.bounds, bitmap.bitmap().unwrap().pixel(50, 40)), (Rect { x: 0.0, y: 0.0, w: 100.0, h: 80.0 }, Some([0, 0, 0, 0])));
+    }
+
+    #[test]
+    fn paste_attributes_gives_the_look_of_what_was_copied() {
+        let mut e = three_boxes();
+        let all = ids(&e);
+        e.selection = vec![all[0]];
+        e.for_selected(|o| {
+            o.stroke = Some(Stroke { color: Color::BLACK, width: 3.0 });
+            o.opacity = 0.5;
+            o.filters = vec![crate::effects::LiveFilter::new(crate::effects::FilterKind::Blur)];
+        });
+        e.copy();
+        e.selection = vec![all[2]];
+        assert!(e.paste_attributes());
+        let (from, to) = (e.object(all[0]).unwrap().clone(), e.object(all[2]).unwrap().clone());
+        assert_eq!((to.fill, to.stroke, to.opacity, to.filters.len()), (from.fill, from.stroke, 0.5, 1));
+        assert_eq!(to.bounds, Rect { x: 60.0, y: 10.0, w: 20.0, h: 20.0 }, "it stays where and what it was");
+        // Nothing copied, or nothing selected, and nothing happens.
+        e.selection.clear();
+        assert!(!e.paste_attributes());
+        assert!(!three_boxes().paste_attributes());
     }
 
     #[test]

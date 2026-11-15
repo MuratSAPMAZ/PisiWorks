@@ -24,7 +24,13 @@ Save never overwrites the opened image. It creates a `.pisi` document that keeps
 
 Marquee (M), Lasso (L) and Magic Wand (W) select pixels on a bitmap. Hold Shift to add to the selection, or Alt to subtract. Painting, filling and filters stay inside the selection. Cut, Copy and Delete act on the selected pixels, and Paste adds them as a new bitmap. Drag inside the selection with the Pointer, or press the arrow keys, to move the selected pixels; hold Alt to leave a copy behind. Dragging inside it with Marquee or Lasso moves only the selection border, and with Ctrl held it moves the pixels. Ctrl+D or Esc drops the selection.
 
+The Select menu changes a pixel selection. Select Similar adds every pixel of a like color anywhere on the bitmap, and Select Inverse (Ctrl+Shift+I) selects everything else. Expand Marquee and Contract Marquee grow or shrink it by a number of pixels, Border Marquee turns it into a band along its edge, and Smooth Marquee evens out a ragged edge. With no pixels selected, Select Inverse selects the objects that were not selected.
+
 Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
+
+Modify > Flatten Selection (Ctrl+Alt+Shift+Z) turns the selected objects into one bitmap. Merge Down (Ctrl+E) flattens them into the bitmap right under them. Flatten Layers makes one bitmap of everything on the layers that show, on one layer; hidden layers are removed, and slices and hotspots are kept. Modify > Canvas > Trim Canvas cuts the canvas back to the artwork.
+
+Edit > Insert > Empty Bitmap adds a clear bitmap the size of the canvas to paint on. Edit > Clone (Ctrl+Shift+D) copies the selection in place, and Paste Attributes (Ctrl+Alt+Shift+V) gives the selection the fill, stroke, opacity, blend mode and filters of what was copied. Filters > Repeat Filter (Ctrl+Alt+Shift+F) applies the last filter again. File > Revert goes back to the file as it was last saved. View > Fit Selection (Ctrl+Alt+0) zooms in on the selection.
 
 ## Reshaping vectors
 
@@ -72,7 +78,7 @@ In the Layers panel a chain between an object and its mask shows that the two ar
 
 ## Web areas
 
-Hotspot (J) and Slice (K) draw areas over the artwork. Move and resize them with the Pointer, and set a hotspot's link in Properties. Press 2 to hide or show them.
+Hotspot (J) and Slice (K) draw areas over the artwork. Edit > Insert > Hotspot (Ctrl+Shift+U) and Rectangular Slice put one over the selected object; with several objects selected, you are asked whether to make one for all of them or one each. Move and resize them with the Pointer, and set a hotspot's link in Properties. Press 2 to hide or show them.
 
 They never appear in the flattened image. Exporting `name.png` also writes `name_slice1.png`, `name_slice2.png` and so on for slices, and `name_map.html` with an image map for hotspots.
 

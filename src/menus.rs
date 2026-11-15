@@ -191,6 +191,52 @@ pub enum Cmd {
     PlayStates,
     Close,
     Language(Language),
+    Revert,
+    Clone,
+    PasteAttributes,
+    /// A hotspot or a slice over the selection.
+    InsertWeb(crate::model::WebKind),
+    InsertBitmap,
+    AddState,
+    FitSelection,
+    SelectSimilar,
+    SelectInverse,
+    Marquee(MarqueeOp),
+    TrimCanvas,
+    FlattenSelection,
+    MergeDown,
+    FlattenLayers,
+    RepeatFilter,
+}
+
+/// The commands that change the marquee by a number of pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MarqueeOp {
+    Expand,
+    Contract,
+    Border,
+    Smooth,
+}
+
+impl MarqueeOp {
+    pub fn label(self) -> &'static str {
+        match self {
+            MarqueeOp::Expand => crate::i18n::t("Expand Marquee"),
+            MarqueeOp::Contract => crate::i18n::t("Contract Marquee"),
+            MarqueeOp::Border => crate::i18n::t("Border Marquee"),
+            MarqueeOp::Smooth => crate::i18n::t("Smooth Marquee"),
+        }
+    }
+
+    /// What the number in its dialog is called.
+    pub fn prompt(self) -> &'static str {
+        match self {
+            MarqueeOp::Expand => crate::i18n::t("Expand by:"),
+            MarqueeOp::Contract => crate::i18n::t("Contract by:"),
+            MarqueeOp::Border => crate::i18n::t("Width:"),
+            MarqueeOp::Smooth => crate::i18n::t("Sample radius:"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -346,7 +392,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Save", "Ctrl+S", Cmd::Save),
             cmd("Save As...", "Ctrl+Shift+S", Cmd::SaveAs),
-            na("Revert"),
+            cmd("Revert", "", Cmd::Revert),
             Sep,
             cmd("Import...", "Ctrl+R", Cmd::Import),
             cmd("Export...", "Ctrl+Shift+R", Cmd::Export),
@@ -372,13 +418,13 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                     na("New Button..."),
                     na("New Symbol..."),
                     Sep,
-                    na("Hotspot"),
-                    na("Rectangular Slice"),
+                    cmd("Hotspot", "Ctrl+Shift+U", Cmd::InsertWeb(crate::model::WebKind::Hotspot)),
+                    cmd("Rectangular Slice", "", Cmd::InsertWeb(crate::model::WebKind::Slice)),
                     Sep,
-                    na("Empty Bitmap"),
+                    cmd("Empty Bitmap", "", Cmd::InsertBitmap),
                     Sep,
                     cmd("Layer", "", Cmd::AddLayer),
-                    na("State"),
+                    cmd("State", "", Cmd::AddState),
                     cmd("Page", "", Cmd::AddPage),
                 ],
             ),
@@ -391,10 +437,10 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Paste as Mask", "", Cmd::PasteAsMask),
             cmd("Paste Inside", "Ctrl+Shift+V", Cmd::PasteInside),
-            na("Paste Attributes"),
+            cmd("Paste Attributes", "Ctrl+Alt+Shift+V", Cmd::PasteAttributes),
             Sep,
             cmd("Duplicate", "Ctrl+Alt+D", Cmd::Duplicate),
-            na("Clone"),
+            cmd("Clone", "Ctrl+Shift+D", Cmd::Clone),
             Sep,
             na("Preferences..."),
             na("Keyboard Shortcuts..."),
@@ -434,7 +480,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                 ],
             ),
             Sep,
-            na("Fit Selection"),
+            cmd("Fit Selection", "Ctrl+Alt+0", Cmd::FitSelection),
             cmd("Fit All", "Ctrl+0", Cmd::FitAll),
             Sep,
             cmd("Rulers", "Ctrl+Alt+R", Cmd::Rulers),
@@ -452,14 +498,14 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             na("Superselect"),
             na("Subselect"),
             Sep,
-            na("Select Similar"),
-            na("Select Inverse"),
+            cmd("Select Similar", "", Cmd::SelectSimilar),
+            cmd("Select Inverse", "Ctrl+Shift+I", Cmd::SelectInverse),
             na("Feather..."),
             Sep,
-            na("Expand Marquee..."),
-            na("Contract Marquee..."),
-            na("Border Marquee..."),
-            na("Smooth Marquee..."),
+            cmd("Expand Marquee...", "", Cmd::Marquee(MarqueeOp::Expand)),
+            cmd("Contract Marquee...", "", Cmd::Marquee(MarqueeOp::Contract)),
+            cmd("Border Marquee...", "", Cmd::Marquee(MarqueeOp::Border)),
+            cmd("Smooth Marquee...", "", Cmd::Marquee(MarqueeOp::Smooth)),
         ],
     ),
     (
@@ -470,7 +516,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                 &[
                     cmd("Image Size...", "", Cmd::ImageSize),
                     cmd("Canvas Size...", "", Cmd::CanvasSize),
-                    na("Trim Canvas"),
+                    cmd("Trim Canvas", "", Cmd::TrimCanvas),
                     cmd("Fit Canvas", "", Cmd::FitCanvas),
                 ],
             ),
@@ -502,9 +548,9 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                 ],
             ),
             Sep,
-            na("Flatten Selection"),
-            na("Merge Down"),
-            na("Flatten Layers"),
+            cmd("Flatten Selection", "Ctrl+Alt+Shift+Z", Cmd::FlattenSelection),
+            cmd("Merge Down", "Ctrl+E", Cmd::MergeDown),
+            cmd("Flatten Layers", "", Cmd::FlattenLayers),
             Sep,
             Sub(
                 "Transform",
@@ -579,7 +625,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
     (
         "Filters",
         &[
-            na("Repeat Filter"),
+            cmd("Repeat Filter", "Ctrl+Alt+Shift+F", Cmd::RepeatFilter),
             Sep,
             Sub(
                 "Adjust Color",
