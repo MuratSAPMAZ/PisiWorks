@@ -110,7 +110,7 @@ File > Image Preview (Ctrl+Shift+X) shows the export settings beside the image t
 
 ## Printing
 
-File > Page Setup sets the paper, which way it is turned, the margins, and whether the page is scaled to fit the paper. File > Print (Ctrl+P) sends the page to a printer set up on the computer, or saves it as a PDF file. The page prints as it exports, without slices and hotspots, at 72 pixels to the inch; a page larger than the paper is cut off at the margins unless Fit to page is on. Printing needs the system's print service (CUPS).
+File > Page Setup sets the paper, which way it is turned, the margins, and whether the page is scaled to fit the paper. File > Print (Ctrl+P) sends the page to a printer set up on the computer, or saves it as a PDF file. The page prints as it exports, without slices and hotspots, at 72 pixels to the inch; a page larger than the paper is printed on several sheets unless Fit to page is on. Print range chooses the page on show, all pages of the document, or a range of them. Printing needs the system's print service (CUPS).
 
 ## Groups
 

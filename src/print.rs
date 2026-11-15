@@ -112,17 +112,47 @@ impl PrintSetup {
     }
 }
 
-/// A one-page PDF with the page's picture on it. `rgb` is three bytes for each pixel, row after row from the top.
-pub fn pdf(rgb: &[u8], width: u32, height: u32, setup: &PrintSetup) -> Result<Vec<u8>> {
-    if rgb.len() != width as usize * height as usize * 3 || rgb.is_empty() {
+/// A picture to print: three bytes for each pixel, row after row from the top, and its size in pixels.
+pub struct Picture {
+    pub rgb: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
+}
+
+impl PrintSetup {
+    /// The sheets of paper a picture is printed on: for each, where the picture
+    /// lies on it. One sheet when it fits or is scaled to fit; otherwise as many
+    /// as it takes, each showing the next part of it through the margins, from
+    /// the top left across and then down.
+    pub fn sheets(&self, width: u32, height: u32) -> Vec<Layout> {
+        let whole = self.layout(width, height);
+        if !self.overflows(width, height) {
+            return vec![whole];
+        }
+        let (across, down) = ((whole.image.2 / whole.clip.2).ceil().max(1.0) as u32, (whole.image.3 / whole.clip.3).ceil().max(1.0) as u32);
+        let mut sheets = Vec::new();
+        for row in 0..down {
+            for column in 0..across {
+                let mut sheet = whole;
+                // The picture is slid left and up by whole printable areas; what is on this sheet shows through the margins.
+                sheet.image.0 = whole.image.0 - column as f32 * whole.clip.2;
+                sheet.image.1 = whole.image.1 + row as f32 * whole.clip.3;
+                sheets.push(sheet);
+            }
+        }
+        sheets
+    }
+}
+
+/// A PDF of several pictures, each on as many sheets as it needs.
+pub fn pdf_of(pictures: &[Picture], setup: &PrintSetup) -> Result<Vec<u8>> {
+    if pictures.is_empty() || pictures.iter().any(|p| p.rgb.is_empty() || p.rgb.len() != p.width as usize * p.height as usize * 3) {
         bail!(t("rendered image has an invalid size"));
     }
-    let Layout { paper, image, clip } = setup.layout(width, height);
-    // Cut to the margins, then the picture stretched over its place on the paper.
-    let content = format!(
-        "q {:.2} {:.2} {:.2} {:.2} re W n {:.2} 0 0 {:.2} {:.2} {:.2} cm /Im0 Do Q\n",
-        clip.0, clip.1, clip.2, clip.3, image.2, image.3, image.0, image.1
-    );
+    let sheets: Vec<(usize, Layout)> = pictures.iter().enumerate().flat_map(|(index, p)| setup.sheets(p.width, p.height).into_iter().map(move |sheet| (index, sheet))).collect();
+    // The objects of the file, by number: the catalog, the list of pages, each picture, then a page and its drawing for each sheet.
+    let picture_object = |index: usize| 3 + index;
+    let page_object = |sheet: usize| 3 + pictures.len() + sheet * 2;
     let mut out: Vec<u8> = b"%PDF-1.4\n%\xE2\xE3\xCF\xD3\n".to_vec();
     let mut offsets = Vec::new();
     let mut object = |out: &mut Vec<u8>, head: String, stream: Option<&[u8]>| {
@@ -136,18 +166,31 @@ pub fn pdf(rgb: &[u8], width: u32, height: u32, setup: &PrintSetup) -> Result<Ve
         out.extend_from_slice(b"endobj\n");
     };
     object(&mut out, "<< /Type /Catalog /Pages 2 0 R >>".into(), None);
-    object(&mut out, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(), None);
-    object(
-        &mut out,
-        format!("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>", paper.0, paper.1),
-        None,
-    );
-    object(
-        &mut out,
-        format!("<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {} >>", rgb.len()),
-        Some(rgb),
-    );
-    object(&mut out, format!("<< /Length {} >>", content.len()), Some(content.as_bytes()));
+    let kids: Vec<String> = (0..sheets.len()).map(|sheet| format!("{} 0 R", page_object(sheet))).collect();
+    object(&mut out, format!("<< /Type /Pages /Kids [{}] /Count {} >>", kids.join(" "), sheets.len()), None);
+    for picture in pictures {
+        object(
+            &mut out,
+            format!("<< /Type /XObject /Subtype /Image /Width {} /Height {} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {} >>", picture.width, picture.height, picture.rgb.len()),
+            Some(&picture.rgb),
+        );
+    }
+    for (sheet, (index, Layout { paper, image, clip })) in sheets.iter().enumerate() {
+        object(
+            &mut out,
+            format!(
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /XObject << /Im0 {} 0 R >> >> /Contents {} 0 R >>",
+                paper.0,
+                paper.1,
+                picture_object(*index),
+                page_object(sheet) + 1
+            ),
+            None,
+        );
+        // Cut to the margins, then the picture stretched over its place on the paper.
+        let content = format!("q {:.2} {:.2} {:.2} {:.2} re W n {:.2} 0 0 {:.2} {:.2} {:.2} cm /Im0 Do Q\n", clip.0, clip.1, clip.2, clip.3, image.2, image.3, image.0, image.1);
+        object(&mut out, format!("<< /Length {} >>", content.len()), Some(content.as_bytes()));
+    }
     let table = out.len();
     out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", offsets.len() + 1).as_bytes());
     for offset in &offsets {
@@ -155,6 +198,34 @@ pub fn pdf(rgb: &[u8], width: u32, height: u32, setup: &PrintSetup) -> Result<Ve
     }
     out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{table}\n%%EOF\n", offsets.len() + 1).as_bytes());
     Ok(out)
+}
+
+/// A PDF with one picture on it.
+#[cfg(test)]
+pub fn pdf(rgb: &[u8], width: u32, height: u32, setup: &PrintSetup) -> Result<Vec<u8>> {
+    pdf_of(&[Picture { rgb: rgb.to_vec(), width, height }], setup)
+}
+
+/// Which pages of the document are printed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum PageRange {
+    #[default]
+    Current,
+    All,
+    /// From one page to another, counted from 1, both included.
+    Pages,
+}
+
+/// The pages a range stands for, counted from 0, in a document of `count` pages whose page on show is `current`.
+pub fn pages_in(range: PageRange, current: usize, count: usize, from: u32, to: u32) -> Vec<usize> {
+    match range {
+        PageRange::Current => vec![current.min(count.saturating_sub(1))],
+        PageRange::All => (0..count).collect(),
+        PageRange::Pages => {
+            let (low, high) = (from.min(to).max(1) as usize, (from.max(to) as usize).min(count));
+            (low..=high).map(|page| page - 1).collect()
+        }
+    }
 }
 
 /// The names in the output of `lpstat -e`, one printer to a line.
@@ -270,6 +341,39 @@ mod tests {
         }
         // A picture of the wrong size is refused.
         assert!(pdf(&rgb, 5, 2, &PrintSetup::default()).is_err() && pdf(&[], 0, 0, &PrintSetup::default()).is_err());
+    }
+
+    #[test]
+    fn a_page_too_large_for_the_paper_is_spread_over_several_sheets() {
+        let setup = PrintSetup::default();
+        // A4 inside 10 mm margins takes about 538 by 785 pixels: 1000 by 1000 needs two sheets across and two down.
+        assert_eq!(setup.sheets(400, 300).len(), 1);
+        let sheets = setup.sheets(1000, 1000);
+        assert_eq!(sheets.len(), 4);
+        let room = sheets[0].clip;
+        // The second sheet shows the picture slid left by one printable width; the third, slid up by one printable height.
+        assert!(near(sheets[1].image.0, sheets[0].image.0 - room.2) && near(sheets[1].image.1, sheets[0].image.1));
+        assert!(near(sheets[2].image.1, sheets[0].image.1 + room.3) && near(sheets[2].image.0, sheets[0].image.0));
+        assert!(sheets.iter().all(|sheet| sheet.clip == room && near(sheet.image.2, 1000.0)));
+        // Scaled to fit, it is one sheet whatever its size.
+        assert_eq!(PrintSetup { fit: true, ..setup }.sheets(5000, 5000).len(), 1);
+        // The file has a page for each sheet of each picture, and holds each picture once.
+        let small = Picture { rgb: vec![7; 4 * 4 * 3], width: 4, height: 4 };
+        let large = Picture { rgb: vec![9; 1000 * 1000 * 3], width: 1000, height: 1000 };
+        let bytes = pdf_of(&[small, large], &setup).unwrap();
+        let text = String::from_utf8_lossy(&bytes);
+        assert!(text.contains("/Count 5") && text.matches("/Type /Page ").count() == 5 && text.matches("/Subtype /Image").count() == 2);
+        assert!(pdf_of(&[], &setup).is_err());
+    }
+
+    #[test]
+    fn a_range_of_pages_is_counted_from_one_and_kept_inside_the_document() {
+        assert_eq!(pages_in(PageRange::Current, 2, 5, 1, 1), [2]);
+        assert_eq!(pages_in(PageRange::All, 2, 3, 1, 1), [0, 1, 2]);
+        assert_eq!(pages_in(PageRange::Pages, 0, 5, 2, 4), [1, 2, 3]);
+        assert_eq!(pages_in(PageRange::Pages, 0, 5, 4, 2), [1, 2, 3], "the wrong way round is put right");
+        assert_eq!(pages_in(PageRange::Pages, 0, 3, 0, 99), [0, 1, 2]);
+        assert!(pages_in(PageRange::Pages, 0, 3, 7, 9).is_empty());
     }
 
     #[test]

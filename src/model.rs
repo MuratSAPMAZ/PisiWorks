@@ -2816,7 +2816,12 @@ impl Editor {
     }
 
     pub fn export_page(&self) -> Page {
-        let mut page = self.doc.page().clone();
+        self.export_page_at(self.doc.active_page)
+    }
+
+    /// Any page of the document as the exporter and the printer need it.
+    pub fn export_page_at(&self, index: usize) -> Page {
+        let mut page = self.doc.pages.get(index).unwrap_or(self.doc.page()).clone();
         page.button_symbols = self.doc.symbols.iter().filter(|s| s.kind == SymbolKind::Button).map(|s| s.id).collect();
         page
     }

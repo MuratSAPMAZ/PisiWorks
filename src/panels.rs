@@ -430,6 +430,20 @@ impl Workspace {
                     })
                     .collect()
             }
+            Combo::PrintRange => {
+                use crate::print::PageRange;
+                let current = self.print_dialog.as_ref().map(|dialog| dialog.range);
+                [(t("Current page"), PageRange::Current), (t("All pages"), PageRange::All), (t("Pages"), PageRange::Pages)]
+                    .into_iter()
+                    .map(|(name, range)| {
+                        item(name.into(), current == Some(range), cx, Box::new(move |this, _, _| {
+                            if let Some(dialog) = this.print_dialog.as_mut() {
+                                dialog.range = range;
+                            }
+                        }))
+                    })
+                    .collect()
+            }
             Combo::Paper => crate::print::PaperSize::ALL
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
@@ -1692,7 +1706,7 @@ impl Workspace {
     /// File > Print: the printer, or a PDF file, and the number of copies.
     pub(crate) fn print_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         let dialog = self.print_dialog.as_ref()?;
-        let names = [t("Printer:"), t("Copies:")];
+        let names = [t("Printer:"), t("Copies:"), t("Print range:")];
         let name_width = label_width(&names, 60.);
         let chosen: SharedString = dialog.printers.get(dialog.chosen).cloned().unwrap_or_else(|| t("Save as PDF...").to_string()).into();
         let to_printer = dialog.chosen < dialog.printers.len();
@@ -1701,11 +1715,32 @@ impl Workspace {
         if to_printer {
             rows.push(labelled_row(names[1], name_width, self.field(FieldId::PrintCopies, 50., cx)).into_any_element());
         }
+        // Which pages of the document: the one on show, all of them, or from one to another.
+        use crate::print::PageRange;
+        let range_name = match dialog.range {
+            PageRange::Current => t("Current page"),
+            PageRange::All => t("All pages"),
+            PageRange::Pages => t("Pages"),
+        };
+        rows.push(
+            labelled_row(
+                t("Print range:"),
+                name_width,
+                div()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(self.combo(Combo::PrintRange, range_name, 110., cx).bg(rgb(PANEL_RAISED)))
+                    .when(dialog.range == PageRange::Pages, |d| d.child(self.field(FieldId::PrintFrom, 30., cx)).child(label("-")).child(self.field(FieldId::PrintTo, 30., cx))),
+            )
+            .into_any_element(),
+        );
         if dialog.printers.is_empty() {
             rows.push(div().text_color(rgb(TEXT_DIM)).child(t("No printer is set up on this computer.")).into_any_element());
         }
         if self.print_setup.overflows(page.width, page.height) {
-            rows.push(div().text_color(rgb(TEXT_DIM)).child(t("The page is larger than the paper. Turn on Fit to page in Page Setup to print all of it.")).into_any_element());
+            let sheets = self.print_setup.sheets(page.width, page.height).len();
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(tf("The page is larger than the paper and will be printed on {} sheets. Fit to page in Page Setup prints it on one.", &[&sheets])).into_any_element());
         }
         let buttons = div()
             .flex()

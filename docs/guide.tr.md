@@ -112,7 +112,7 @@ Dosya > Görüntü Önizleme (Ctrl+Shift+X), dışa aktarma ayarlarını verdikl
 
 ## Yazdırma
 
-Dosya > Sayfa Yapısı kâğıdı, yönünü, kenar boşluklarını ve sayfanın kâğıda sığacak şekilde ölçeklenip ölçeklenmeyeceğini belirler. Dosya > Yazdır (Ctrl+P) sayfayı bilgisayarda kurulu bir yazıcıya gönderir veya PDF dosyası olarak kaydeder. Sayfa, dışa aktarıldığı gibi, dilimler ve sıcak noktalar olmadan, inç başına 72 pikselle yazdırılır; kâğıttan büyük sayfa, Sayfaya sığdır açık değilse kenar boşluklarında kesilir. Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
+Dosya > Sayfa Yapısı kâğıdı, yönünü, kenar boşluklarını ve sayfanın kâğıda sığacak şekilde ölçeklenip ölçeklenmeyeceğini belirler. Dosya > Yazdır (Ctrl+P) sayfayı bilgisayarda kurulu bir yazıcıya gönderir veya PDF dosyası olarak kaydeder. Sayfa, dışa aktarıldığı gibi, dilimler ve sıcak noktalar olmadan, inç başına 72 pikselle yazdırılır; kâğıttan büyük sayfa, Sayfaya sığdır açık değilse birkaç kâğıda yazdırılır. Yazdırma aralığı görünen sayfayı, belgenin bütün sayfalarını veya bir sayfa aralığını seçer. Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
 
 ## Gruplar
 

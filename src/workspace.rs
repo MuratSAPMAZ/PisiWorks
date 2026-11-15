@@ -101,6 +101,7 @@ pub enum Combo {
     Paper,
     Orientation,
     Printer,
+    PrintRange,
     /// What an object is filled with: a color, a gradient or a pattern.
     FillKind,
     FillPattern,
@@ -264,6 +265,10 @@ pub struct PrintDialog {
     /// The printer picked; one past the last of them is a PDF file.
     pub chosen: usize,
     pub copies: u32,
+    /// Which pages of the document to print, and for a range the first and last, counted from 1.
+    pub range: crate::print::PageRange,
+    pub from: u32,
+    pub to: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -338,6 +343,8 @@ pub enum FieldId {
     /// A margin in Page Setup: left, right, top, bottom.
     PrintMargin(usize),
     PrintCopies,
+    PrintFrom,
+    PrintTo,
     /// How large a pattern fill is drawn, in percent.
     FillScale,
     /// The numbers among the options of the tool in hand.
@@ -2584,7 +2591,8 @@ impl Workspace {
                 let (printers, default) = crate::print::printers();
                 // The default printer if there is one, else the first; with none set up, a PDF file.
                 let chosen = default.and_then(|name| printers.iter().position(|p| *p == name)).unwrap_or(0);
-                self.print_dialog = Some(PrintDialog { printers, chosen, copies: 1 });
+                let pages = self.ed.doc.pages.len() as u32;
+                self.print_dialog = Some(PrintDialog { printers, chosen, copies: 1, range: Default::default(), from: 1, to: pages });
             }
             Cmd::Subselect => {
                 if self.ed.subselect() {
@@ -2769,19 +2777,24 @@ impl Workspace {
     }
 
     /// The page as it prints: laid out on the paper as a PDF. A see-through canvas prints as white paper.
-    fn printed_page(&mut self) -> anyhow::Result<Vec<u8>> {
+    fn printed_pages(&mut self, pages: &[usize]) -> anyhow::Result<Vec<u8>> {
         self.ed.end_mask_edit();
         self.ed.close_groups();
-        let pixmap = crate::export::render_page(&self.ed.export_page())?;
-        let rgb: Vec<u8> = pixmap.pixels().iter().flat_map(|px| [px.red(), px.green(), px.blue()].map(|c| c.saturating_add(255 - px.alpha()))).collect();
-        crate::print::pdf(&rgb, pixmap.width(), pixmap.height(), &self.print_setup)
+        let mut pictures = Vec::new();
+        for index in pages {
+            let pixmap = crate::export::render_page(&self.ed.export_page_at(*index))?;
+            let rgb: Vec<u8> = pixmap.pixels().iter().flat_map(|px| [px.red(), px.green(), px.blue()].map(|c| c.saturating_add(255 - px.alpha()))).collect();
+            pictures.push(crate::print::Picture { rgb, width: pixmap.width(), height: pixmap.height() });
+        }
+        crate::print::pdf_of(&pictures, &self.print_setup)
     }
 
     /// OK in the Print dialog: the page goes to the printer picked, or into a PDF file.
     pub fn apply_print_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.commit_field();
         let Some(dialog) = self.print_dialog.take() else { return };
-        let pdf = match self.printed_page() {
+        let pages = crate::print::pages_in(dialog.range, self.ed.doc.active_page, self.ed.doc.pages.len(), dialog.from, dialog.to);
+        let pdf = match self.printed_pages(&pages) {
             Ok(pdf) => pdf,
             Err(error) => {
                 self.status = error.to_string();
@@ -2793,7 +2806,7 @@ impl Workspace {
         let too_big = self.print_setup.overflows(page.width, page.height);
         if let Some(printer) = dialog.printers.get(dialog.chosen) {
             self.status = match crate::print::send(&pdf, printer, dialog.copies, &self.print_setup, &stem) {
-                Ok(_) if too_big => tf("Sent to {}. The page is larger than the paper, so its edges are cut off.", &[printer]),
+                Ok(_) if too_big => tf("Sent to {}. The page is larger than the paper, so it is printed on several sheets.", &[printer]),
                 Ok(_) => tf("Sent to {}", &[printer]),
                 Err(error) => tf("Could not print: {}", &[&error]),
             };
@@ -5404,6 +5417,8 @@ impl Workspace {
             FieldId::PrintMargin(side) => number(self.print_setup.margins[side.min(3)]),
             FieldId::FillScale => self.current_fill_style().map_or_else(String::new, |style| number(style.scale)),
             FieldId::PrintCopies => self.print_dialog.as_ref().map_or_else(String::new, |dialog| dialog.copies.to_string()),
+            FieldId::PrintFrom => self.print_dialog.as_ref().map_or_else(String::new, |dialog| dialog.from.to_string()),
+            FieldId::PrintTo => self.print_dialog.as_ref().map_or_else(String::new, |dialog| dialog.to.to_string()),
             FieldId::GradientPlace => self.picked_stop().map_or_else(String::new, |stop| number((stop.0 * 100.0).round())),
             FieldId::GradientOpacity => self.picked_stop().map_or_else(String::new, |stop| number((stop.1.a as f32 / 2.55).round())),
             FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
@@ -5686,6 +5701,12 @@ impl Workspace {
             FieldId::FillScale => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
                 self.change_fill_style(true, |style| style.scale = v.min(1000.0));
+            }
+            FieldId::PrintFrom | FieldId::PrintTo => {
+                let pages = self.ed.doc.pages.len() as f32;
+                let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.print_dialog.as_mut()) else { return };
+                let page = v.round().min(pages) as u32;
+                if field.id == FieldId::PrintFrom { dialog.from = page } else { dialog.to = page }
             }
             FieldId::PrintCopies => {
                 let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.print_dialog.as_mut()) else { return };

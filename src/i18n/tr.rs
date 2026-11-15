@@ -867,8 +867,6 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Copies:", "Kopya sayısı:"),
     ("Save as PDF...", "PDF olarak kaydet..."),
     ("No printer is set up on this computer.", "Bu bilgisayarda kurulu yazıcı yok."),
-    ("The page is larger than the paper. Turn on Fit to page in Page Setup to print all of it.", "Sayfa kâğıttan büyük. Tamamını yazdırmak için Sayfa Yapısı'nda Sayfaya sığdır'ı açın."),
-    ("Sent to {}. The page is larger than the paper, so its edges are cut off.", "{} yazıcısına gönderildi. Sayfa kâğıttan büyük olduğu için kenarları kesildi."),
     ("Sent to {}", "{} yazıcısına gönderildi"),
     ("Could not print: {}", "Yazdırılamadı: {}"),
     ("The print system (CUPS) is not installed", "Yazdırma sistemi (CUPS) kurulu değil"),
@@ -962,4 +960,9 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Spelling check complete.", "Yazım denetimi tamamlandı."),
     ("Spell checking needs enchant-2 or hunspell, and a dictionary for the language.", "Yazım denetimi için enchant-2 veya hunspell ile dilin sözlüğü gerekir."),
     ("The spell checker stopped answering.", "Yazım denetleyicisi yanıt vermeyi kesti."),
+    ("The page is larger than the paper and will be printed on {} sheets. Fit to page in Page Setup prints it on one.", "Sayfa kâğıttan büyük ve {} kâğıda yazdırılacak. Sayfa Yapısı'ndaki Sayfaya sığdır onu tek kâğıda yazdırır."),
+    ("Sent to {}. The page is larger than the paper, so it is printed on several sheets.", "{} yazıcısına gönderildi. Sayfa kâğıttan büyük olduğu için birkaç kâğıda yazdırılıyor."),
+    ("Print range:", "Yazdırma aralığı:"),
+    ("Current page", "Geçerli sayfa"),
+    ("All pages", "Tüm sayfalar"),
 ];
