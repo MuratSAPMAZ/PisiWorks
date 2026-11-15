@@ -165,3 +165,13 @@ Her sekme satırının sağındaki panel menüsü o grubu daraltır veya kapatı
 **Düzenle > Tercihler** (Ctrl+U) geri alma adımı sayısını, işaretçinin bir nesneyi ne kadar yakından seçtiğini, nesnelerin ne kadar yakından bitiştiğini, ızgaranın boyutunu ve rengini ve kılavuzların rengini ayarlar. Metin seçiliyken Ctrl+U altını çizer. **Görünüm > Izgara > Izgaraya Bitiştir** (Ctrl+Alt+Shift+G) ızgara görünürken taşınan nesneleri ızgara çizgilerine bitiştirir.
 
 **Düzenle > Klavye Kısayolları** bütün menü komutlarını tuşlarıyla listeler. Bir komutu seçip **Değiştir**'e, sonra yeni tuşlara basın. Tuşlar başka bir komuttaysa o komuttan alınır. **Kaldır** komutu tuşsuz bırakır, **Sıfırla** ilk tuşlarına döndürür. Değişiklikler ayar dosyasında saklanır.
+
+## Semboller, düğmeler ve animasyon
+
+Bir sembol kopyasına **çift tıklayınca** sembol olduğu yerde açılır: parçaları sayfada serbest kalır, sayfanın geri kalanı kilitlenir ve bu sırada çizilen her şey sembole katılır. Boş bir yere çift tıklamak ya da belgenin üstündeki **◀ Sayfa** düğmesi düzenlemeyi bitirir; sembolün bütün kopyaları değişir. Aynısı **Değiştir > Sembol > Sembolü Düzenle** ile de yapılır.
+
+**Düzenle > Ekle > Yeni Sembol** (Ctrl+F8) adını ve türünü (Grafik, Animasyon, Düğme) sorar, sonra boş sembolü çizmeniz için açar. **Yeni Düğme** (Ctrl+Shift+F8) doğrudan bir düğme sembolü açar. Bir düğmenin dört durumu vardır: Yukarıda, Üzerinde, Aşağıda, Aşağıdayken Üzerinde. Düzenlerken üstteki listeden durumu seçin; boş bir durumda **… Grafiğini Kopyala** bir önceki durumu getirir. Sayfadaki düğme seçiliyken Özellikler'deki **Bağlantı** alanı tıklanınca gidilecek adresi alır.
+
+**Önizleme** görünümünde fareyi düğmenin üzerine getirince Üzerinde, basınca Aşağıda durumu görünür. Dışa aktarırken her düğme için durum görüntüleri ve bunları fareyle değiştiren bir HTML sayfası (`ad.html`) yazılır.
+
+**Değiştir > Animasyon > Seçimi Canlandır** (Alt+Shift+F8) seçimi bir animasyon sembolüne çevirir: durum sayısı, taşıma mesafesi ve yönü (0° sağ, 90° yukarı), ölçek, opaklık ve dönüş sorulur; gerekirse yeni durumlar eklenir. Seçiliyken yolu görünür (yeşil başlangıç, kırmızı bitiş); kırmızı ucu sürüklemek mesafeyi ve yönü değiştirir. **Ayarlar** aynı pencereyi yeniden açar, **Animasyonu Kaldır** yalnızca ilk durumdaki kopyayı bırakır.

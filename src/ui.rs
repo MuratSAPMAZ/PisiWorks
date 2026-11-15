@@ -566,6 +566,44 @@ impl Workspace {
             .child(text)
     }
 
+    /// While a symbol is edited in place: the way back to the page, the symbol's name
+    /// and, for a button, which of its looks is on show.
+    fn symbol_trail(&self, cx: &mut Context<Self>) -> Option<Div> {
+        let edit = self.ed.editing_symbol()?;
+        let symbol = self.ed.edited_symbol()?;
+        let look = edit.look;
+        let back = div()
+            .h(px(20.))
+            .px_1p5()
+            .flex()
+            .flex_none()
+            .items_center()
+            .border_1()
+            .border_color(rgb(INPUT_BORDER))
+            .hover(|s| s.bg(rgb(HOVER)))
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(|this, _, _, cx| {
+                    this.toggle_symbol_edit();
+                    cx.notify();
+                }),
+            )
+            .child(format!("◀ {}", self.ed.doc.page().name));
+        let mut trail = div().ml_2().flex().items_center().gap_1().child(back).child(div().font_weight(FontWeight::BOLD).child(tf("Editing symbol \"{}\"", &[&symbol.name])));
+        if symbol.kind == crate::model::SymbolKind::Button {
+            trail = trail.child(self.combo(Combo::ButtonLook, crate::model::button_look_name(look), 150., cx).bg(rgb(PANEL_RAISED)));
+            if look > 0 {
+                let name = [t("Copy Up Graphic"), t("Copy Over Graphic"), t("Copy Down Graphic")][look - 1];
+                trail = trail.child(self.text_button(name, true, cx, |this, _, _| {
+                    if this.ed.copy_previous_look() {
+                        this.ed.commit(t("Copy Graphic"));
+                    }
+                }));
+            }
+        }
+        Some(trail)
+    }
+
     fn document(&self, cx: &mut Context<Self>) -> Stateful<Div> {
         let page = self.ed.doc.page();
         let zoom = (self.zoom * 100.0).round() as u32;
@@ -639,7 +677,8 @@ impl Workspace {
                     .child(self.view_button(ViewMode::Original, "view-original", t("Original"), cx))
                     .child(self.view_button(ViewMode::Preview, "view-preview", t("Preview"), cx))
                     .child(self.view_button(ViewMode::TwoUp, "view-2up", t("2-Up"), cx))
-                    .child(self.view_button(ViewMode::FourUp, "view-4up", t("4-Up"), cx)),
+                    .child(self.view_button(ViewMode::FourUp, "view-4up", t("4-Up"), cx))
+                    .children(self.symbol_trail(cx)),
             )
             .child(self.combo(Combo::Page, page.name.clone(), 110., cx));
         let status_bar = div()
@@ -881,6 +920,7 @@ impl Workspace {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
@@ -1066,6 +1106,10 @@ impl Workspace {
                 }
             }
             crate::model::Shape::Web { kind: crate::model::WebKind::Hotspot, .. } => {
+                extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
+            }
+            // A button takes the visitor somewhere when the exported page is clicked.
+            crate::model::Shape::Instance { symbol, .. } if self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == crate::model::SymbolKind::Button) => {
                 extra = extra.child(div().flex().items_center().gap_1().child(label(t("Link:"))).child(self.field(FieldId::Url, 220., cx)));
             }
             _ => {}
@@ -1789,6 +1833,8 @@ impl Render for Workspace {
             .children(self.marquee_dialog_view(cx))
             .children(self.print_dialog_view(cx))
             .children(self.preferences_view(cx))
+            .children(self.symbol_dialog_view(cx))
+            .children(self.animate_dialog_view(cx))
             .children(self.shortcuts_view(cx))
             .children(self.spell_dialog_view(cx))
             .children(self.guide_dialog_view(cx))

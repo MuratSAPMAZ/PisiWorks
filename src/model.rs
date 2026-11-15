@@ -815,6 +815,9 @@ pub struct Object {
     /// The edge and the texture of the fill.
     #[serde(default, skip_serializing_if = "FillLook::is_plain")]
     pub fill_look: FillLook,
+    /// Where a click on a button goes once the page is exported; empty for no link.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub link: String,
     /// Live filters, applied in this order each time the object is drawn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<crate::effects::LiveFilter>,
@@ -854,6 +857,7 @@ impl Object {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -881,6 +885,7 @@ impl Object {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -1254,6 +1259,7 @@ impl Object {
                     fill_style: None,
                     stroke_profile: Vec::new(),
                     fill_look: Default::default(),
+                    link: String::new(),
                     filters: Vec::new(),
                     fill: self.fill,
                     // A bold the font does not have is made by thickening each letter.
@@ -2179,6 +2185,16 @@ pub struct Page {
     /// the selection leaves them. Never written to a file: groups are closed first.
     #[serde(skip)]
     pub open_groups: Vec<OpenGroup>,
+    /// The looks of the button symbols that have more than one. Filled in, like
+    /// `button_symbols`, only on the copy of a page handed to the exporter.
+    #[serde(skip)]
+    pub button_looks: Vec<ButtonLooks>,
+    /// The symbol being edited in place. Never written to a file: the edit is ended first.
+    #[serde(skip)]
+    pub symbol_edit: Option<SymbolEdit>,
+    /// The animation symbols on the page.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub animations: Vec<Animation>,
 }
 
 /// A group whose members are being worked on one by one.
@@ -2249,6 +2265,66 @@ impl Page {
             button_symbols: Vec::new(),
             guides: Guides::default(),
             open_groups: Vec::new(),
+            symbol_edit: None,
+            animations: Vec::new(),
+            button_looks: Vec::new(),
+        }
+    }
+
+    /// The buttons that change under the mouse: the copies, lying loose on the page, of button symbols with more than one look.
+    pub fn buttons(&self) -> Vec<&Object> {
+        self.layers
+            .iter()
+            .filter(|l| l.visible)
+            .flat_map(|l| l.objects.iter())
+            .filter(|o| o.visible && matches!(o.shape, Shape::Instance { symbol, .. } if self.button_looks.iter().any(|b| b.symbol == symbol)))
+            .collect()
+    }
+
+    /// The page with one of its buttons showing another look: 1 is Over, 2 Down, 3 Over
+    /// While Down. A look the button does not have leaves it as it is.
+    pub fn with_button_look(&self, id: u64, look: usize) -> Page {
+        let mut page = self.clone();
+        let looks = std::mem::take(&mut page.button_looks);
+        if let Some(object) = page.objects_mut().find(|o| o.id == id) {
+            if let Shape::Instance { symbol, objects } = &mut object.shape {
+                let entry = looks.iter().find(|b| b.symbol == *symbol);
+                let parts = entry.and_then(|b| b.looks.get(look.wrapping_sub(1))).filter(|parts| !parts.is_empty());
+                if let (Some(entry), Some(parts)) = (entry, parts) {
+                    let own = parts.iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
+                    let (natural, frame) = (entry.natural, object.placement.map_or(object.bounds, |p| p.frame));
+                    let sx = if natural.w > 0.0 { frame.w / natural.w } else { 1.0 };
+                    let sy = if natural.h > 0.0 { frame.h / natural.h } else { 1.0 };
+                    let fitted = Rect { x: frame.x + (own.x - natural.x) * sx, y: frame.y + (own.y - natural.y) * sy, w: own.w * sx, h: own.h * sy };
+                    *objects = parts.clone();
+                    match &mut object.placement {
+                        Some(placement) => {
+                            placement.frame = fitted;
+                            object.bounds = placement.bounds();
+                        }
+                        None => object.bounds = fitted,
+                    }
+                }
+            }
+        }
+        page.button_looks = looks;
+        page
+    }
+
+    /// The part of the page a button takes up with any of its looks, in whole pixels.
+    pub fn button_area(&self, id: u64) -> Option<Rect> {
+        let area = (0..4).filter_map(|look| self.with_button_look(id, look).objects().find(|o| o.id == id).map(|o| o.bounds)).reduce(Rect::union)?;
+        let area = self.rect().intersect(area)?;
+        let (left, top) = (area.x.floor(), area.y.floor());
+        Some(Rect { x: left, y: top, w: (area.right().ceil() - left).max(1.0), h: (area.bottom().ceil() - top).max(1.0) })
+    }
+
+    /// The objects a layer has in a state, whether or not the state is the one on show.
+    fn state_layer_mut(&mut self, state: usize, layer: usize) -> Option<&mut Vec<Object>> {
+        if state == self.active_state || self.layers.get(layer).is_some_and(|l| l.shared) {
+            self.layers.get_mut(layer).map(|l| &mut l.objects)
+        } else {
+            self.states.get_mut(state)?.objects.get_mut(layer)
         }
     }
 
@@ -2487,6 +2563,116 @@ pub struct Symbol {
     pub objects: Vec<Object>,
     #[serde(default)]
     pub kind: SymbolKind,
+    /// The other looks of a button, after the Up look in `objects`: Over, Down and Over
+    /// While Down. They are placed against the Up look, so a look may start off its corner.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub looks: Vec<Vec<Object>>,
+}
+
+/// The four looks of a button, as Fireworks names them.
+pub const BUTTON_LOOKS: [&str; 4] = ["Up", "Over", "Down", "Over While Down"];
+
+/// The name of a look of a button, in the language of the interface.
+pub fn button_look_name(look: usize) -> &'static str {
+    crate::i18n::tc("button", BUTTON_LOOKS[look.min(3)])
+}
+
+/// The other looks of a button symbol, as the exporter and the preview need them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ButtonLooks {
+    pub symbol: u64,
+    /// The box of the Up look, which the other looks are placed against.
+    pub natural: Rect,
+    /// Over, Down and Over While Down.
+    pub looks: Vec<Arc<Vec<Object>>>,
+}
+
+/// A symbol being edited in place: its objects lie loose on the page, and everything
+/// drawn there until the edit ends becomes part of the symbol.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SymbolEdit {
+    pub symbol: u64,
+    /// The copy of the symbol that was opened, which goes back when the edit ends.
+    pub shell: Option<Object>,
+    /// The layer and the place in it where the symbol's objects were put.
+    pub spot: (usize, usize),
+    /// A symbol made empty gets its first copy on the page when the edit ends.
+    pub place: bool,
+    /// The objects of the page that are not the symbol's.
+    pub outside: Vec<u64>,
+    /// Those of them that were locked for the edit, and are unlocked after it.
+    pub locked: Vec<u64>,
+    /// Where the symbol lay when the edit began.
+    pub frame: Rect,
+    /// Which look of a button is on the page.
+    pub look: usize,
+    /// The looks that are not on the page now.
+    pub looks: [Vec<Object>; 4],
+}
+
+/// What Fireworks' Animate dialog asks.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct AnimationSettings {
+    pub states: u32,
+    /// How far the object travels, in pixels.
+    pub distance: f32,
+    /// The way it travels, in degrees: 0 is to the right, 90 is up.
+    pub direction: f32,
+    /// The size it ends at, in percent of the size it starts at.
+    pub scale: f32,
+    pub opacity_from: f32,
+    pub opacity_to: f32,
+    /// How far it turns on the way, in degrees.
+    pub rotation: f32,
+    pub clockwise: bool,
+}
+
+impl Default for AnimationSettings {
+    fn default() -> Self {
+        Self { states: 5, distance: 72.0, direction: 0.0, scale: 100.0, opacity_from: 100.0, opacity_to: 100.0, rotation: 0.0, clockwise: true }
+    }
+}
+
+impl AnimationSettings {
+    /// Where the middle of the object is after `step` of the states, starting from `start`.
+    pub fn center(&self, start: Vec2, step: usize) -> Vec2 {
+        let along = self.along(step) * self.distance;
+        let angle = self.direction.to_radians();
+        v2(start.x + along * angle.cos(), start.y - along * angle.sin())
+    }
+
+    /// How much of the way is behind the object at a state: 0 at the first, 1 at the last.
+    fn along(&self, step: usize) -> f32 {
+        if self.states < 2 { 0.0 } else { step as f32 / (self.states - 1) as f32 }
+    }
+
+    /// The symbol as a state shows it: moved, resized, turned and faded from how it starts.
+    fn pose(&self, start: &Object, step: usize) -> Object {
+        let mut object = start.clone();
+        let along = self.along(step);
+        let size = 1.0 + (self.scale / 100.0 - 1.0) * along;
+        let center = self.center(start.bounds.center(), step);
+        let (w, h) = (start.bounds.w * size, start.bounds.h * size);
+        object.set_bounds(Rect { x: center.x - w / 2.0, y: center.y - h / 2.0, w, h });
+        let turn = self.rotation.to_radians() * along * if self.clockwise { 1.0 } else { -1.0 };
+        if turn != 0.0 {
+            object.warp(&Warp::rotation(center, turn));
+        }
+        object.opacity = ((self.opacity_from + (self.opacity_to - self.opacity_from) * along) / 100.0).clamp(0.0, 1.0);
+        object
+    }
+}
+
+/// An animation symbol on a page: one copy of the symbol in each of a run of states.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Animation {
+    pub symbol: u64,
+    pub settings: AnimationSettings,
+    /// The state the animation starts in.
+    pub first_state: usize,
+    pub layer: usize,
+    /// The copies, the first state's first.
+    pub objects: Vec<u64>,
 }
 
 /// What a symbol is for, as Fireworks sorts them.
@@ -2495,15 +2681,17 @@ pub enum SymbolKind {
     #[default]
     Graphic,
     Button,
+    Animation,
 }
 
 impl SymbolKind {
-    pub const ALL: [SymbolKind; 2] = [SymbolKind::Graphic, SymbolKind::Button];
+    pub const ALL: [SymbolKind; 3] = [SymbolKind::Graphic, SymbolKind::Animation, SymbolKind::Button];
 
     pub fn label(self) -> &'static str {
         match self {
             SymbolKind::Graphic => t("Graphic"),
             SymbolKind::Button => t("Button"),
+            SymbolKind::Animation => t("Animation"),
         }
     }
 }
@@ -2827,7 +3015,31 @@ impl Editor {
     pub fn export_page_at(&self, index: usize) -> Page {
         let mut page = self.doc.pages.get(index).unwrap_or(self.doc.page()).clone();
         page.button_symbols = self.doc.symbols.iter().filter(|s| s.kind == SymbolKind::Button).map(|s| s.id).collect();
+        page.button_looks = self.button_looks();
         page
+    }
+
+    /// The looks of every button symbol that has more than the Up look.
+    pub fn button_looks(&self) -> Vec<ButtonLooks> {
+        let symbols = &self.doc.symbols;
+        symbols
+            .iter()
+            .filter(|s| s.kind == SymbolKind::Button && s.looks.iter().any(|look| !look.is_empty()))
+            .map(|s| {
+                let looks = s
+                    .looks
+                    .iter()
+                    .map(|look| {
+                        let mut parts = look.clone();
+                        for part in &mut parts {
+                            link_object(symbols, part, 1);
+                        }
+                        Arc::new(parts)
+                    })
+                    .collect();
+                ButtonLooks { symbol: s.id, natural: s.objects.iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default(), looks }
+            })
+            .collect()
     }
 
     pub fn object_mut(&mut self, id: u64) -> Option<&mut Object> {
@@ -3278,6 +3490,7 @@ impl Editor {
 
     pub fn set_active_page(&mut self, index: usize) {
         if index < self.doc.pages.len() {
+            self.leave_symbol_for_good();
             self.close_groups();
             self.navigate(|doc| doc.active_page = index);
             self.selection.clear();
@@ -3292,6 +3505,7 @@ impl Editor {
 
     pub fn set_active_state(&mut self, index: usize) {
         if index < self.doc.page().states.len() && index != self.doc.page().active_state {
+            self.leave_symbol_for_good();
             self.close_groups();
             self.navigate(|doc| doc.page_mut().goto_state(index));
             self.selection.clear();
@@ -3520,7 +3734,7 @@ impl Editor {
             return existing.id;
         }
         let id = self.alloc_id();
-        self.doc.symbols.push(Symbol { id, name: name.to_string(), objects: normalized(objects), kind });
+        self.doc.symbols.push(Symbol { id, name: name.to_string(), objects: normalized(objects), kind, looks: Vec::new() });
         id
     }
 
@@ -3541,6 +3755,7 @@ impl Editor {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -3578,10 +3793,353 @@ impl Editor {
         self.selection = objects.iter().map(|o| o.id).collect();
         let id = self.alloc_id();
         let name = tf("Symbol {}", &[&(self.doc.symbols.len() + 1)]);
-        self.doc.symbols.push(Symbol { id, name, objects: normalized(&objects), kind: SymbolKind::Graphic });
+        self.doc.symbols.push(Symbol { id, name, objects: normalized(&objects), kind: SymbolKind::Graphic, looks: Vec::new() });
         let instance = self.new_instance(id, bounds);
         self.replace_selected(vec![instance]);
         Some(id)
+    }
+
+    /// Adds an empty symbol to the library, as New Symbol and New Button do before it is drawn.
+    pub fn new_symbol(&mut self, name: &str, kind: SymbolKind) -> u64 {
+        let id = self.alloc_id();
+        self.doc.symbols.push(Symbol { id, name: name.to_string(), objects: Vec::new(), kind, looks: Vec::new() });
+        id
+    }
+
+    pub fn editing_symbol(&self) -> Option<&SymbolEdit> {
+        self.doc.page().symbol_edit.as_ref()
+    }
+
+    /// The symbol being edited, as the library has it.
+    pub fn edited_symbol(&self) -> Option<&Symbol> {
+        let id = self.editing_symbol()?.symbol;
+        self.doc.symbols.iter().find(|s| s.id == id)
+    }
+
+    /// Whether Edit Symbol has something to open: one selected copy of a symbol.
+    pub fn can_edit_symbol(&self) -> bool {
+        self.selected().iter().any(|o| matches!(o.shape, Shape::Instance { .. }))
+    }
+
+    /// Opens the selected copy of a symbol for editing where it lies.
+    pub fn edit_selected_symbol(&mut self) -> bool {
+        let Some(instance) = self.selected().into_iter().find(|o| matches!(o.shape, Shape::Instance { .. })).cloned() else { return false };
+        let Shape::Instance { symbol, .. } = instance.shape else { return false };
+        self.edit_symbol(symbol, Some(instance), false)
+    }
+
+    /// Parts of a symbol as they lie on the page when the symbol, whose Up look fills `natural`, fills `frame`.
+    fn laid(&mut self, parts: &[Object], natural: Rect, frame: Rect) -> Vec<Object> {
+        let Some(own) = parts.iter().map(|o| o.bounds).reduce(Rect::union) else { return Vec::new() };
+        let sx = if natural.w > 0.0 { frame.w / natural.w } else { 1.0 };
+        let sy = if natural.h > 0.0 { frame.h / natural.h } else { 1.0 };
+        let mut linked = parts.to_vec();
+        for part in &mut linked {
+            link_object(&self.doc.symbols, part, 1);
+        }
+        let mut holder = linked[0].clone();
+        (holder.placement, holder.opacity, holder.mask) = (None, 1.0, None);
+        holder.bounds = Rect { x: frame.x + (own.x - natural.x) * sx, y: frame.y + (own.y - natural.y) * sy, w: own.w * sx, h: own.h * sy };
+        holder.shape = Shape::Group { objects: Arc::new(linked) };
+        let mut laid = holder.instance_parts();
+        for part in &mut laid {
+            part.id = self.alloc_id();
+        }
+        laid
+    }
+
+    /// Opens a symbol for editing on the page. With a copy of it, the symbol's objects
+    /// take the copy's place; without one they are put in the middle of the page.
+    pub fn edit_symbol(&mut self, symbol: u64, instance: Option<Object>, place: bool) -> bool {
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        let Some(entry) = self.doc.symbols.iter().find(|s| s.id == symbol).cloned() else { return false };
+        let middle = self.doc.page().rect().center();
+        let natural = entry.objects.iter().map(|o| o.bounds).reduce(Rect::union).unwrap_or_default();
+        let frame = match &instance {
+            Some(object) => object.placement.map_or(object.bounds, |p| p.frame),
+            None => Rect { x: (middle.x - natural.w / 2.0).round(), y: (middle.y - natural.h / 2.0).round(), w: natural.w, h: natural.h },
+        };
+        let mut looks: [Vec<Object>; 4] = Default::default();
+        for (look, parts) in std::iter::once(&entry.objects).chain(entry.looks.iter()).take(4).enumerate() {
+            looks[look] = self.laid(parts, natural, frame);
+        }
+        let page = self.doc.page_mut();
+        let mut spot = (page.active_layer, page.layers[page.active_layer].objects.len());
+        if let Some(object) = &instance {
+            for (index, layer) in page.layers.iter_mut().enumerate() {
+                if let Some(at) = layer.objects.iter().position(|o| o.id == object.id) {
+                    layer.objects.remove(at);
+                    spot = (index, at);
+                }
+            }
+        }
+        let outside: Vec<u64> = page.objects().map(|o| o.id).collect();
+        let mut locked = Vec::new();
+        for object in page.layers.iter_mut().flat_map(|l| l.objects.iter_mut()).filter(|o| !o.locked) {
+            object.locked = true;
+            locked.push(object.id);
+        }
+        let shown = std::mem::take(&mut looks[0]);
+        page.layers[spot.0].objects.splice(spot.1..spot.1, shown);
+        page.symbol_edit = Some(SymbolEdit { symbol, shell: instance, spot, place, outside, locked, frame, look: 0, looks });
+        self.selection.clear();
+        true
+    }
+
+    /// Takes the objects of the symbol being edited off the page, bottom-most first.
+    fn take_edit_members(&mut self) -> Vec<Object> {
+        let page = self.doc.page_mut();
+        let Some(edit) = &page.symbol_edit else { return Vec::new() };
+        let outside = edit.outside.clone();
+        let mut members = Vec::new();
+        for layer in &mut page.layers {
+            let mut at = 0;
+            while at < layer.objects.len() {
+                let object = &layer.objects[at];
+                if outside.contains(&object.id) || object.is_web() {
+                    at += 1;
+                } else {
+                    members.push(layer.objects.remove(at));
+                }
+            }
+        }
+        self.selection.retain(|id| !members.iter().any(|o| o.id == *id));
+        members
+    }
+
+    fn put_edit_members(&mut self, members: Vec<Object>) {
+        let page = self.doc.page_mut();
+        let Some(edit) = &page.symbol_edit else { return };
+        let layer = edit.spot.0.min(page.layers.len() - 1);
+        let at = edit.spot.1.min(page.layers[layer].objects.len());
+        page.layers[layer].objects.splice(at..at, members);
+    }
+
+    /// Shows another look of the button being edited.
+    pub fn set_symbol_look(&mut self, look: usize) -> bool {
+        if look > 3 || self.editing_symbol().is_none_or(|edit| edit.look == look) {
+            return false;
+        }
+        let members = self.take_edit_members();
+        let Some(edit) = self.doc.page_mut().symbol_edit.as_mut() else { return false };
+        edit.looks[edit.look] = members;
+        edit.look = look;
+        let shown = std::mem::take(&mut edit.looks[look]);
+        self.put_edit_members(shown);
+        true
+    }
+
+    /// Fireworks' Copy Up Graphic, Copy Over Graphic and Copy Down Graphic: the look
+    /// before the one on show is copied into it.
+    pub fn copy_previous_look(&mut self) -> bool {
+        let Some(edit) = self.editing_symbol().filter(|edit| edit.look > 0) else { return false };
+        let mut copies = edit.looks[edit.look - 1].clone();
+        if copies.is_empty() {
+            return false;
+        }
+        for copy in &mut copies {
+            copy.id = self.alloc_id();
+        }
+        self.selection = copies.iter().map(|o| o.id).collect();
+        self.put_edit_members(copies);
+        true
+    }
+
+    /// Ends the edit of a symbol: what lies on the page becomes the symbol, and every
+    /// copy of it follows. Returns whether a symbol was being edited.
+    pub fn leave_symbol(&mut self) -> bool {
+        if self.editing_symbol().is_none() {
+            return false;
+        }
+        self.end_mask_edit();
+        self.close_groups();
+        let members = self.take_edit_members();
+        let Some(mut edit) = self.doc.page_mut().symbol_edit.take() else { return false };
+        edit.looks[edit.look] = members;
+        for object in self.doc.page_mut().layers.iter_mut().flat_map(|l| l.objects.iter_mut()) {
+            if edit.locked.contains(&object.id) {
+                object.locked = false;
+            }
+        }
+        self.selection.clear();
+        let union = |objects: &[Object]| objects.iter().map(|o| o.bounds).reduce(Rect::union);
+        let now = union(&edit.looks[0]).or_else(|| union(&edit.looks.concat()));
+        let id = edit.symbol;
+        let Some(now) = now else {
+            // Emptied: the symbol stays in the library with nothing in it, and the copy that was opened is gone.
+            if let Some(symbol) = self.doc.symbols.iter_mut().find(|s| s.id == id) {
+                (symbol.objects, symbol.looks) = (Vec::new(), Vec::new());
+            }
+            self.doc.relink_symbols();
+            return true;
+        };
+        let mut looks: Vec<Vec<Object>> = edit
+            .looks
+            .iter()
+            .map(|look| {
+                let mut look = look.clone();
+                for object in &mut look {
+                    object.translate(-now.x, -now.y);
+                }
+                look
+            })
+            .collect();
+        let up = looks.remove(0);
+        while looks.last().is_some_and(Vec::is_empty) {
+            looks.pop();
+        }
+        if let Some(symbol) = self.doc.symbols.iter_mut().find(|s| s.id == id) {
+            (symbol.objects, symbol.looks) = (up, looks);
+        }
+        // The other copies keep their own scale: they grow and move as the symbol did.
+        let before = edit.frame;
+        if before.w > 0.0 && before.h > 0.0 {
+            for object in self.doc.pages.iter_mut().flat_map(Page::all_objects_mut) {
+                if !matches!(object.shape, Shape::Instance { symbol, .. } if symbol == id) {
+                    continue;
+                }
+                let frame = object.placement.map_or(object.bounds, |p| p.frame);
+                let (kx, ky) = (frame.w / before.w, frame.h / before.h);
+                let fitted = Rect { x: frame.x + (now.x - before.x) * kx, y: frame.y + (now.y - before.y) * ky, w: now.w * kx, h: now.h * ky };
+                match &mut object.placement {
+                    Some(placement) => {
+                        placement.frame = fitted;
+                        object.bounds = placement.bounds();
+                    }
+                    None => object.bounds = fitted,
+                }
+            }
+        }
+        let copy = match edit.shell {
+            Some(mut shell) => {
+                match &mut shell.placement {
+                    Some(placement) => {
+                        placement.frame = now;
+                        shell.bounds = placement.bounds();
+                    }
+                    None => shell.bounds = now,
+                }
+                Some(shell)
+            }
+            None if edit.place => Some(self.new_instance(id, now)),
+            None => None,
+        };
+        if let Some(copy) = copy {
+            self.selection = vec![copy.id];
+            let page = self.doc.page_mut();
+            let layer = edit.spot.0.min(page.layers.len() - 1);
+            let at = edit.spot.1.min(page.layers[layer].objects.len());
+            page.layers[layer].objects.insert(at, copy);
+        }
+        self.doc.relink_symbols();
+        true
+    }
+
+    /// Ends a symbol edit as its own undo step, before something that cannot go on inside one.
+    pub fn leave_symbol_for_good(&mut self) {
+        if self.leave_symbol() {
+            self.commit(t("Edit Symbol"));
+        }
+    }
+
+    /// The animation a selected object belongs to.
+    pub fn selected_animation(&self) -> Option<usize> {
+        self.doc.page().animations.iter().position(|a| a.objects.iter().any(|id| self.selection.contains(id)))
+    }
+
+    /// Fireworks' Animate Selection: the selection becomes an animation symbol with a
+    /// copy in each of a run of states, moved, resized, turned and faded step by step.
+    /// States are added if the page has too few.
+    pub fn animate_selection(&mut self, settings: AnimationSettings) -> bool {
+        if self.selected_animation().is_some() {
+            return self.set_animation(settings);
+        }
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        let one_instance = match self.selected().as_slice() {
+            [object] => match object.shape {
+                Shape::Instance { symbol, .. } => Some(symbol),
+                _ => None,
+            },
+            _ => None,
+        };
+        let Some(symbol) = one_instance.or_else(|| self.make_symbol()) else { return false };
+        if let Some(entry) = self.doc.symbols.iter_mut().find(|s| s.id == symbol) {
+            entry.kind = SymbolKind::Animation;
+        }
+        let Some(start) = self.selected().first().map(|o| (*o).clone()) else { return false };
+        let page = self.doc.page_mut();
+        let Some(layer) = page.layers.iter().position(|l| l.objects.iter().any(|o| o.id == start.id)) else { return false };
+        page.animations.push(Animation { symbol, settings, first_state: page.active_state, layer, objects: vec![start.id] });
+        self.lay_animation(self.doc.page().animations.len() - 1, start);
+        true
+    }
+
+    /// Changes the settings of the animation the selection belongs to.
+    pub fn set_animation(&mut self, settings: AnimationSettings) -> bool {
+        let Some(index) = self.selected_animation() else { return false };
+        let Some(start) = self.animation_start(index) else { return false };
+        self.doc.page_mut().animations[index].settings = settings;
+        self.lay_animation(index, start);
+        true
+    }
+
+    /// The copy an animation starts from, as it would be with nothing done to it.
+    fn animation_start(&self, index: usize) -> Option<Object> {
+        let page = self.doc.page();
+        let animation = page.animations.get(index)?;
+        let first = *animation.objects.first()?;
+        let mut start = page.objects().chain(page.states.iter().flat_map(|s| s.objects.iter().flatten())).find(|o| o.id == first)?.clone();
+        start.opacity = 1.0;
+        Some(start)
+    }
+
+    /// Puts the copies of an animation into its states afresh, from the copy it starts with.
+    fn lay_animation(&mut self, index: usize, start: Object) {
+        let animation = self.doc.page().animations[index].clone();
+        let settings = animation.settings;
+        let count = settings.states.clamp(1, 250) as usize;
+        let page = self.doc.page_mut();
+        page.retain_all(|o| !animation.objects.contains(&o.id));
+        while page.states.len() < animation.first_state + count {
+            let mut state = State::new(tf("State {}", &[&(page.states.len() + 1)]));
+            state.objects = vec![Vec::new(); page.layers.len()];
+            page.states.push(state);
+        }
+        let mut ids = Vec::new();
+        for step in 0..count {
+            let mut copy = settings.pose(&start, step);
+            copy.id = if step == 0 { start.id } else { self.alloc_id() };
+            ids.push(copy.id);
+            if let Some(objects) = self.doc.page_mut().state_layer_mut(animation.first_state + step, animation.layer) {
+                objects.push(copy);
+            }
+        }
+        self.doc.page_mut().animations[index].objects = ids.clone();
+        self.selection = ids.into_iter().filter(|id| self.doc.page().objects().any(|o| o.id == *id)).collect();
+    }
+
+    /// Fireworks' Remove Animation: the copy in the first state stays, as an ordinary copy of the symbol.
+    pub fn remove_animation(&mut self) -> bool {
+        let Some(index) = self.selected_animation() else { return false };
+        let animation = self.doc.page_mut().animations.remove(index);
+        let rest: Vec<u64> = animation.objects.iter().skip(1).copied().collect();
+        self.doc.page_mut().retain_all(|o| !rest.contains(&o.id));
+        if let Some(entry) = self.doc.symbols.iter_mut().find(|s| s.id == animation.symbol) {
+            entry.kind = SymbolKind::Graphic;
+        }
+        self.selection.retain(|id| !rest.contains(id));
+        true
+    }
+
+    /// The middles of an animation's copies, state by state: the path Fireworks draws for it.
+    pub fn animation_path(&self, index: usize) -> Vec<Vec2> {
+        let Some(animation) = self.doc.page().animations.get(index) else { return Vec::new() };
+        let Some(start) = self.animation_start(index) else { return Vec::new() };
+        (0..animation.settings.states.max(1) as usize).map(|step| animation.settings.center(start.bounds.center(), step)).collect()
     }
 
     /// Replaces selected symbol copies with their own objects. Returns how many were broken.
@@ -3855,6 +4413,7 @@ impl Editor {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -4452,6 +5011,7 @@ mod tests {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,
@@ -4469,6 +5029,104 @@ mod tests {
         e.selection.clear();
         e.commit("seed");
         e
+    }
+
+    #[test]
+    fn a_symbol_is_edited_where_it_lies_and_its_copies_follow() {
+        let mut e = editor();
+        e.doc.next_id = 1000;
+        e.selection = vec![100];
+        let symbol = e.make_symbol().unwrap();
+        let first = e.selection[0];
+        // A second copy, twice the size.
+        assert!(e.place_symbol_at(symbol, v2(300.0, 300.0)));
+        let second = e.selection[0];
+        e.object_mut(second).unwrap().bounds = Rect { x: 260.0, y: 260.0, w: 80.0, h: 80.0 };
+        e.selection = vec![first];
+        assert!(e.can_edit_symbol() && e.edit_selected_symbol());
+        assert_eq!(e.edited_symbol().unwrap().id, symbol);
+        // The copy is gone, its one object lies loose where it was, and the rest of the page is locked.
+        assert!(e.object(first).is_none() && e.object(101).unwrap().locked);
+        let member = e.doc.page().objects().find(|o| !o.locked).unwrap().clone();
+        assert_eq!(member.bounds, Rect { x: 0.0, y: 10.0, w: 40.0, h: 40.0 });
+        // Something drawn during the edit joins the symbol: it grows 20 to the right.
+        e.add_object(rect(0, 40.0, 10.0, 20.0, 40.0));
+        assert!(e.leave_symbol() && e.editing_symbol().is_none());
+        assert_eq!(e.doc.symbols[0].objects.len(), 2);
+        assert_eq!(e.object(first).unwrap().bounds, Rect { x: 0.0, y: 10.0, w: 60.0, h: 40.0 });
+        assert_eq!(e.object(second).unwrap().bounds, Rect { x: 260.0, y: 260.0, w: 120.0, h: 80.0 });
+        assert!(!e.object(101).unwrap().locked && e.selection == vec![first]);
+        assert_eq!(e.object(first).unwrap().instance_parts().len(), 2);
+        assert!(!e.leave_symbol());
+    }
+
+    #[test]
+    fn a_new_button_gets_its_looks_and_its_first_copy() {
+        let mut e = editor();
+        let symbol = e.new_symbol("Button", SymbolKind::Button);
+        assert!(e.edit_symbol(symbol, None, true));
+        e.add_object(rect(0, 100.0, 100.0, 80.0, 30.0));
+        // Over starts empty, and takes the Up look when asked.
+        assert!(e.set_symbol_look(1) && !e.set_symbol_look(1));
+        assert_eq!(e.doc.page().objects().filter(|o| !o.locked).count(), 0);
+        assert!(e.copy_previous_look());
+        let over = e.selection[0];
+        e.object_mut(over).unwrap().translate(5.0, 0.0);
+        assert!(e.set_symbol_look(0));
+        assert_eq!(e.doc.page().objects().filter(|o| !o.locked).count(), 1);
+        assert!(e.leave_symbol());
+        let entry = &e.doc.symbols[0];
+        assert_eq!((entry.objects.len(), entry.looks.len()), (1, 1));
+        assert_eq!(entry.objects[0].bounds, Rect { x: 0.0, y: 0.0, w: 80.0, h: 30.0 });
+        assert_eq!(entry.looks[0][0].bounds.x, 5.0, "a look keeps its place against the Up look");
+        // The new symbol's first copy is on the page, selected.
+        let copy = e.selected()[0].clone();
+        assert!(matches!(copy.shape, Shape::Instance { symbol: s, .. } if s == symbol));
+        assert_eq!(copy.bounds, Rect { x: 100.0, y: 100.0, w: 80.0, h: 30.0 });
+        // Opening it again brings the looks back where they were.
+        assert!(e.edit_selected_symbol() && e.set_symbol_look(1));
+        assert_eq!(e.doc.page().objects().find(|o| !o.locked).unwrap().bounds.x, 105.0);
+        // An emptied symbol leaves no copy behind.
+        e.set_symbol_look(0);
+        let members: Vec<u64> = e.doc.page().objects().filter(|o| !o.locked).map(|o| o.id).collect();
+        e.selection = members;
+        e.delete_selected();
+        e.set_symbol_look(1);
+        e.selection = e.doc.page().objects().filter(|o| !o.locked).map(|o| o.id).collect();
+        e.delete_selected();
+        assert!(e.leave_symbol());
+        assert!(e.doc.symbols[0].objects.is_empty() && e.doc.page().objects().count() == 3);
+    }
+
+    #[test]
+    fn animate_selection_lays_a_copy_in_each_state() {
+        let mut e = editor();
+        e.selection = vec![100];
+        let settings = AnimationSettings { states: 5, distance: 80.0, direction: 0.0, scale: 200.0, opacity_from: 100.0, opacity_to: 0.0, ..Default::default() };
+        assert!(e.animate_selection(settings));
+        let page = e.doc.page();
+        assert_eq!((page.states.len(), page.animations.len()), (5, 1));
+        assert_eq!(e.doc.symbols[0].kind, SymbolKind::Animation);
+        assert_eq!(e.animation_path(0), [20.0, 40.0, 60.0, 80.0, 100.0].map(|x| v2(x, 30.0)));
+        let last = page.at_state(4);
+        let copy = last.objects().find(|o| o.id == page.animations[0].objects[4]).unwrap();
+        assert_eq!(copy.bounds, Rect { x: 60.0, y: -10.0, w: 80.0, h: 80.0 });
+        assert_eq!(copy.opacity, 0.0);
+        // The first state keeps the copy that was there, at full strength, and it is the one selected.
+        assert_eq!(e.selected()[0].bounds, Rect { x: 0.0, y: 10.0, w: 40.0, h: 40.0 });
+        assert_eq!(e.selected()[0].opacity, 1.0);
+        // Up is up: 90 degrees takes the object toward the top of the page.
+        assert!(e.animate_selection(AnimationSettings { states: 3, distance: 10.0, direction: 90.0, ..Default::default() }));
+        assert_eq!(e.animation_path(0)[2], v2(20.0, 20.0));
+        let page = e.doc.page();
+        assert_eq!(page.animations[0].objects.len(), 3);
+        // Fewer states: the copies beyond them are gone, the states stay.
+        assert_eq!(page.states.len(), 5);
+        assert_eq!(page.at_state(4).objects().count(), 0);
+        assert_eq!(page.at_state(2).objects().count(), 1);
+        assert!(e.remove_animation() && !e.remove_animation());
+        let page = e.doc.page();
+        assert!(page.animations.is_empty() && page.at_state(1).objects().count() == 0 && page.objects().count() == 3);
     }
 
     fn order(e: &Editor) -> Vec<u64> {

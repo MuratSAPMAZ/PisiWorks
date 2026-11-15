@@ -179,6 +179,8 @@ pub struct Scene {
     guide_lines: Vec<(bool, f32, u32)>,
     /// The handles of the selected object's gradient: where it starts and where it ends.
     fill_handles: Option<(Vec2, Vec2, Option<Vec2>)>,
+    /// The path of the selected animation: where its symbol is in each state.
+    motion: Vec<Vec2>,
     /// The cuts of 9-slice scaling: the box of the selection, and where the two upright and two level cuts are.
     nine_cuts: Option<(Rect, [f32; 4])>,
     stroke: Option<Color>,
@@ -343,6 +345,7 @@ impl Scene {
             grid: (w.prefs.grid, w.prefs.grid_color),
             guide_lines: w.guide_lines(),
             fill_handles: w.fill_handles(),
+            motion: w.motion_path(),
             nine_cuts: w.ed.selection_bounds().zip(w.nine_slice_lines()),
             stroke: w.stroke,
             fill: w.fill,
@@ -442,6 +445,18 @@ impl Scene {
                     let knob = |at: Point<Pixels>| Bounds { origin: point(at.x - px(4.), at.y - px(4.)), size: size(px(8.), px(8.)) };
                     window.paint_quad(fill(knob(from), rgb(0xffffff)).corner_radii(px(4.)).border_widths(1.).border_color(rgb(0x000000)));
                     window.paint_quad(fill(knob(to), rgb(0xffffff)).border_widths(1.).border_color(rgb(0x000000)));
+                }
+                // An animation's path: a dot for each state, green where it starts and red where it ends.
+                if self.motion.len() > 1 {
+                    let dots: Vec<Point<Pixels>> = self.motion.iter().map(|p| map.to_screen(*p)).collect();
+                    if let Some(line) = build_path(&dots, false, Some(1.0)) {
+                        window.paint_path(line, rgb(0x0000ff));
+                    }
+                    for (index, at) in dots.iter().enumerate() {
+                        let color = if index == 0 { 0x00c000 } else if index + 1 == dots.len() { 0xff0000 } else { 0x0000ff };
+                        let knob = Bounds { origin: point(at.x - px(3.), at.y - px(3.)), size: size(px(6.), px(6.)) };
+                        window.paint_quad(fill(knob, rgb(color)).corner_radii(px(3.)));
+                    }
                 }
                 // The cuts of 9-slice scaling run across the selection only.
                 if let Some((bounds, cuts)) = self.nine_cuts {
@@ -671,6 +686,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         fill_style: None,
         stroke_profile: Vec::new(),
         fill_look: Default::default(),
+        link: String::new(),
         filters: Vec::new(),
         fill: None,
         stroke: None,

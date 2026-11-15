@@ -39,6 +39,7 @@ fn base(shape: Shape, name: &str, bounds: Rect, fill: Option<Color>, stroke: Opt
         fill_style: None,
         stroke_profile: Vec::new(),
         fill_look: Default::default(),
+        link: String::new(),
         filters: Vec::new(),
         fill,
         stroke: stroke.map(|color| Stroke { color, width: 1.0 }),

@@ -101,6 +101,8 @@ pub enum Combo {
     TextFont,
     Paper,
     Orientation,
+    /// Which look of the button being edited is on show.
+    ButtonLook,
     Printer,
     PrintRange,
     /// What an object is filled with: a color, a gradient or a pattern.
@@ -365,6 +367,9 @@ pub enum FieldId {
     PathOffset,
     /// What Check Spelling changes the word on show to.
     SpellChange,
+    NewSymbolName,
+    /// A number of the Animate dialog: states, move, direction, scaling, opacity from and to, rotation.
+    Animate(usize),
     PrefUndo,
     PrefPick,
     PrefSnap,
@@ -510,6 +515,8 @@ pub enum Drag {
     NineGuide(usize),
     /// Dragging a handle of a gradient fill: its end, or else its start.
     FillHandle { end: bool, width: bool },
+    /// The end of an animation's path is being dragged.
+    MotionEnd,
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
     Guide { horizontal: bool, index: Option<usize>, at: f32 },
     Resize { handle: usize, origin: Rect },
@@ -621,7 +628,7 @@ pub struct Workspace {
     pub estimate_palette: Vec<Color>,
     pub view_mode: ViewMode,
     pub previews: Vec<PreviewPane>,
-    previews_key: Option<(u64, ViewMode)>,
+    previews_key: Option<(u64, ViewMode, Option<(u64, usize)>)>,
     stale_previews: Vec<Arc<RenderImage>>,
     /// The rendered page shown on the canvas while it has blend modes, with the revision it was rendered at.
     pub page_raster: Option<(u64, Arc<RenderImage>)>,
@@ -647,6 +654,12 @@ pub struct Workspace {
     pub print_setup: crate::print::PrintSetup,
     /// Page Setup while it is open, holding what to go back to on Cancel.
     pub page_setup_dialog: Option<crate::print::PrintSetup>,
+    /// New Symbol: the name and the kind asked for.
+    pub symbol_dialog: Option<(String, SymbolKind)>,
+    /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
+    pub preview_button: Option<(u64, usize)>,
+    /// Animate Selection and its Settings: the settings as edited so far.
+    pub animate_dialog: Option<crate::model::AnimationSettings>,
     pub print_dialog: Option<PrintDialog>,
     pub image_preview: Option<ImagePreview>,
     /// What Edit > Preferences sets, and while its dialog is open what to go back to on Cancel.
@@ -920,6 +933,9 @@ impl Workspace {
             ps_effect: 0,
             print_setup: Settings::load().print,
             page_setup_dialog: None,
+            symbol_dialog: None,
+            preview_button: None,
+            animate_dialog: None,
             print_dialog: None,
             image_preview: None,
             prefs: Settings::load().preferences,
@@ -1814,12 +1830,16 @@ impl Workspace {
             self.previews_key = None;
             return;
         }
-        let key = (self.ed.revision, self.view_mode);
+        let key = (self.ed.revision, self.view_mode, self.preview_button);
         if self.previews_key == Some(key) {
             return;
         }
         self.previews_key = Some(key);
-        let page = self.ed.export_page();
+        let mut page = self.ed.export_page();
+        // In Preview a button answers the mouse as it will in a browser.
+        if let Some((id, look)) = self.preview_button {
+            page = page.with_button_look(id, look);
+        }
         let settings: Vec<ExportSettings> = match self.view_mode {
             ViewMode::FourUp => comparison_settings(page.export).to_vec(),
             _ => vec![page.export],
@@ -2160,6 +2180,53 @@ impl Workspace {
         }
     }
 
+    /// Makes an empty symbol and opens it, so that what is drawn next becomes the symbol.
+    fn new_symbol(&mut self, name: &str, kind: SymbolKind) {
+        self.ed.leave_symbol();
+        let id = self.ed.new_symbol(name, kind);
+        self.symbol_selection = Some(id);
+        self.ed.edit_symbol(id, None, true);
+        self.ed.commit(if kind == SymbolKind::Button { t("New Button") } else { t("New Symbol") });
+        self.set_view_mode(ViewMode::Original);
+        self.status = t("Draw the symbol, then double-click an empty spot to finish").into();
+    }
+
+    /// Edit Symbol: opens the selected copy where it lies, or ends the edit that is going on.
+    pub fn toggle_symbol_edit(&mut self) {
+        if self.ed.leave_symbol() || self.ed.edit_selected_symbol() {
+            self.ed.commit(t("Edit Symbol"));
+            if self.ed.editing_symbol().is_some() {
+                self.status = t("Double-click an empty spot to finish editing the symbol").into();
+            }
+        }
+    }
+
+    /// The path of the animation the selection belongs to: the middle of its symbol in each state.
+    pub fn motion_path(&self) -> Vec<Vec2> {
+        if self.view_mode != ViewMode::Original {
+            return Vec::new();
+        }
+        self.ed.selected_animation().map_or_else(Vec::new, |index| self.ed.animation_path(index))
+    }
+
+    /// Closes New Symbol; kept, the symbol is made and opened for drawing.
+    pub fn close_symbol_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some((name, kind)) = self.symbol_dialog.take() else { return };
+        if keep {
+            self.new_symbol(&name, kind);
+        }
+    }
+
+    /// Closes Animate; kept, the selection is animated with the settings, or its animation changed to them.
+    pub fn close_animate_dialog(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(settings) = self.animate_dialog.take() else { return };
+        if keep && self.ed.animate_selection(settings) {
+            self.ed.commit(t("Animate Selection"));
+        }
+    }
+
     fn make_symbol(&mut self) {
         match self.ed.make_symbol() {
             Some(id) => {
@@ -2326,7 +2393,9 @@ impl Workspace {
             Cmd::Cut | Cmd::Copy | Cmd::Clear | Cmd::Duplicate | Cmd::Deselect | Cmd::Arrange(_) | Cmd::Align(_)
             | Cmd::FlipH | Cmd::FlipV => has_selection,
             Cmd::Filter(_) => self.ed.has_selected_bitmap(),
-            Cmd::ConvertToSymbol => has_selection,
+            Cmd::ConvertToSymbol | Cmd::Animate => has_selection,
+            Cmd::EditSymbol => self.ed.can_edit_symbol() || self.ed.editing_symbol().is_some(),
+            Cmd::AnimateSettings | Cmd::RemoveAnimation => self.ed.selected_animation().is_some(),
             Cmd::BreakApart | Cmd::Ungroup => self.ed.selected().iter().any(|o| o.is_instance()),
             Cmd::Group => self.ed.selection.len() >= 2,
             Cmd::Rotate { .. } => has_selection,
@@ -2576,6 +2645,18 @@ impl Workspace {
                 }
             }
             Cmd::ConvertToSymbol => self.make_symbol(),
+            Cmd::NewSymbol => self.symbol_dialog = Some((tf("Symbol {}", &[&(self.ed.doc.symbols.len() + 1)]), SymbolKind::Graphic)),
+            Cmd::NewButton => self.new_symbol(t("Button"), SymbolKind::Button),
+            Cmd::EditSymbol => self.toggle_symbol_edit(),
+            Cmd::Animate | Cmd::AnimateSettings => {
+                let settings = self.ed.selected_animation().map(|index| self.ed.doc.page().animations[index].settings);
+                self.animate_dialog = Some(settings.unwrap_or_default());
+            }
+            Cmd::RemoveAnimation => {
+                if self.ed.remove_animation() {
+                    self.ed.commit(t("Remove Animation"));
+                }
+            }
             Cmd::BreakApart => {
                 self.ed.break_apart();
                 self.ed.commit(t("Break Apart"));
@@ -2802,6 +2883,7 @@ impl Workspace {
 
     /// The page as it prints: laid out on the paper as a PDF. A see-through canvas prints as white paper.
     fn printed_pages(&mut self, pages: &[usize]) -> anyhow::Result<Vec<u8>> {
+        self.ed.leave_symbol_for_good();
         self.ed.end_mask_edit();
         self.ed.close_groups();
         let mut pictures = Vec::new();
@@ -3274,6 +3356,7 @@ impl Workspace {
     }
 
     fn write_document(&mut self, mut path: PathBuf) {
+        self.ed.leave_symbol_for_good();
         self.ed.end_mask_edit();
         self.ed.close_groups();
         // Saving under an image name writes a flattened copy, and the editable
@@ -3298,6 +3381,7 @@ impl Workspace {
     }
 
     fn export_to(&mut self, path: &Path) {
+        self.ed.leave_symbol_for_good();
         self.ed.end_mask_edit();
         self.ed.close_groups();
         let page = &self.ed.export_page();
@@ -3394,6 +3478,11 @@ impl Workspace {
         self.commit_field();
         window.focus(&self.focus);
         self.stop_playing();
+        // In Preview a press on a button shows its Down look.
+        if self.watch_preview_button(self.view_map().to_doc(ev.position), true) && self.preview_button.is_some() {
+            cx.notify();
+            return;
+        }
         // The comparison views show finished images, so dragging only pans them.
         if self.view_mode != ViewMode::Original {
             self.drag = Some(Drag::Pan { last: ev.position });
@@ -3656,6 +3745,14 @@ impl Workspace {
                 return;
             }
         }
+        // The red end of an animation's path sets how far and which way the animation goes.
+        if let Some(end) = self.motion_path().last().copied().filter(|_| self.motion_path().len() > 1) {
+            let reach = 6.0 / self.zoom;
+            if (end.x - p.x).abs() <= reach && (end.y - p.y).abs() <= reach {
+                self.drag = Some(Drag::MotionEnd);
+                return;
+            }
+        }
         // Inside a pixel selection the Pointer moves the pixels, and Alt leaves a copy behind.
         if self.tool == Tool::Pointer && self.pixel_drag_down(p, true, ev.modifiers.alt) {
             return;
@@ -3671,6 +3768,13 @@ impl Workspace {
             }
         }
         match self.ed.doc.page().hit_test(p, self.tolerance()) {
+            // A double-click on a copy of a symbol opens the symbol where it lies.
+            Some(id) if ev.click_count >= 2 && self.ed.object(id).is_some_and(|o| matches!(o.shape, Shape::Instance { .. })) => {
+                self.ed.selection = vec![id];
+                self.toggle_symbol_edit();
+            }
+            // And one beside the symbol being edited ends the edit.
+            None if ev.click_count >= 2 && self.ed.editing_symbol().is_some() => self.toggle_symbol_edit(),
             Some(id) => {
                 if ev.modifiers.shift {
                     if self.ed.is_selected(id) {
@@ -4315,6 +4419,7 @@ impl Workspace {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
@@ -4420,6 +4525,9 @@ impl Workspace {
         let p = map.to_doc(ev.position);
         self.cursor_doc = p;
         self.cursor_screen = ev.position;
+        if self.drag.is_none() && self.watch_preview_button(p, ev.pressed_button == Some(gpui::MouseButton::Left)) {
+            cx.notify();
+        }
         if self.filter_drag.is_some() {
             self.drag_filter(ev.position);
             cx.notify();
@@ -4480,6 +4588,15 @@ impl Workspace {
                 if let Some(b) = self.ed.selection_bounds() {
                     let part = if index < 2 { (p.x - b.x) / b.w.max(1.0) } else { (p.y - b.y) / b.h.max(1.0) };
                     self.nine_guides[index] = part.clamp(0.0, 1.0);
+                }
+            }
+            Drag::MotionEnd => {
+                if let (Some(index), Some(start)) = (self.ed.selected_animation(), self.motion_path().first().copied()) {
+                    let mut settings = self.ed.doc.page().animations[index].settings;
+                    let (dx, dy) = (on_guides.x - start.x, on_guides.y - start.y);
+                    settings.distance = (dx * dx + dy * dy).sqrt().round();
+                    settings.direction = (-dy).atan2(dx).to_degrees().rem_euclid(360.0).round();
+                    self.ed.set_animation(settings);
                 }
             }
             Drag::FillHandle { end, width } => {
@@ -4674,7 +4791,25 @@ impl Workspace {
         cx.notify();
     }
 
+    /// Keeps track, in Preview, of the button under the mouse. Returns whether anything changed.
+    fn watch_preview_button(&mut self, p: Vec2, pressed: bool) -> bool {
+        let over = if self.view_mode == ViewMode::Preview {
+            let has_looks = |symbol: u64| self.ed.doc.symbols.iter().any(|s| s.id == symbol && s.kind == SymbolKind::Button && s.looks.iter().any(|look| !look.is_empty()));
+            let page = self.ed.doc.page();
+            let hit = page.objects().filter(|o| o.visible && o.bounds.contains(p) && matches!(o.shape, Shape::Instance { symbol, .. } if has_looks(symbol))).last();
+            hit.map(|o| (o.id, if pressed { 2 } else { 1 }))
+        } else {
+            None
+        };
+        let changed = over != self.preview_button;
+        self.preview_button = over;
+        changed
+    }
+
     pub fn mouse_up(&mut self, ev: &MouseUpEvent, _: &mut Window, cx: &mut Context<Self>) {
+        if self.watch_preview_button(self.view_map().to_doc(ev.position), false) {
+            cx.notify();
+        }
         if self.panel_drag.is_some() {
             self.finish_panel_drag(ev.position);
             cx.notify();
@@ -4692,6 +4827,7 @@ impl Workspace {
                 self.ed.commit(t("Move"));
             }
             Drag::FillHandle { .. } => self.ed.commit(t("Fill")),
+            Drag::MotionEnd => self.ed.commit(t("Animate Selection")),
             Drag::Reshape { ids, .. } => {
                 // Pushing works on many short pieces, and the result is a curved path again.
                 for id in ids {
@@ -5237,6 +5373,10 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.symbol_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_symbol_dialog(key == "enter");
+        } else if self.animate_dialog.is_some() && matches!(key, "enter" | "escape") {
+            self.close_animate_dialog(key == "enter");
         } else if self.prefs_dialog.is_some() {
             match key {
                 "enter" => self.close_preferences(true),
@@ -5517,6 +5657,8 @@ impl Workspace {
             FieldId::WandTolerance => number(self.tool_options.wand_tolerance),
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
+            FieldId::NewSymbolName => self.symbol_dialog.as_ref().map_or_else(String::new, |(name, _)| name.clone()),
+            FieldId::Animate(which) => self.animate_dialog.map_or_else(String::new, |s| number([s.states as f32, s.distance, s.direction, s.scale, s.opacity_from, s.opacity_to, s.rotation][which.min(6)])),
             FieldId::PrefUndo => self.prefs.undo_steps.to_string(),
             FieldId::PrefPick => number(self.prefs.pick_distance),
             FieldId::PrefSnap => number(self.prefs.snap_distance),
@@ -5529,7 +5671,7 @@ impl Workspace {
             FieldId::FreeformSize => number(self.freeform_size),
             FieldId::Url => match first.map(|o| &o.shape) {
                 Some(Shape::Web { url, .. }) => url.clone(),
-                _ => String::new(),
+                _ => first.map_or_else(String::new, |o| o.link.clone()),
             },
             FieldId::Opacity => number(first.map_or(100.0, |o| o.opacity * 100.0)),
             FieldId::FillHex => hex(vector.map_or(self.fill, |o| o.fill)),
@@ -5719,6 +5861,23 @@ impl Workspace {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
             }
+            FieldId::NewSymbolName => {
+                if let Some((name, _)) = self.symbol_dialog.as_mut().filter(|_| !cleared) {
+                    *name = text.to_string();
+                }
+            }
+            FieldId::Animate(which) => {
+                let (Some(v), Some(s)) = (number.filter(|v| *v >= 0.0), self.animate_dialog.as_mut()) else { return };
+                match which {
+                    0 => s.states = v.round().clamp(1.0, 250.0) as u32,
+                    1 => s.distance = v.min(10000.0),
+                    2 => s.direction = v % 360.0,
+                    3 => s.scale = v.min(25000.0),
+                    4 => s.opacity_from = v.min(100.0),
+                    5 => s.opacity_to = v.min(100.0),
+                    _ => s.rotation = v.min(36000.0),
+                }
+            }
             FieldId::PrefUndo | FieldId::PrefPick | FieldId::PrefSnap | FieldId::PrefGridX | FieldId::PrefGridY => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };
                 match field.id {
@@ -5764,10 +5923,11 @@ impl Workspace {
             }
             FieldId::Url => {
                 let link = text.to_string();
-                self.ed.for_selected(|o| {
-                    if let Shape::Web { url, .. } = &mut o.shape {
-                        url.clone_from(&link);
-                    }
+                self.ed.for_selected(|o| match &mut o.shape {
+                    Shape::Web { url, .. } => url.clone_from(&link),
+                    // A button carries its link itself.
+                    Shape::Instance { .. } => o.link.clone_from(&link),
+                    _ => {}
                 });
                 self.ed.commit(t("Hotspot Link"));
             }

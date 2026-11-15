@@ -720,7 +720,8 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
             _ => None,
         })
         .collect();
-    if shapes.is_empty() {
+    let buttons = page.buttons();
+    if shapes.is_empty() && buttons.is_empty() {
         return Ok(0);
     }
     let stem = path.file_stem().map_or_else(|| "export".into(), |s| s.to_string_lossy().into_owned());
@@ -745,8 +746,55 @@ pub fn export_web(page: &Page, path: &Path) -> Result<usize> {
         save_pixmap(&piece, &path.with_file_name(format!("{stem}_slice{written}.{extension}")))?;
     }
     let hotspots: Vec<_> = shapes.iter().filter(|(_, kind, _)| *kind == WebKind::Hotspot).collect();
-    if !hotspots.is_empty() {
-        let image = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let image = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    if !buttons.is_empty() {
+        // Each button is cut out of the page once for every look it has, and a web page
+        // lays the cut-outs over the image and swaps them as the mouse comes, presses and goes.
+        let mut links = String::new();
+        for (number, button) in buttons.iter().enumerate() {
+            let Some(area) = page.button_area(button.id) else { continue };
+            let Some(crop) = IntRect::from_xywh(area.x as i32, area.y as i32, area.w as u32, area.h as u32) else { continue };
+            let mut files: [Option<String>; 4] = Default::default();
+            for (look, suffix) in ["up", "over", "down", "overdown"].into_iter().enumerate() {
+                let has = look == 0 || page.button_looks.iter().any(|b| matches!(button.shape, Shape::Instance { symbol, .. } if symbol == b.symbol) && b.looks.get(look - 1).is_some_and(|l| !l.is_empty()));
+                if !has {
+                    continue;
+                }
+                let shown = if look == 0 { pixmap.clone() } else { render_page(&page.with_button_look(button.id, look))? };
+                let Some(piece) = shown.clone_rect(crop) else { continue };
+                let name = format!("{stem}_button{}_{suffix}.{extension}", number + 1);
+                save_pixmap(&piece, &path.with_file_name(&name))?;
+                written += 1;
+                files[look] = Some(name);
+            }
+            let Some(up) = files[0].clone() else { continue };
+            let over = files[1].clone().unwrap_or_else(|| up.clone());
+            let down = files[2].clone().unwrap_or_else(|| over.clone());
+            let href = if button.link.is_empty() { "#" } else { button.link.as_str() };
+            links.push_str(&format!(
+                "  <a href=\"{}\" style=\"position:absolute;left:{}px;top:{}px\"><img src=\"{up}\" width=\"{}\" height=\"{}\" alt=\"{}\" style=\"display:block;border:0\" onmouseover=\"this.src='{over}'\" onmouseout=\"this.src='{up}'\" onmousedown=\"this.src='{down}'\" onmouseup=\"this.src='{over}'\"></a>\n",
+                escape_html(href),
+                area.x as i32,
+                area.y as i32,
+                area.w as u32,
+                area.h as u32,
+                escape_html(&button.name),
+            ));
+        }
+        let map = if hotspots.is_empty() { String::new() } else { map_markup(hotspots.iter().map(|(object, _, url)| (*object, object.name.as_str(), *url))) };
+        let html = format!(
+            "<!doctype html>\n<meta charset=\"utf-8\">\n<div style=\"position:relative;width:{}px;height:{}px\">\n  <img src=\"{}\" width=\"{}\" height=\"{}\"{} alt=\"\" style=\"display:block\">\n{links}</div>\n{map}",
+            page.width,
+            page.height,
+            escape_html(&image),
+            page.width,
+            page.height,
+            if hotspots.is_empty() { "" } else { " usemap=\"#map\"" },
+        );
+        let target = path.with_file_name(format!("{stem}.html"));
+        std::fs::write(&target, html).with_context(|| tf("could not write {}", &[&target.display()]))?;
+        written += 1;
+    } else if !hotspots.is_empty() {
         let html = image_map(&image, page, hotspots.iter().map(|(object, _, url)| (*object, object.name.as_str(), *url)));
         let target = path.with_file_name(format!("{stem}_map.html"));
         std::fs::write(&target, html).with_context(|| tf("could not write {}", &[&target.display()]))?;
@@ -760,12 +808,12 @@ fn escape_html(text: &str) -> String {
 }
 
 fn image_map<'a>(image: &str, page: &Page, areas: impl Iterator<Item = (&'a Object, &'a str, &'a str)>) -> String {
-    let mut html = format!(
-        "<!doctype html>\n<img src=\"{}\" width=\"{}\" height=\"{}\" usemap=\"#map\" alt=\"\">\n<map name=\"map\">\n",
-        escape_html(image),
-        page.width,
-        page.height
-    );
+    format!("<!doctype html>\n<img src=\"{}\" width=\"{}\" height=\"{}\" usemap=\"#map\" alt=\"\">\n{}", escape_html(image), page.width, page.height, map_markup(areas))
+}
+
+/// The map that tells a browser where the hotspots of an image are and where each leads.
+fn map_markup<'a>(areas: impl Iterator<Item = (&'a Object, &'a str, &'a str)>) -> String {
+    let mut html = String::from("<map name=\"map\">\n");
     for (object, name, url) in areas {
         let href = if url.is_empty() { "#" } else { url };
         let b = object.bounds;
@@ -818,6 +866,51 @@ fn flatten_on_white(image: &image::RgbaImage) -> image::RgbImage {
 }
 
 #[cfg(test)]
+mod button_tests {
+    use super::*;
+    use crate::model::{Document, Editor, SymbolKind};
+
+    #[test]
+    fn a_button_is_exported_with_a_picture_for_each_look_and_a_page_that_swaps_them() {
+        let mut e = Editor::new(Document::new(100, 60));
+        let symbol = e.new_symbol("Go", SymbolKind::Button);
+        assert!(e.edit_symbol(symbol, None, true));
+        let red = crate::model::Color { r: 255, g: 0, b: 0, a: 255 };
+        let green = crate::model::Color { r: 0, g: 255, b: 0, a: 255 };
+        let mut up = Object::new_web(1, crate::model::WebKind::Slice, Rect { x: 10.0, y: 10.0, w: 40.0, h: 20.0 });
+        (up.shape, up.fill, up.stroke) = (Shape::Rect { radius: 0.0 }, Some(red), None);
+        e.add_object(up);
+        assert!(e.set_symbol_look(1) && e.copy_previous_look());
+        e.for_selected(|o| o.fill = Some(green));
+        assert!(e.leave_symbol());
+        e.for_selected(|o| o.link = "a.html?x=1&y=2".into());
+        let page = e.export_page();
+        assert_eq!(page.buttons().len(), 1);
+        let id = page.buttons()[0].id;
+        assert_eq!(page.button_area(id), Some(Rect { x: 10.0, y: 10.0, w: 40.0, h: 20.0 }));
+        // The Over look is drawn where the button is.
+        let over = render_page(&page.with_button_look(id, 1)).unwrap();
+        let at = over.pixel(30, 20).unwrap();
+        assert_eq!((at.red(), at.green()), (0, 255));
+        // A look the button does not have leaves it showing the Up look.
+        let down = render_page(&page.with_button_look(id, 2)).unwrap();
+        assert_eq!(down.pixel(30, 20).unwrap().red(), 255);
+        let dir = std::env::temp_dir().join(format!("pisiworks-buttons-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("menu.png");
+        assert_eq!(export_web(&page, &path).unwrap(), 3);
+        let html = std::fs::read_to_string(dir.join("menu.html")).unwrap();
+        assert!(html.contains("href=\"a.html?x=1&amp;y=2\""), "{html}");
+        assert!(html.contains("left:10px;top:10px") && html.contains("onmouseover=\"this.src='menu_button1_over.png'\""), "{html}");
+        // With no Down look, a press shows Over.
+        assert!(html.contains("onmousedown=\"this.src='menu_button1_over.png'\""));
+        let piece = image::open(dir.join("menu_button1_over.png")).unwrap().to_rgba8();
+        assert_eq!((piece.width(), piece.height(), piece.get_pixel(5, 5).0), (40, 20, [0, 255, 0, 255]));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::model::{Rect, Stroke};
@@ -846,6 +939,7 @@ mod tests {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,

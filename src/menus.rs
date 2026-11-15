@@ -217,6 +217,13 @@ pub enum Cmd {
     Panel(Panel),
     HidePanels,
     ConvertToSymbol,
+    NewSymbol,
+    NewButton,
+    /// Opens the selected copy of a symbol for editing in place, or ends the edit.
+    EditSymbol,
+    Animate,
+    AnimateSettings,
+    RemoveAnimation,
     BreakApart,
     PathOp(PathOp),
     Group,
@@ -503,6 +510,9 @@ pub fn panel_shortcut(key: &str, control: bool, shift: bool, alt: bool) -> Optio
         ("f4", false, false, false) => return Some(Cmd::HidePanels),
         ("f7", false, true, false) => return Some(Cmd::CheckSpelling),
         ("f8", false, false, false) => return Some(Cmd::ConvertToSymbol),
+        ("f8", true, false, false) => return Some(Cmd::NewSymbol),
+        ("f8", true, true, false) => return Some(Cmd::NewButton),
+        ("f8", false, true, true) => return Some(Cmd::Animate),
         ("f2", true, false, false) => Panel::Tools,
         ("f3", true, false, false) => Panel::Properties,
         ("f6", false, false, false) => Panel::Optimize,
@@ -571,8 +581,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sub(
                 "Insert",
                 &[
-                    na("New Button..."),
-                    na("New Symbol..."),
+                    cmd("New Button...", "Ctrl+Shift+F8", Cmd::NewButton),
+                    cmd("New Symbol...", "Ctrl+F8", Cmd::NewSymbol),
                     Sep,
                     cmd("Hotspot", "Ctrl+Shift+U", Cmd::InsertWeb(crate::model::WebKind::Hotspot)),
                     cmd("Rectangular Slice", "", Cmd::InsertWeb(crate::model::WebKind::Slice)),
@@ -692,10 +702,13 @@ pub const MENUS: &[(&str, &[Entry])] = &[
                     cmd("Fit Canvas", "", Cmd::FitCanvas),
                 ],
             ),
-            na("Animation"),
+            Sub(
+                "Animation",
+                &[cmd("Animate Selection...", "Alt+Shift+F8", Cmd::Animate), cmd("Settings...", "", Cmd::AnimateSettings), cmd("Remove Animation", "", Cmd::RemoveAnimation)],
+            ),
             Sub(
                 "Symbol",
-                &[cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol), cmd("Break Apart", "Ctrl+B", Cmd::BreakApart)],
+                &[cmd("Convert to Symbol", "F8", Cmd::ConvertToSymbol), cmd("Edit Symbol", "", Cmd::EditSymbol), cmd("Break Apart", "Ctrl+B", Cmd::BreakApart)],
             ),
             Sub(
                 "Mask",

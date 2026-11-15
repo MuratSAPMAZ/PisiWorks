@@ -163,3 +163,13 @@ Preview shows the page as it will export. 2-Up puts the original next to it, and
 **Edit > Preferences** (Ctrl+U) sets the number of undo steps, how near the pointer picks an object, how near things snap, the size and color of the grid and the color of the guides. With text selected, Ctrl+U underlines instead. **View > Grid > Snap to Grid** (Ctrl+Alt+Shift+G) makes moved objects snap to the grid lines while the grid is shown.
 
 **Edit > Keyboard Shortcuts** lists every menu command with its keys. Pick a command, press **Change**, then the new keys. Keys that belonged to another command are taken from it. **Remove** leaves the command without keys and **Reset** gives back the ones it came with. Changes are kept in the settings file.
+
+## Symbols, buttons and animation
+
+**Double-clicking** a copy of a symbol opens the symbol where it lies: its parts lie loose on the page, the rest of the page is locked, and whatever is drawn meanwhile joins the symbol. A double-click on an empty spot, or the **◀ Page** button above the document, ends the edit, and every copy of the symbol changes. **Modify > Symbol > Edit Symbol** does the same.
+
+**Edit > Insert > New Symbol** (Ctrl+F8) asks for a name and a type (Graphic, Animation, Button) and opens the empty symbol for drawing. **New Button** (Ctrl+Shift+F8) opens a button symbol straight away. A button has four states: Up, Over, Down and Over While Down. While editing, pick the state from the list above the document; in an empty state **Copy … Graphic** brings the state before it. With a button selected on the page, **Link** in Properties takes the address a click leads to.
+
+In **Preview** the button shows its Over state under the mouse and its Down state when pressed. On export each button gets a picture for every state and an HTML page (`name.html`) that swaps them.
+
+**Modify > Animation > Animate Selection** (Alt+Shift+F8) turns the selection into an animation symbol: it asks for the number of states, the distance and direction of the move (0° right, 90° up), scaling, opacity and rotation, and adds states if needed. While selected its path shows (green start, red end); dragging the red end changes distance and direction. **Settings** opens the same dialog again and **Remove Animation** leaves only the copy in the first state.

@@ -292,6 +292,7 @@ mod tests {
             fill_style: None,
             stroke_profile: Vec::new(),
             fill_look: Default::default(),
+            link: String::new(),
             filters: Vec::new(),
             fill: Some(Color::rgb(10, 20, 30)),
             stroke: Some(Stroke { color: Color::BLACK, width: 4.0 }),

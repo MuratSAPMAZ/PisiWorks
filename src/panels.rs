@@ -65,6 +65,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         fill_style: None,
         stroke_profile: Vec::new(),
         fill_look: Default::default(),
+        link: String::new(),
         filters: Vec::new(),
         fill,
         stroke,
@@ -447,6 +448,15 @@ impl Workspace {
             Combo::Paper => crate::print::PaperSize::ALL
                 .into_iter()
                 .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
+                .collect(),
+            Combo::ButtonLook => (0..4)
+                .map(|look| {
+                    item(crate::model::button_look_name(look).into(), self.ed.editing_symbol().is_some_and(|edit| edit.look == look), cx, Box::new(move |this, _, _| {
+                        if this.ed.set_symbol_look(look) {
+                            this.ed.commit(t("Edit Symbol"));
+                        }
+                    }))
+                })
                 .collect(),
             Combo::Orientation => [(t("Portrait"), false), (t("Landscape"), true)]
                 .into_iter()
@@ -1579,6 +1589,53 @@ impl Workspace {
         .into_any_element()
     }
 
+    /// Edit > Insert > New Symbol: the name and the kind of the symbol to draw.
+    pub(crate) fn symbol_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let (_, kind) = self.symbol_dialog.as_ref()?;
+        let names = [t("Name:"), t("Type:")];
+        let name_width = label_width(&names, 40.);
+        let pick = |this: &Self, which: SymbolKind, cx: &mut Context<Self>, set: fn(&mut Workspace)| this.check_box(which.label(), *kind == which, cx, set).into_any_element();
+        let rows = vec![
+            labelled_row(names[0], name_width, self.field(FieldId::NewSymbolName, 170., cx)).into_any_element(),
+            labelled_row(names[1], name_width, div()).into_any_element(),
+            pick(self, SymbolKind::Graphic, cx, |this| this.symbol_dialog.iter_mut().for_each(|d| d.1 = SymbolKind::Graphic)),
+            pick(self, SymbolKind::Animation, cx, |this| this.symbol_dialog.iter_mut().for_each(|d| d.1 = SymbolKind::Animation)),
+            pick(self, SymbolKind::Button, cx, |this| this.symbol_dialog.iter_mut().for_each(|d| d.1 = SymbolKind::Button)),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_symbol_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_symbol_dialog(false)));
+        Some(self.dialog_frame(260., t("New Symbol"), rows, buttons))
+    }
+
+    /// Modify > Animation > Animate Selection: how many states, and how the object changes across them.
+    pub(crate) fn animate_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let settings = self.animate_dialog?;
+        let names = [t("States:"), t("Move:"), t("Direction:"), t("Scale to:"), t("Opacity:"), t("Rotate:")];
+        let name_width = label_width(&names, 60.);
+        let with = |this: &Self, which: usize, unit: &'static str, cx: &mut Context<Self>| div().flex().items_center().gap_1().child(this.field(FieldId::Animate(which), 50., cx)).child(label(unit));
+        let rows = vec![
+            labelled_row(names[0], name_width, self.field(FieldId::Animate(0), 50., cx)).into_any_element(),
+            labelled_row(names[1], name_width, with(self, 1, t("pixels"), cx)).into_any_element(),
+            labelled_row(names[2], name_width, with(self, 2, "°", cx)).into_any_element(),
+            labelled_row(names[3], name_width, with(self, 3, "%", cx)).into_any_element(),
+            labelled_row(names[4], name_width, with(self, 4, t("to"), cx).child(self.field(FieldId::Animate(5), 50., cx))).into_any_element(),
+            labelled_row(names[5], name_width, with(self, 6, "°", cx)).into_any_element(),
+            self.check_box(t("CW"), settings.clockwise, cx, |this| this.animate_dialog.iter_mut().for_each(|s| s.clockwise = true)).into_any_element(),
+            self.check_box(t("CCW"), !settings.clockwise, cx, |this| this.animate_dialog.iter_mut().for_each(|s| s.clockwise = false)).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_animate_dialog(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_animate_dialog(false)));
+        Some(self.dialog_frame(250., t("Animate"), rows, buttons))
+    }
+
     /// Edit > Preferences: undo steps, how near the pointer picks and things snap, and the grid.
     pub(crate) fn preferences_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
         self.prefs_dialog?;
@@ -2007,18 +2064,21 @@ impl Workspace {
                     .child(self.icon_button("duplicate", t("Duplicate State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
+                        this.ed.leave_symbol_for_good();
                         this.ed.doc.page_mut().duplicate_state();
                         this.ed.commit(t("Duplicate State"));
                     }))
                     .child(self.icon_button("plus", t("New State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
+                        this.ed.leave_symbol_for_good();
                         this.ed.doc.page_mut().add_state();
                         this.ed.commit(t("New State"));
                     }))
                     .child(self.icon_button("minus", t("Delete State"), false, cx, |this, _| {
                         this.stop_playing();
                         this.ed.selection.clear();
+                        this.ed.leave_symbol_for_good();
                         if this.ed.doc.page_mut().delete_state() {
                             this.ed.commit(t("Delete State"));
                         } else {
