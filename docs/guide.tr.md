@@ -78,6 +78,12 @@ Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi 
 
 Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
 
+## Kılavuzlar
+
+Sayfaya kılavuz koymak için üstteki veya yandaki cetvelden sürükleyin. İşaretçi ile bir kılavuzu sürükleyerek taşıyın; kaldırmak için cetvelin üzerine geri sürükleyin. Taşınan, çizilen veya yeniden boyutlandırılan nesneler kılavuzlara bitişir. Görünüm > Kılavuzlar onları gösterir veya gizler (Ctrl+;), kilitler, bitiştirmeyi kapatır ve hepsini temizler.
+
+Akıllı kılavuzlar bir nesneyi taşırken belirir: nesnenin bir kenarı veya ortası başka bir nesneyle ya da sayfayla hizalandığında bir çizgi görünür ve nesne oraya bitişir. Görünüm > Akıllı Kılavuzlar çizgileri veya bitiştirmeyi kapatır. Görünüm > Dilim Kılavuzları, dilimlerin kenarları boyunca uzanan kırmızı çizgileri gösterir veya gizler.
+
 ## Web alanları
 
 Sıcak Nokta (J) ve Dilim (K), çizimin üzerine alanlar çizer. Düzenle > Ekle > Sıcak Nokta (Ctrl+Shift+U) ve Dikdörtgen Dilim, seçili nesnenin üzerine bir tane koyar; birden fazla nesne seçiliyse hepsi için bir tane mi yoksa her biri için ayrı mı oluşturulacağı sorulur. Bunları İşaretçi ile taşıyıp yeniden boyutlandırın; sıcak noktanın bağlantısını Özellikler panelinden ayarlayın. Gizlemek veya göstermek için 2'ye basın.

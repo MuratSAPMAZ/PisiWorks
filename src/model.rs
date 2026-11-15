@@ -1582,6 +1582,52 @@ pub struct Page {
     /// the exporter, which has the page but not the document's library.
     #[serde(skip)]
     pub button_symbols: Vec<u64>,
+    /// The guides dragged out of the rulers.
+    #[serde(default, skip_serializing_if = "Guides::is_empty")]
+    pub guides: Guides,
+}
+
+/// The guides of a page: lines to line things up with, which are never part of the image.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Guides {
+    /// The heights of the guides that run across the page.
+    #[serde(default)]
+    pub horizontal: Vec<f32>,
+    /// The places of the guides that run down the page.
+    #[serde(default)]
+    pub vertical: Vec<f32>,
+}
+
+impl Guides {
+    pub fn is_empty(&self) -> bool {
+        self.horizontal.is_empty() && self.vertical.is_empty()
+    }
+
+    fn list(&self, horizontal: bool) -> &Vec<f32> {
+        if horizontal { &self.horizontal } else { &self.vertical }
+    }
+
+    pub fn list_mut(&mut self, horizontal: bool) -> &mut Vec<f32> {
+        if horizontal { &mut self.horizontal } else { &mut self.vertical }
+    }
+
+    /// The guide within `reach` of a point: whether it runs across, and which one it is. The nearest wins.
+    pub fn near(&self, p: Vec2, reach: f32) -> Option<(bool, usize)> {
+        let nearest = |horizontal: bool, at: f32| {
+            self.list(horizontal).iter().enumerate().map(|(index, guide)| ((guide - at).abs(), horizontal, index)).filter(|(far, _, _)| *far <= reach).min_by(|a, b| a.0.total_cmp(&b.0))
+        };
+        [nearest(true, p.y), nearest(false, p.x)].into_iter().flatten().min_by(|a, b| a.0.total_cmp(&b.0)).map(|(_, horizontal, index)| (horizontal, index))
+    }
+}
+
+/// How far to move so that one of `values` lands on one of `targets`, if any is within `reach`; the shortest move wins.
+pub fn snap_offset(values: &[f32], targets: &[f32], reach: f32) -> Option<f32> {
+    values.iter().flat_map(|value| targets.iter().map(move |target| target - value)).filter(|offset| offset.abs() <= reach).min_by(|a, b| a.abs().total_cmp(&b.abs()))
+}
+
+/// The three places of a box that line up with others, along each direction: its near edge, its middle and its far edge.
+pub fn snap_places(bounds: Rect) -> ([f32; 3], [f32; 3]) {
+    ([bounds.x, bounds.x + bounds.w / 2.0, bounds.right()], [bounds.y, bounds.y + bounds.h / 2.0, bounds.bottom()])
 }
 
 impl Page {
@@ -1599,6 +1645,7 @@ impl Page {
             jpeg_mask: None,
             jpeg_mask_color: None,
             button_symbols: Vec::new(),
+            guides: Guides::default(),
         }
     }
 
@@ -1698,6 +1745,19 @@ impl Page {
         for slot in self.states.iter_mut().flat_map(|s| s.objects.iter_mut()) {
             slot.retain(&keep);
         }
+    }
+
+    /// What smart guides line a moving selection up with: the edges and middles of
+    /// the other objects that show, and of the page. Places across, then places down.
+    pub fn smart_targets(&self, moving: &[u64]) -> (Vec<f32>, Vec<f32>) {
+        let (mut across, mut down) = (Vec::new(), Vec::new());
+        let boxes = self.layers.iter().filter(|l| l.visible).flat_map(|l| &l.objects).filter(|o| o.visible && !moving.contains(&o.id)).map(|o| o.bounds);
+        for bounds in boxes.chain([self.rect()]) {
+            let (xs, ys) = snap_places(bounds);
+            across.extend(xs);
+            down.extend(ys);
+        }
+        (across, down)
     }
 
     pub fn rect(&self) -> Rect {
@@ -3172,6 +3232,48 @@ mod tests {
 
     fn ids(e: &Editor) -> Vec<u64> {
         e.doc.page().objects().map(|o| o.id).collect()
+    }
+
+    #[test]
+    fn guides_are_found_and_snapped_to() {
+        let guides = Guides { horizontal: vec![50.0, 120.0], vertical: vec![30.0] };
+        assert!(!guides.is_empty() && Guides::default().is_empty());
+        // The nearest guide within reach is the one under the mouse.
+        assert_eq!(guides.near(v2(200.0, 52.0), 3.0), Some((true, 0)));
+        assert_eq!(guides.near(v2(31.0, 80.0), 3.0), Some((false, 0)));
+        assert_eq!(guides.near(v2(31.0, 52.0), 3.0), Some((false, 0)), "the vertical one is a pixel nearer");
+        assert_eq!(guides.near(v2(200.0, 80.0), 3.0), None);
+        // A box moves the shortest way that puts an edge or its middle on a target.
+        let (xs, ys) = snap_places(Rect { x: 10.0, y: 46.0, w: 30.0, h: 10.0 });
+        assert_eq!((xs, ys), ([10.0, 25.0, 40.0], [46.0, 51.0, 56.0]));
+        assert_eq!(snap_offset(&ys, &guides.horizontal, 5.0), Some(-1.0), "its middle is nearest");
+        assert_eq!(snap_offset(&xs, &guides.vertical, 5.0), Some(5.0));
+        assert_eq!(snap_offset(&xs, &guides.vertical, 4.0), None);
+        assert_eq!(snap_offset(&xs, &[], 5.0), None);
+        // Guides are kept in the file, and a page without any is written as before.
+        let mut page = Page::new("p", 10, 10);
+        assert!(!serde_json::to_string(&page).unwrap().contains("guides"));
+        page.guides = guides.clone();
+        let back: Page = serde_json::from_str(&serde_json::to_string(&page).unwrap()).unwrap();
+        assert_eq!(back.guides, guides);
+    }
+
+    #[test]
+    fn smart_guides_line_up_with_the_other_objects_and_the_page() {
+        let e = three_boxes();
+        let all = ids(&e);
+        // Moving the blue box, the red and green ones and the page give the places to line up with.
+        let (across, down) = e.doc.page().smart_targets(&[all[2]]);
+        for x in [10.0, 20.0, 30.0, 40.0, 0.0, 50.0, 100.0] {
+            assert!(across.contains(&x), "{x}");
+        }
+        assert!(!across.contains(&60.0) && !across.contains(&80.0), "its own edges are not");
+        assert!(down.contains(&10.0) && down.contains(&20.0) && down.contains(&30.0) && down.contains(&40.0) && down.contains(&80.0));
+        // A hidden object is nothing to line up with.
+        let mut hidden = three_boxes();
+        hidden.selection = vec![all[0]];
+        hidden.for_selected(|o| o.visible = false);
+        assert!(!hidden.doc.page().smart_targets(&[all[2]]).0.contains(&10.0));
     }
 
     #[test]

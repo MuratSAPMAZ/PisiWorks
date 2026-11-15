@@ -76,6 +76,12 @@ A masked object shows Mask in Properties: Path Outline or Grayscale Appearance f
 
 In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
 
+## Guides
+
+Drag out of the ruler along the top or down the side to put a guide on the page. With the Pointer, drag a guide to move it, and drag it back onto a ruler to remove it. Objects being moved, drawn or resized snap to guides. View > Guides shows or hides them (Ctrl+;), locks them, turns snapping off, and clears them all.
+
+Smart guides appear while you move an object: a line shows where one of its edges or its middle lines up with another object or with the page, and the object snaps there. View > Smart Guides turns the lines or the snapping off. View > Slice Guides shows or hides the red lines along the edges of slices.
+
 ## Web areas
 
 Hotspot (J) and Slice (K) draw areas over the artwork. Edit > Insert > Hotspot (Ctrl+Shift+U) and Rectangular Slice put one over the selected object; with several objects selected, you are asked whether to make one for all of them or one each. Move and resize them with the Pointer, and set a hotspot's link in Properties. Press 2 to hide or show them.

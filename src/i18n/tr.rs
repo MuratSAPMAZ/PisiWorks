@@ -837,4 +837,10 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Sample radius:", "Örnek yarıçapı:"),
     ("Feather Selection", "Seçimde Geçiş Yumuşatma"),
     ("Radius:", "Yarıçap:"),
+    ("Show Guides", "Kılavuzları Göster"),
+    ("Lock Guides", "Kılavuzları Kilitle"),
+    ("Snap to Guides", "Kılavuzlara Bitiştir"),
+    ("Clear Guides", "Kılavuzları Temizle"),
+    ("Show Smart Guides", "Akıllı Kılavuzları Göster"),
+    ("Snap to Smart Guides", "Akıllı Kılavuzlara Bitiştir"),
 ];

@@ -282,6 +282,7 @@ impl Mask {
         }
     }
 
+    #[cfg(test)]
     pub fn is_feathered(&self) -> bool {
         self.soft.is_some()
     }

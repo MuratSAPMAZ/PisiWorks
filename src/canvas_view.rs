@@ -173,6 +173,8 @@ pub struct Scene {
     caret: Option<(Vec2, f32)>,
     show_rulers: bool,
     show_grid: bool,
+    /// The lines drawn across the whole view: whether each runs across, where it is on the page, and its color.
+    guide_lines: Vec<(bool, f32, u32)>,
     stroke: Option<Color>,
     fill: Option<Color>,
     textures: Textures,
@@ -307,6 +309,7 @@ impl Scene {
             caret,
             show_rulers: w.show_rulers,
             show_grid: w.show_grid,
+            guide_lines: w.guide_lines(),
             stroke: w.stroke,
             fill: w.fill,
             textures: w.textures.clone(),
@@ -388,6 +391,15 @@ impl Scene {
             window.paint_quad(outline(page_bounds, rgb(theme::BORDER), BorderStyle::Solid));
             if overlays {
                 self.paint_overlays(map, window);
+                for (horizontal, at, color) in &self.guide_lines {
+                    let on_screen = map.to_screen(Vec2 { x: *at, y: *at });
+                    let line = if *horizontal {
+                        Bounds { origin: point(bounds.origin.x, on_screen.y), size: size(bounds.size.width, px(1.)) }
+                    } else {
+                        Bounds { origin: point(on_screen.x, bounds.origin.y), size: size(px(1.), bounds.size.height) }
+                    };
+                    window.paint_quad(fill(line, rgb(*color)));
+                }
                 if self.show_rulers {
                     paint_rulers(bounds, map, window, cx);
                 }

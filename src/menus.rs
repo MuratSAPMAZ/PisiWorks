@@ -207,6 +207,19 @@ pub enum Cmd {
     MergeDown,
     FlattenLayers,
     RepeatFilter,
+    Guides(GuideCmd),
+}
+
+/// The commands of the Guides, Smart Guides and Slice Guides menus.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GuideCmd {
+    Show,
+    Lock,
+    Snap,
+    Clear,
+    ShowSmart,
+    SnapSmart,
+    Slice,
 }
 
 /// The commands that change the marquee by a number of pixels.
@@ -488,9 +501,21 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Rulers", "Ctrl+Alt+R", Cmd::Rulers),
             cmd("Show Grid", "Ctrl+Alt+G", Cmd::Grid),
-            na("Guides"),
-            na("Smart Guides"),
-            na("Slice Guides"),
+            Sub(
+                "Guides",
+                &[
+                    cmd("Show Guides", "Ctrl+;", Cmd::Guides(GuideCmd::Show)),
+                    cmd("Lock Guides", "Ctrl+Alt+;", Cmd::Guides(GuideCmd::Lock)),
+                    cmd("Snap to Guides", "Ctrl+Shift+;", Cmd::Guides(GuideCmd::Snap)),
+                    Sep,
+                    cmd("Clear Guides", "", Cmd::Guides(GuideCmd::Clear)),
+                ],
+            ),
+            Sub(
+                "Smart Guides",
+                &[cmd("Show Smart Guides", "Ctrl+\\", Cmd::Guides(GuideCmd::ShowSmart)), cmd("Snap to Smart Guides", "", Cmd::Guides(GuideCmd::SnapSmart))],
+            ),
+            cmd("Slice Guides", "Ctrl+Alt+Shift+;", Cmd::Guides(GuideCmd::Slice)),
         ],
     ),
     (

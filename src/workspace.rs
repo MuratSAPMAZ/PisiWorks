@@ -25,7 +25,9 @@ use crate::canvas_view::{encoded_texture, handle_rects, make_texture, texture_ke
 use crate::autoshape::AutoKind;
 use crate::export::{export_web, measure_text};
 use crate::library::common_items;
-use crate::menus::{panel_shortcut, Cmd, Panel, ScreenMode, Tool, DOCK_GROUPS, ZOOM_LEVELS};
+use crate::menus::{panel_shortcut, Cmd, GuideCmd, Panel, ScreenMode, Tool, DOCK_GROUPS, ZOOM_LEVELS};
+use crate::model::{snap_offset, snap_places};
+use crate::theme::RULER_SIZE;
 use crate::optimize::{comparison_settings, encode, encoded_palette, export_page, format_size, settings_label, ExportSettings, MAX_COLORS, MIN_COLORS};
 use crate::paths::PathOp;
 use crate::model::SymbolKind;
@@ -351,7 +353,11 @@ const TOOL_HOLD_MS: u64 = 350;
 const TOOL_FLYOUT_OFFSET: f32 = 24.0;
 
 pub enum Drag {
-    Move { last: Vec2 },
+    /// Moving the selection: where the mouse took hold, the box of the selection
+    /// then, and how far it has been moved since, which snapping can make differ from the mouse.
+    Move { start: Vec2, origin: Option<Rect>, moved: Vec2 },
+    /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
+    Guide { horizontal: bool, index: Option<usize>, at: f32 },
     Resize { handle: usize, origin: Rect },
     Marquee { start: Vec2, current: Vec2 },
     Create { start: Vec2, current: Vec2 },
@@ -510,6 +516,14 @@ pub struct Workspace {
     pub replace_text: String,
     pub show_rulers: bool,
     pub show_grid: bool,
+    pub show_guides: bool,
+    pub lock_guides: bool,
+    pub snap_guides: bool,
+    pub show_smart_guides: bool,
+    pub snap_smart_guides: bool,
+    pub show_slice_guides: bool,
+    /// The smart guides the selection being moved is lined up on: whether each runs across, and where it is.
+    pub smart_lines: Vec<(bool, f32)>,
     pub space_held: bool,
     pub status: String,
     /// Set by overlays during a click so the root handler keeps them open.
@@ -735,6 +749,13 @@ impl Workspace {
             replace_text: String::new(),
             show_rulers: true,
             show_grid: false,
+            show_guides: true,
+            lock_guides: false,
+            snap_guides: true,
+            show_smart_guides: true,
+            snap_smart_guides: true,
+            show_slice_guides: true,
+            smart_lines: Vec::new(),
             space_held: false,
             status: String::new(),
             keep_overlays: false,
@@ -1327,6 +1348,12 @@ impl Workspace {
             Cmd::HidePanels => self.panels_off,
             Cmd::Rulers => self.show_rulers,
             Cmd::Grid => self.show_grid,
+            Cmd::Guides(GuideCmd::Show) => self.show_guides,
+            Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
+            Cmd::Guides(GuideCmd::Snap) => self.snap_guides,
+            Cmd::Guides(GuideCmd::ShowSmart) => self.show_smart_guides,
+            Cmd::Guides(GuideCmd::SnapSmart) => self.snap_smart_guides,
+            Cmd::Guides(GuideCmd::Slice) => self.show_slice_guides,
             Cmd::Language(language) => crate::i18n::language() == language,
             // Ticked while the mask is switched off.
             Cmd::MaskToggle => self.ed.selected().iter().any(|o| o.mask.as_ref().is_some_and(|mask| !mask.enabled)),
@@ -1911,6 +1938,7 @@ impl Workspace {
             Cmd::TextToPaths => self.ed.selected().iter().any(|o| matches!(o.shape, Shape::Text { .. })),
             Cmd::FirstState | Cmd::PreviousState | Cmd::NextState | Cmd::LastState => self.ed.doc.page().states.len() > 1,
             Cmd::PathOp(op) => self.ed.selection.len() >= if op.needs_two() { 2 } else { 1 },
+            Cmd::Guides(GuideCmd::Clear) => !self.ed.doc.page().guides.is_empty(),
             Cmd::Revert => (self.path.is_some() || self.source_image.is_some()) && self.ed.is_dirty(),
             Cmd::Clone | Cmd::FitSelection => has_selection,
             Cmd::PasteAttributes => has_selection && self.ed.has_clipboard(),
@@ -1981,6 +2009,16 @@ impl Workspace {
             Cmd::FitAll => self.fit_all(),
             Cmd::Rulers => self.show_rulers = !self.show_rulers,
             Cmd::Grid => self.show_grid = !self.show_grid,
+            Cmd::Guides(GuideCmd::Show) => self.show_guides = !self.show_guides,
+            Cmd::Guides(GuideCmd::Lock) => self.lock_guides = !self.lock_guides,
+            Cmd::Guides(GuideCmd::Snap) => self.snap_guides = !self.snap_guides,
+            Cmd::Guides(GuideCmd::ShowSmart) => self.show_smart_guides = !self.show_smart_guides,
+            Cmd::Guides(GuideCmd::SnapSmart) => self.snap_smart_guides = !self.snap_smart_guides,
+            Cmd::Guides(GuideCmd::Slice) => self.show_slice_guides = !self.show_slice_guides,
+            Cmd::Guides(GuideCmd::Clear) => {
+                self.ed.doc.page_mut().guides = Default::default();
+                self.ed.commit(t("Clear Guides"));
+            }
             Cmd::SelectAll => self.ed.select_all(),
             // The first Deselect drops the pixel selection, the next the object.
             Cmd::Deselect => {
@@ -2570,6 +2608,10 @@ impl Workspace {
         }
         let p = self.view_map().to_doc(ev.position);
         let tool = self.active_tool();
+        if self.guide_down(ev.position, p, tool) {
+            cx.notify();
+            return;
+        }
         if self.text_edit.is_some() {
             self.finish_text();
             if tool != Tool::Text {
@@ -2598,7 +2640,7 @@ impl Workspace {
             Tool::Stamp => self.stamp_down(ev, p),
             Tool::Freeform => self.freeform_down(p),
             Tool::Rect | Tool::Ellipse | Tool::Line | Tool::Knife | Tool::Hotspot | Tool::Slice => {
-                let start = snap(p);
+                let start = self.guide_snapped(p);
                 self.drag = Some(Drag::Create { start, current: start });
             }
             Tool::Pen => self.pen_down(p, ev.click_count, window, cx),
@@ -2662,6 +2704,96 @@ impl Workspace {
         self.pixel_sel = Some(PixelSelection { object: target, edges: Arc::new(shifted.edges()), mask: Arc::new(shifted) });
     }
 
+    /// A press on a ruler pulls a new guide out of it, and a press with the Pointer on a guide takes hold of that one.
+    fn guide_down(&mut self, at: Point<Pixels>, p: Vec2, tool: Tool) -> bool {
+        if !self.show_guides {
+            return false;
+        }
+        let bounds = self.canvas_bounds.get();
+        let ruler = px(RULER_SIZE);
+        if self.show_rulers && bounds.contains(&at) && (at.y < bounds.origin.y + ruler || at.x < bounds.origin.x + ruler) {
+            // The ruler along the top gives guides that run across; the one down the side, guides that run down.
+            let horizontal = at.y < bounds.origin.y + ruler;
+            self.drag = Some(Drag::Guide { horizontal, index: None, at: if horizontal { p.y } else { p.x }.round() });
+            return true;
+        }
+        if tool != Tool::Pointer || self.lock_guides {
+            return false;
+        }
+        let Some((horizontal, index)) = self.ed.doc.page().guides.near(p, 3.0 / self.zoom) else { return false };
+        self.drag = Some(Drag::Guide { horizontal, index: Some(index), at: if horizontal { p.y } else { p.x }.round() });
+        true
+    }
+
+    /// Every line to draw across the view: the page's guides, the one being dragged,
+    /// the guides along the edges of the slices, and the smart guides of the move under way.
+    pub fn guide_lines(&self) -> Vec<(bool, f32, u32)> {
+        const GUIDE: u32 = 0x00c000;
+        const SLICE_GUIDE: u32 = 0xff4040;
+        const SMART_GUIDE: u32 = 0xff00ff;
+        let page = self.ed.doc.page();
+        let mut lines = Vec::new();
+        if self.show_slice_guides {
+            for slice in page.objects().filter(|o| o.visible && matches!(o.shape, Shape::Web { kind: WebKind::Slice, .. })) {
+                let b = slice.bounds;
+                lines.extend([(false, b.x, SLICE_GUIDE), (false, b.right(), SLICE_GUIDE), (true, b.y, SLICE_GUIDE), (true, b.bottom(), SLICE_GUIDE)]);
+            }
+        }
+        if self.show_guides {
+            // The guide being dragged is drawn where the mouse has it, not where it was.
+            let held = match self.drag {
+                Some(Drag::Guide { horizontal, index, at }) => Some((horizontal, index, at)),
+                _ => None,
+            };
+            for horizontal in [true, false] {
+                let list = if horizontal { &page.guides.horizontal } else { &page.guides.vertical };
+                lines.extend(list.iter().enumerate().filter(|(index, _)| held.is_none_or(|(h, held, _)| h != horizontal || held != Some(*index))).map(|(_, at)| (horizontal, *at, GUIDE)));
+            }
+            if let Some((horizontal, _, at)) = held {
+                lines.push((horizontal, at, GUIDE));
+            }
+        }
+        lines.extend(self.smart_lines.iter().map(|(horizontal, at)| (*horizontal, *at, SMART_GUIDE)));
+        lines
+    }
+
+    /// A point moved onto a guide, if it is within reach of one and snapping is on.
+    fn guide_snapped(&self, p: Vec2) -> Vec2 {
+        let p = snap(p);
+        if !(self.show_guides && self.snap_guides) {
+            return p;
+        }
+        let (guides, reach) = (&self.ed.doc.page().guides, 5.0 / self.zoom);
+        v2(p.x + snap_offset(&[p.x], &guides.vertical, reach).unwrap_or(0.0), p.y + snap_offset(&[p.y], &guides.horizontal, reach).unwrap_or(0.0))
+    }
+
+    /// How much further a selection whose box would be `moved` has to go to line up
+    /// with a guide or, failing that, with another object; and the smart guides it then lies on.
+    fn move_snap(&self, moved: Rect) -> (Vec2, Vec<(bool, f32)>) {
+        let (page, reach) = (self.ed.doc.page(), 5.0 / self.zoom);
+        let (xs, ys) = snap_places(moved);
+        let guides = (self.show_guides && self.snap_guides).then_some(&page.guides);
+        let smart = self.snap_smart_guides.then(|| page.smart_targets(&self.ed.selection));
+        let mut lines = Vec::new();
+        let mut along = |places: &[f32; 3], guides: Option<&Vec<f32>>, smart: Option<&Vec<f32>>, horizontal: bool| -> f32 {
+            if let Some(offset) = guides.and_then(|guides| snap_offset(places, guides, reach)) {
+                return offset;
+            }
+            let Some(offset) = smart.and_then(|targets| snap_offset(places, targets, reach)) else { return 0.0 };
+            // Every place that now lies on a target gets its line drawn.
+            let targets = smart.map_or(&[][..], |targets| &targets[..]);
+            for place in places.iter().map(|place| place + offset) {
+                if targets.iter().any(|target| (target - place).abs() < 0.01) && !lines.contains(&(horizontal, place)) {
+                    lines.push((horizontal, place));
+                }
+            }
+            offset
+        };
+        let dx = along(&xs, guides.map(|g| &g.vertical), smart.as_ref().map(|s| &s.0), false);
+        let dy = along(&ys, guides.map(|g| &g.horizontal), smart.as_ref().map(|s| &s.1), true);
+        (v2(dx, dy), if self.show_smart_guides { lines } else { Vec::new() })
+    }
+
     fn pointer_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
         // Inside a pixel selection the Pointer moves the pixels, and Alt leaves a copy behind.
         if self.tool == Tool::Pointer && self.pixel_drag_down(p, true, ev.modifiers.alt) {
@@ -2688,7 +2820,7 @@ impl Workspace {
                 } else if !self.ed.is_selected(id) {
                     self.ed.selection = vec![id];
                 }
-                self.drag = Some(Drag::Move { last: p });
+                self.drag = Some(Drag::Move { start: p, origin: self.ed.selection_bounds(), moved: Vec2::default() });
             }
             None => {
                 if !ev.modifiers.shift {
@@ -3364,6 +3496,21 @@ impl Workspace {
             cx.notify();
             return;
         }
+        // Where the mouse is once guides have had their say, for the drags that draw and resize.
+        let on_guides = self.guide_snapped(p);
+        if let Some(Drag::Move { start, origin, moved }) = self.drag {
+            let free = v2((p.x - start.x).round(), (p.y - start.y).round());
+            let (extra, lines) = origin.map_or((Vec2::default(), Vec::new()), |origin| self.move_snap(Rect { x: origin.x + free.x, y: origin.y + free.y, ..origin }));
+            let total = v2(free.x + extra.x, free.y + extra.y);
+            let (dx, dy) = (total.x - moved.x, total.y - moved.y);
+            if dx != 0.0 || dy != 0.0 {
+                self.ed.for_selected(|o| o.translate(dx, dy));
+            }
+            self.smart_lines = lines;
+            self.drag = Some(Drag::Move { start, origin, moved: total });
+            cx.notify();
+            return;
+        }
         let Some(drag) = self.drag.as_mut() else {
             if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() {
                 cx.notify();
@@ -3371,20 +3518,14 @@ impl Workspace {
             return;
         };
         match drag {
-            Drag::Move { last } => {
-                let (dx, dy) = ((p.x - last.x).round(), (p.y - last.y).round());
-                if dx != 0.0 || dy != 0.0 {
-                    last.x += dx;
-                    last.y += dy;
-                    self.ed.for_selected(|o| o.translate(dx, dy));
-                }
-            }
+            Drag::Move { .. } => {}
+            Drag::Guide { horizontal, at, .. } => *at = if *horizontal { p.y } else { p.x }.round(),
             Drag::Resize { handle, origin } => {
-                let target = resized(*origin, *handle, snap(p));
+                let target = resized(*origin, *handle, on_guides);
                 self.ed.for_selected(|o| o.set_bounds(target));
             }
             Drag::Marquee { current, .. } => *current = p,
-            Drag::Crop { current, .. } => *current = snap(p),
+            Drag::Crop { current, .. } => *current = on_guides,
             Drag::PixelArea { points, .. } => {
                 if self.tool == Tool::Marquee {
                     points.truncate(1);
@@ -3472,7 +3613,7 @@ impl Workspace {
                 }
             }
             Drag::Create { start, current } => {
-                let raw = snap(p);
+                let raw = on_guides;
                 *current = match (ev.modifiers.shift, self.tool) {
                     (true, Tool::Line | Tool::Knife) => constrain_angle(*start, raw),
                     (true, _) => constrain_square(*start, raw),
@@ -3572,7 +3713,26 @@ impl Workspace {
         }
         let Some(drag) = self.drag.take() else { return };
         match drag {
-            Drag::Move { .. } => self.ed.commit(t("Move")),
+            Drag::Move { .. } => {
+                self.smart_lines.clear();
+                self.ed.commit(t("Move"));
+            }
+            Drag::Guide { horizontal, index, at } => {
+                // Let go over a ruler or off the canvas, a guide is thrown away.
+                let bounds = self.canvas_bounds.get();
+                let ruler = if self.show_rulers { px(RULER_SIZE) } else { px(0.) };
+                let kept = bounds.contains(&ev.position) && ev.position.x >= bounds.origin.x + ruler && ev.position.y >= bounds.origin.y + ruler;
+                let guides = self.ed.doc.page_mut().guides.list_mut(horizontal);
+                match (index, kept) {
+                    (Some(index), true) if index < guides.len() => guides[index] = at,
+                    (Some(index), false) if index < guides.len() => {
+                        guides.remove(index);
+                    }
+                    (None, true) => guides.push(at),
+                    _ => {}
+                }
+                self.ed.commit(t("Guides"));
+            }
             Drag::Resize { .. } => self.ed.commit(t("Scale")),
             Drag::Vertex { .. } => self.ed.commit(t("Edit Path")),
             Drag::PenHandle => {}
@@ -3795,6 +3955,11 @@ impl Workspace {
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,
             ("d", true, false) => Cmd::Clone,
+            (";", false, false) => Cmd::Guides(GuideCmd::Show),
+            (";", false, true) => Cmd::Guides(GuideCmd::Lock),
+            (";" | ":", true, false) => Cmd::Guides(GuideCmd::Snap),
+            (";" | ":", true, true) => Cmd::Guides(GuideCmd::Slice),
+            ("\\", false, false) => Cmd::Guides(GuideCmd::ShowSmart),
             ("v", true, true) => Cmd::PasteAttributes,
             ("0", false, true) => Cmd::FitSelection,
             ("i", true, false) => Cmd::SelectInverse,
