@@ -432,6 +432,8 @@ if (movie.pictures.length === 0) start();
 function go(toScene, toFrame, play) {
   if (toScene < 0 || toScene >= movie.scenes.length) return;
   var other = toScene !== scene;
+  // Each scene is looked at from where it was drawn.
+  if (other) { camX = 0; camKey = null; camRule = null; }
   scene = toScene;
   frame = Math.max(0, Math.min(toFrame, movie.scenes[scene].length - 1));
   playing = play;
@@ -487,6 +489,39 @@ function acts(key, b) {
   return a.extra ? list.concat(a.extra) : list;
 }
 function has(key, b, kind) { return acts(key, b).some(function (l) { return l[0] === kind; }); }
+// The view: how far it has gone along the stage (camX), the object it goes along with (camKey), and what a
+// rule has said about it (camRule): the name of an object to follow, or false to stand still.
+var camX = 0, camKey = null, camRule = null;
+// How far an object slides because the view has moved: everything goes the other way by as much as the
+// view has gone, what slides like scenery by a part of that, and a text that shows a number not at all.
+function slide(op, key, b) {
+  if (!camX || op[0] === "t") return 0;
+  var far = acts(key, b).filter(function (l) { return l[0] === "scenery"; })[0];
+  return far ? -camX * far[1] / 100 : -camX;
+}
+// The same, with what comes back in at the other side put where it has come back in. `x` is where the object is.
+function seen2(op, key, b, x) {
+  var s = slide(op, key, b);
+  var far = acts(key, b).filter(function (l) { return l[0] === "scenery"; })[0];
+  if (far && far[2]) s += wrapped(x + s, b.box[2], movie.width) - (x + s);
+  return s;
+}
+// Moves the view to where what it follows has gone. It keeps the object where it was drawn on the screen.
+function lens() {
+  if (camRule === false) return;
+  var list = ops(), found = null;
+  for (var i = 0; i < list.length && !found; i += 1) {
+    var b = behaviorsOf(list[i]), key = keyOf(list[i]);
+    if (!b || actor(key).hidden) continue;
+    if (camRule ? b.n === camRule.name : has(key, b, "camera")) found = list[i];
+  }
+  if (!found) { camKey = null; return; }
+  var dx = moved(keyOf(found), behaviorsOf(found)).dx;
+  // A rule takes the view over from wherever it is, without a leap.
+  if (camRule && (camRule.base === undefined || camRule.key !== keyOf(found))) { camRule.base = dx - camX; camRule.key = keyOf(found); }
+  camKey = keyOf(found);
+  camX = dx - (camRule ? camRule.base : 0);
+}
 // The op of the object known by a number, if it is on the stage now.
 function opOf(key) {
   var list = ops();
@@ -549,7 +584,7 @@ function moved(key, b) {
 }
 // One frame's worth of what the viewer does to an object: the mouse draws it on, the arrow
 // keys walk it, the ground pulls it down and Up or Space makes it jump.
-function step(key, b) {
+function step(key, b, op) {
   // An object a rule has made faster does everything faster: its own time runs quicker.
   var a = actor(key), dt = a.rate * pace / movie.fps, box = b.box;
   a.n += a.rate * pace;
@@ -563,11 +598,12 @@ function step(key, b) {
     return;
   }
   if (dragging && dragging.key === key) return;
-  var falls = has(key, b, "gravity"), fromX = a.x, fromY = a.y, flies = false;
+  // The edges of the stage are where the screen ends: with the view moved, so are they.
+  var falls = has(key, b, "gravity"), fromX = a.x, fromY = a.y, flies = false, s = op ? slide(op, key, b) : 0;
   list.forEach(function (l) {
     var k = l[0], p = l[1], q = l[2];
     if (k === "mouse" && mouse) {
-      var dx = mouse.x - (box[0] + box[2] / 2 + a.x), dy = mouse.y - (box[1] + box[3] / 2 + a.y);
+      var dx = mouse.x - s - (box[0] + box[2] / 2 + a.x), dy = mouse.y - (box[1] + box[3] / 2 + a.y);
       var far = Math.sqrt(dx * dx + dy * dy), go = p <= 0 ? far : Math.min(far, p * dt);
       if (far > 0.5) { a.x += dx / far * go; a.y += dy / far * go; }
     } else if (k === "keys") {
@@ -575,7 +611,8 @@ function step(key, b) {
       if (keys.ArrowRight) a.x += p * dt;
       if (!falls && keys.ArrowUp) a.y -= p * dt;
       if (!falls && keys.ArrowDown) a.y += p * dt;
-      a.x = Math.max(-box[0], Math.min(a.x, movie.width - box[0] - box[2]));
+      // What the view follows is never at the side of the screen: it walks on as far as it likes.
+      if (key !== camKey) a.x = Math.max(-box[0] - s, Math.min(a.x, movie.width - box[0] - box[2] - s));
       a.y = Math.max(-box[1], Math.min(a.y, movie.height - box[1] - box[3]));
     } else if (k === "gravity") {
       if (a.ground && q > 0 && (keys.ArrowUp || keys[" "])) { a.vy = -q; a.ground = false; }
@@ -591,7 +628,7 @@ function step(key, b) {
       else if (Math.abs(pace2 - Math.abs(p)) > 0.001) { a.rx *= Math.abs(p) / pace2; a.ry *= Math.abs(p) / pace2; }
       flies = true;
       a.x += a.rx * dt; a.y += a.ry * dt;
-      var lowX = -box[0], highX = movie.width - box[0] - box[2], lowY = -box[1], highY = movie.height - box[1] - box[3];
+      var lowX = -box[0] - s, highX = movie.width - box[0] - box[2] - s, lowY = -box[1], highY = movie.height - box[1] - box[3];
       if (a.x < lowX) { a.x = lowX; a.rx = Math.abs(a.rx); } else if (a.x > highX) { a.x = highX; a.rx = -Math.abs(a.rx); }
       if (a.y < lowY) { a.y = lowY; a.ry = Math.abs(a.ry); } else if (a.y > highY) { a.y = highY; a.ry = -Math.abs(a.ry); }
     }
@@ -650,10 +687,13 @@ function cast() {
     var b = behaviorsOf(op);
     if (!b || !b.n || actor(keyOf(op)).hidden) return;
     var m = moved(keyOf(op), b);
-    list.push({ key: keyOf(op), name: b.n, b: b, box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+    // sx is how far along it is drawn from where it is: the view may have moved.
+    list.push({ key: keyOf(op), name: b.n, b: b, box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]], s: slide(op, keyOf(op), b), sx: seen2(op, keyOf(op), b, b.box[0] + m.dx) });
   });
   return list;
 }
+// A player's box as it is on the screen.
+function shown(p) { return [p.box[0] + p.sx, p.box[1], p.box[2], p.box[3]]; }
 // Whether two objects touch. Boxes that lie against each other touch, so that what stands on a
 // thing touches it; a round object is taken by its outline and not by the corners of its box.
 function meets(p, q) {
@@ -748,8 +788,8 @@ function take(step, who, players) {
     var a = actor(p.key), box = p.b.box;
     if (k === "move") { a.x += x; a.y += y; }
     else if (k === "goto") { a.x = x - box[0]; a.y = y - box[1]; a.vy = 0; }
-    else if (k === "random") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = Math.random() * (movie.height - box[3]) - box[1]; a.vy = 0; }
-    else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
+    else if (k === "random") { a.x = Math.random() * (movie.width - box[2]) - box[0] - p.s; a.y = Math.random() * (movie.height - box[3]) - box[1]; a.vy = 0; }
+    else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0] - p.s; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
     else if (k === "hide") a.hidden = true;
     else if (k === "jump") {
       // As high as asked: the speed that the pull of Fall and Jump takes that long a way to stop. What has
@@ -804,6 +844,8 @@ function take(step, who, players) {
     }
   });
   if (k === "rnd") numbers[name] = Math.floor(Math.min(x, y) + Math.random() * (Math.abs(y - x) + 1));
+  if (k === "camera") camRule = { name: name };
+  else if (k === "camera-stop") camRule = false;
   // A number that is a value of the command being done is changed there, and is forgotten when the command ends.
   var own = given && typeof given[name] === "number";
   if (k === "add") { if (own) given[name] += x; else numbers[name] = (numbers[name] || 0) + x; }
@@ -909,7 +951,7 @@ function judge() {
       if (came("v" + index, holds(numbers[e[1]] || 0, e[2], e[3]))) follow(rule);
     } else if (k === "edge") {
       players.forEach(function (p) {
-        if (p.name === e[1] && came("e" + index + ":" + p.key, atEdge(p.box, e[2]))) { var who = {}; who[p.name] = p.key; follow(rule, who); }
+        if (p.name === e[1] && came("e" + index + ":" + p.key, atEdge(shown(p), e[2]))) { var who = {}; who[p.name] = p.key; follow(rule, who); }
       });
     } else if (k === "touch") {
       players.forEach(function (p) {
@@ -926,6 +968,7 @@ function judge() {
 }
 // Starts the film again from the beginning, with every number as it started.
 function restart() {
+  camX = 0; camKey = null; camRule = null;
   actors = {}; clipFrames = {}; seen = {}; ticks = 0; owed = 0; frozen = false; dragging = null; clones = []; waiting = [];
   startNumbers();
   var same = scene === 0;
@@ -960,6 +1003,8 @@ function draw() {
     }
     var b = behaviorsOf(op), m = b ? moved(keyOf(op), b) : null;
     if (b && actor(keyOf(op)).hidden) return;
+    // Drawn where the view has it.
+    if (b) m.dx += seen2(op, keyOf(op), b, b.box[0] + m.dx);
     // What has just been hit blinks: it is left out of every other pair of frames for a little over a second.
     if (b && actor(keyOf(op)).flash > ticks && Math.floor(ticks / 2) % 2 === 0) return;
     if (b && has(keyOf(op), b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
@@ -1019,7 +1064,8 @@ function tick(now) {
     a.parent = { key: keyOf(holder), dx: hm.dx, dy: hm.dy };
   });
   // So does every object with behaviors.
-  ops().forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });
+  ops().forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b, op); });
+  lens();
   // The film itself goes on by whole frames, at its own rate: its drawings, and those of its movie clips,
   // which go on by a frame of their own whether or not the scene is playing.
   owed += pace;
@@ -1084,7 +1130,7 @@ canvas.addEventListener("mousedown", function (event) {
   mouse = pointOf(event);
   dragging = topmost(buttons, mouse) ? null : topmost(grips, mouse);
   // A click on a named object: the topmost one under the mouse, and the rules that wait for it.
-  var hit = frozen ? null : topmost(cast(), mouse);
+  var hit = frozen ? null : topmost(cast().map(function (p) { return { key: p.key, name: p.name, box: shown(p) }; }), mouse);
   if (hit) { var who = {}; who[hit.name] = hit.key; happen("click", function (e) { return e[1] === hit.name; }, who); }
   draw();
 });

@@ -192,11 +192,13 @@ fn cloud(e: &mut Editor, x: f32, y: f32, size: f32, speed: f32) {
     give(e, id, &[(Kind::Drift, speed, 0.0)]);
 }
 
-fn sun(e: &mut Editor, x: f32, y: f32, size: f32) {
+/// A sun whose rays turn. Gives back the rays, which have a behavior and so are an object of their own.
+fn sun(e: &mut Editor, x: f32, y: f32, size: f32) -> u64 {
     let rays = star(e, x, y, size, 14, 0.7, Color::rgb(0xff, 0xe0, 0x70));
     give(e, rays, &[(Kind::Spin, 18.0, 0.0)]);
     let disc = oval(e, x + size * 0.2, y + size * 0.2, size * 0.6, size * 0.6, YELLOW);
     rounded(e, disc, Color::rgb(0xff, 0xf0, 0xa0), ORANGE);
+    rays
 }
 
 fn hills(e: &mut Editor, width: f32, ground: f32) {
@@ -624,26 +626,53 @@ pub fn driving() -> Document {
     let (width, height, road) = (720.0, 360.0, 290.0);
     let mut e = start(720, 360, t("Background"), 30.0);
     sky(&mut e, width, height, Color::rgb(0x8c, 0xcc, 0xf8), Color::rgb(0xf0, 0xf8, 0xff));
-    sun(&mut e, 600.0, 20.0, 80.0);
-    hills(&mut e, width, road);
+    // The rays turn, so they are an object the view would carry off: sliding by nothing keeps them on the screen.
+    let rays = sun(&mut e, 600.0, 20.0, 80.0);
+    e.selection = vec![rays];
+    e.for_selected(|o| o.behaviors.push(crate::behavior::Behavior { kind: Kind::Scenery, a: 0.0, b: 0.0 }));
+    // The sky and the sun stay where they are. What is far slides a little as the car goes, what is near
+    // slides more, and each comes back in at the other side: the road never ends.
+    let far = |e: &mut Editor, percent: f32| e.for_selected(|o| o.behaviors.push(crate::behavior::Behavior { kind: Kind::Scenery, a: percent, b: 1.0 }));
+    for (x, w, h, color, percent) in [(-80.0, 380.0, 190.0, Color::rgb(0x9c, 0xd4, 0x88), 20.0), (width - 360.0, 460.0, 240.0, Color::rgb(0x84, 0xc8, 0x78), 30.0), (160.0, 360.0, 130.0, Color::rgb(0x70, 0xbc, 0x68), 45.0)] {
+        let id = oval(&mut e, x, road - h / 2.0, w, h, color);
+        e.selection = vec![id];
+        e.for_selected(|o| o.name = t("Hill").to_string());
+        far(&mut e, percent);
+    }
     cloud(&mut e, 120.0, 40.0, 90.0, 10.0);
+    far(&mut e, 8.0);
     cloud(&mut e, 380.0, 70.0, 60.0, 6.0);
+    far(&mut e, 5.0);
     let tarmac = block(&mut e, -10.0, road, width + 20.0, 80.0, 0.0, Color::rgb(0x50, 0x54, 0x60));
     shaded(&mut e, tarmac, Color::rgb(0x64, 0x68, 0x74), Color::rgb(0x3c, 0x40, 0x4c));
-    for x in [30.0, 170.0, 310.0, 450.0, 590.0] {
-        block(&mut e, x, road + 34.0, 80.0, 6.0, 3.0, WHITE);
+    // Five marks, a stage and one mark apart from the first to the first again, so that they stay evenly spaced as they come round.
+    for x in [0.0, 160.0, 320.0, 480.0, 640.0] {
+        let id = block(&mut e, x, road + 34.0, 80.0, 6.0, 3.0, WHITE);
+        e.selection = vec![id];
+        e.for_selected(|o| o.name = t("Road mark").to_string());
+        far(&mut e, 100.0);
+    }
+    // Bushes by the road, as near as the road is.
+    for x in [90.0, 420.0, 610.0] {
+        let id = oval(&mut e, x, road - 22.0, 70.0, 34.0, DARK_GREEN);
+        shaded(&mut e, id, GREEN, DARK_GREEN);
+        e.selection = vec![id];
+        e.for_selected(|o| o.name = t("Bush").to_string());
+        far(&mut e, 100.0);
     }
     centered(&mut e, t("Hold Right or Left to drive. Let go, and the car slows down by itself."), 360.0, 14.0, 13.0, INK, TextStyle::default());
     layer(&mut e, t("Game"));
     // The car is one object, its wheels two more: a wheel inside the car's group could not turn.
-    let (x, y) = (60.0, road - 84.0);
+    let (x, y) = (250.0, road - 84.0);
     let body = block(&mut e, x, y + 30.0, 190.0, 40.0, 14.0, RED);
     shaded(&mut e, body, Color::rgb(0xf0, 0x50, 0x50), Color::rgb(0xa8, 0x20, 0x28));
     let cabin = block(&mut e, x + 40.0, y, 100.0, 40.0, 16.0, RED);
     let front = block(&mut e, x + 94.0, y + 8.0, 38.0, 24.0, 6.0, Color::rgb(0xc8, 0xe8, 0xff));
     let back = block(&mut e, x + 50.0, y + 8.0, 38.0, 24.0, 6.0, Color::rgb(0xc8, 0xe8, 0xff));
     let lamp = oval(&mut e, x + 176.0, y + 40.0, 12.0, 12.0, YELLOW);
-    grouped(&mut e, car_name, vec![cabin, body, front, back, lamp]);
+    let car = grouped(&mut e, car_name, vec![cabin, body, front, back, lamp]);
+    // The view goes along with the car: it stays where it is on the screen, and the road slides under it.
+    give(&mut e, car, &[(Kind::Camera, 0.0, 0.0)]);
     for at in [x + 22.0, x + 124.0] {
         let id = wheel(&mut e, wheel_name, at, road - 40.0, 44.0);
         give(&mut e, id, &[(Kind::Roll, 0.0, 0.0)]);
@@ -659,9 +688,6 @@ pub fn driving() -> Document {
         rule((EventKind::KeyUp, "ArrowRight", "", 0.0), &[(StepKind::Slow, car_name, 0.0, 0.0)]),
         with(rule((EventKind::Key, "ArrowLeft", "", 0.0), &[(StepKind::Go, car_name, 320.0, 0.0)]), "left"),
         rule((EventKind::KeyUp, "ArrowLeft", "", 0.0), &[(StepKind::Slow, car_name, 0.0, 0.0)]),
-        // At the end of the road the car comes back in at the other end.
-        rule((EventKind::Edge, car_name, "right", 0.0), &[(StepKind::GoTo, car_name, 4.0, y)]),
-        rule((EventKind::Edge, car_name, "left", 0.0), &[(StepKind::GoTo, car_name, width - 194.0, y)]),
     ];
     crate::examples::finish(e)
 }

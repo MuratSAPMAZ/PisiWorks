@@ -32,12 +32,16 @@ pub enum BehaviorKind {
     Ricochet,
     /// Turns as a wheel does: by as much as the way it has gone along the ground.
     Roll,
+    /// The view goes along with it: it stays where it is on the screen, and everything else slides past.
+    Camera,
+    /// Slides past by only a part of how far the view has gone, as what is far away does, and may come back in at the other side.
+    Scenery,
     /// Other objects cannot pass through it: what walks or falls stops at it, and stands on it.
     Solid,
 }
 
 /// Every kind, in the order the menu lists them: first those that move by themselves, then those the viewer moves.
-pub const KINDS: [BehaviorKind; 17] = [
+pub const KINDS: [BehaviorKind; 19] = [
     BehaviorKind::Spin,
     BehaviorKind::Bounce,
     BehaviorKind::BackAndForth,
@@ -54,6 +58,8 @@ pub const KINDS: [BehaviorKind; 17] = [
     BehaviorKind::Draggable,
     BehaviorKind::Ricochet,
     BehaviorKind::Roll,
+    BehaviorKind::Camera,
+    BehaviorKind::Scenery,
     BehaviorKind::Solid,
 ];
 
@@ -77,6 +83,8 @@ impl BehaviorKind {
             BehaviorKind::Draggable => "Can Be Dragged",
             BehaviorKind::Ricochet => "Bounce off the Edges",
             BehaviorKind::Roll => "Roll Like a Wheel",
+            BehaviorKind::Camera => "Camera Follows Me",
+            BehaviorKind::Scenery => "Slide Like Scenery",
             BehaviorKind::Solid => "Is Solid",
         }
     }
@@ -100,6 +108,8 @@ impl BehaviorKind {
             BehaviorKind::Draggable => "drag",
             BehaviorKind::Ricochet => "ricochet",
             BehaviorKind::Roll => "roll",
+            BehaviorKind::Camera => "camera",
+            BehaviorKind::Scenery => "scenery",
             BehaviorKind::Solid => "solid",
         }
     }
@@ -121,13 +131,14 @@ impl BehaviorKind {
             BehaviorKind::ArrowKeys => (("Speed (pixels a second):", 160.0), None),
             BehaviorKind::Gravity => (("Pull (pixels a second, each second):", 900.0), Some(("Jump speed (pixels a second):", 420.0))),
             BehaviorKind::Ricochet => (("Speed (pixels a second):", 220.0), Some(("Direction (degrees):", 50.0))),
-            BehaviorKind::Draggable | BehaviorKind::Roll | BehaviorKind::Solid => (("", 0.0), None),
+            BehaviorKind::Scenery => (("Slides by (percent: 100 as the road, 0 stays on the screen):", 40.0), Some(("Comes back in at the other side (1: yes, 0: no):", 1.0))),
+            BehaviorKind::Draggable | BehaviorKind::Roll | BehaviorKind::Camera | BehaviorKind::Solid => (("", 0.0), None),
         }
     }
 
     /// Whether the kind waits for the viewer's mouse or keyboard, and so shows only in the published film.
     pub const fn interactive(self) -> bool {
-        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Roll | BehaviorKind::Solid)
+        matches!(self, BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Roll | BehaviorKind::Camera | BehaviorKind::Scenery | BehaviorKind::Solid)
     }
 }
 
@@ -209,7 +220,7 @@ pub fn moved(behaviors: &[Behavior], tick: usize, fps: f32, bounds: Rect, stage:
                     moved.alpha = 0.0;
                 }
             }
-            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Roll | BehaviorKind::Solid => {}
+            BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Ricochet | BehaviorKind::Roll | BehaviorKind::Camera | BehaviorKind::Scenery | BehaviorKind::Solid => {}
         }
     }
     moved

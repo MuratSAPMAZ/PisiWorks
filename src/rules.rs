@@ -185,6 +185,10 @@ pub enum StepKind {
     Slow,
     /// Stops the object that is going, at once.
     Halt,
+    /// The view goes along with the object from now on.
+    Camera,
+    /// The view stays where it is.
+    CameraStop,
     /// Sends the object after the object `b` at `x` pixels a second; at 0 it stops going after anything.
     Chase,
     /// Waits `x` seconds before the steps that follow it.
@@ -204,7 +208,7 @@ pub enum StepKind {
     Restart,
 }
 
-pub const STEPS: [StepKind; 37] = [
+pub const STEPS: [StepKind; 39] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -231,6 +235,8 @@ pub const STEPS: [StepKind; 37] = [
     StepKind::Halt,
     StepKind::Attach,
     StepKind::Detach,
+    StepKind::Camera,
+    StepKind::CameraStop,
     StepKind::Wait,
     StepKind::Call,
     StepKind::Sound,
@@ -274,6 +280,8 @@ impl StepKind {
             StepKind::Give => "Give an object a behavior",
             StepKind::Take => "Take a behavior from an object",
             StepKind::Whirl => "Keep an object spinning",
+            StepKind::Camera => "Make the camera follow an object",
+            StepKind::CameraStop => "Let the camera stand still",
             StepKind::Chase => "Send an object after another",
             StepKind::Go => "Set an object going",
             StepKind::Slow => "Let an object slow down and stop",
@@ -319,6 +327,8 @@ impl StepKind {
             StepKind::Give => "give",
             StepKind::Take => "take",
             StepKind::Whirl => "whirl",
+            StepKind::Camera => "camera",
+            StepKind::CameraStop => "camera-stop",
             StepKind::Chase => "chase",
             StepKind::Go => "go",
             StepKind::Slow => "slow",
@@ -356,7 +366,8 @@ impl StepKind {
             StepKind::Whirl => (Some(Pick::Object), None, Some(("Turns a second:", 1.0)), None),
             StepKind::Chase => (Some(Pick::Object), Some(Pick::Object), Some(("Speed:", 100.0)), None),
             StepKind::Go => (Some(Pick::Object), Some(Pick::Way), Some(("Speed:", 250.0)), None),
-            StepKind::Slow | StepKind::Halt | StepKind::Detach => (Some(Pick::Object), None, None, None),
+            StepKind::Slow | StepKind::Halt | StepKind::Detach | StepKind::Camera => (Some(Pick::Object), None, None, None),
+            StepKind::CameraStop => (None, None, None, None),
             StepKind::Attach => (Some(Pick::Object), Some(Pick::Object), None, None),
             StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
             StepKind::Call => (Some(Pick::Command), None, None, None),
@@ -696,6 +707,8 @@ impl Step {
             StepKind::Give => tf("give {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
             StepKind::Take => tf("take from {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
             StepKind::Whirl => tf("make {} spin {} turns a second", &[a, &x]),
+            StepKind::Camera => tf("make the camera follow {}", &[a]),
+            StepKind::CameraStop => t("let the camera stand still").to_string(),
             StepKind::Chase => tf("send {} after {} at {}", &[a, &self.b, &x]),
             StepKind::Go => tf("make {} go {} at {}", &[a, &choice_name(Pick::Way, &self.b), &x]),
             StepKind::Slow => tf("make {} slow down and stop", &[a]),

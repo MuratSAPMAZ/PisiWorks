@@ -418,17 +418,17 @@ pub enum BehaviorCmd {
 /// PisiSahne's Behaviors menu: every kind, those that move by themselves first, then those the viewer moves.
 pub const BEHAVIOR_MENU: &[Entry] = &{
     use crate::behavior::KINDS;
-    let mut entries = [Sep; 22];
+    let mut entries = [Sep; 24];
     let mut index = 0;
-    while index < 17 {
+    while index < 19 {
         // The first ten go by themselves; a line parts them from the five that have to do with the viewer.
         let at = if index < 10 { index } else { index + 1 };
         entries[at] = cmd(KINDS[index].name(), "", Cmd::Behavior(BehaviorCmd::Toggle(KINDS[index])));
         index += 1;
     }
-    entries[19] = cmd("Attach to Another Object...", "", Cmd::Behavior(BehaviorCmd::Attach));
-    entries[20] = cmd("Behavior Settings...", "", Cmd::Behavior(BehaviorCmd::Settings));
-    entries[21] = cmd("Remove All Behaviors", "", Cmd::Behavior(BehaviorCmd::Clear));
+    entries[21] = cmd("Attach to Another Object...", "", Cmd::Behavior(BehaviorCmd::Attach));
+    entries[22] = cmd("Behavior Settings...", "", Cmd::Behavior(BehaviorCmd::Settings));
+    entries[23] = cmd("Remove All Behaviors", "", Cmd::Behavior(BehaviorCmd::Clear));
     entries
 };
 

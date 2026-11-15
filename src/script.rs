@@ -398,7 +398,9 @@ enum Gap {
 
 /// The sentences a step can be: the kind each gives, what its gaps hold in the order they stand, and
 /// whether the first number is taken away ("decrease", "slower").
-const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 40] = [
+const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 42] = [
+    ("make the camera follow {}", StepKind::Camera, &[Gap::A], false),
+    ("let the camera stand still", StepKind::CameraStop, &[], false),
     ("make {} go {} at {}", StepKind::Go, &[Gap::A, Gap::B, Gap::X], false),
     ("make {} slow down and stop", StepKind::Slow, &[Gap::A], false),
     ("make {} stop", StepKind::Halt, &[Gap::A], false),

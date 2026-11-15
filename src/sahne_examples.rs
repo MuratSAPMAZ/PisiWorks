@@ -612,7 +612,10 @@ mod tests {
         let html = crate::publish::html(&doc, "x").unwrap();
         // Each wheel says what it is attached to, and the car, which has no behavior, is a picture the page can follow.
         assert_eq!(html.matches("\"a\":\"Car\"").count(), 2);
-        assert!(html.contains("\"l\":[],\"n\":\"Car\""));
+        assert!(html.contains("\"l\":[[\"camera\",0,0]],\"n\":\"Car\""));
+        // The road marks slide as the road does and come back in; the hills slide less.
+        assert_eq!(html.matches("[\"scenery\",100,1]").count(), 8);
+        assert!(html.contains("[\"scenery\",20,1]") && html.contains("[\"drift\",10,0],[\"scenery\",8,1]"));
         // The words at the top of the stage are a text called what it says: no list offers it. The car and the wheels are offered.
         let names = doc.chosen_names();
         assert!(names.contains(&t("Car").to_string()) && names.contains(&t("Wheel").to_string()));
@@ -710,7 +713,9 @@ mod tests {
         let page = &doc.pages[0];
         assert_eq!(page.timeline.as_ref().unwrap().frame_count(), 1);
         let used: std::collections::HashSet<_> = page.objects().flat_map(|o| o.behaviors.iter().map(|b| b.kind)).collect();
-        assert_eq!(used.len(), crate::behavior::KINDS.len());
+        // All but the two that move the view, which the car example shows: here they would carry the stage away.
+        assert_eq!(used.len(), crate::behavior::KINDS.len() - 2);
+        assert!(!used.contains(&crate::behavior::BehaviorKind::Camera) && !used.contains(&crate::behavior::BehaviorKind::Scenery));
         let html = crate::publish::html(&doc, "x").unwrap();
         assert_eq!(html.matches("[\"m\",[").count(), page.objects().filter(|o| !o.behaviors.is_empty()).count());
         assert!(html.contains("\"l\":[[\"keys\",160,0],[\"gravity\",900,420]]") && html.contains("[\"spin\",8,0]"));

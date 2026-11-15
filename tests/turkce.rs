@@ -197,3 +197,19 @@ Boşluk tuşuna basılınca:
     let told = read("Film başlayınca:\n    Araba nesnesi ileri 300 hızla gitsin\n").unwrap_err();
     assert_eq!((told[0].line, told[0].what.as_str()), (2, "ileri bir yön değil: sağa, sola, yukarı ya da aşağı yazılır"));
 }
+
+#[test]
+fn the_camera_is_told_in_turkish() {
+    set_language(Language::Turkish);
+    let text = "\
+Film başlayınca:
+    kamera Araba nesnesini izlesin
+    Bulut nesnesine Arka Plan Gibi Kay davranışını ver
+
+Boşluk tuşuna basılınca:
+    kamera yerinde dursun
+";
+    let found = read(text).unwrap();
+    assert_eq!(found.rules.iter().flat_map(|rule| &rule.steps).map(|step| (step.kind.key(), step.a.as_str(), step.b.as_str())).collect::<Vec<_>>(), vec![("camera", "Araba", ""), ("give", "Bulut", "scenery"), ("camera-stop", "", "")]);
+    assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+}
