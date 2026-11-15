@@ -55,7 +55,25 @@ It is deliberately a look-alike: the same docked layout, tool groups, panels and
 
 ## Get started
 
-There is no package yet; the program is built from source. Building and running were checked on Linux Mint 22.3. The target is Pardus 25, but **it has not been tried on Pardus 25 yet**.
+Building, packaging and running were checked on Linux Mint 22.3. The target is Pardus 25, but **it has not been tried on Pardus 25 yet**.
+
+### Installing a package
+
+There is no ready-made `.deb` in the repository; one command builds it from source (the build requirements below must be installed):
+
+```bash
+packaging/build-deb.sh
+```
+
+The package is written to `target/deb/` and installed with:
+
+```bash
+sudo apt install ./target/deb/pisiworks_0.1.0_amd64.deb
+```
+
+After that PisiWorks is in the Graphics section of the application menu, and `.pisi` files open in it on a double-click. The maintainer written into the package is taken from the `DEB_MAINTAINER` environment variable, or failing that from git's `user.name` and `user.email`.
+
+### Building from source
 
 You need Rust 1.91 or later (from [rustup](https://rustup.rs/)) and these packages:
 
@@ -125,12 +143,12 @@ The figures are from November 2026 and will drift as work goes on.
 
 ## Not in this version
 
-- Preferences, Keyboard Shortcuts, Batch Process, the button editor, animation symbols, text on a path and spell checking. These appear greyed out in the menus.
-- Gradient and pattern fills for objects.
+- The commands that appear greyed out in the menus: New from Template, Image Preview, Batch Process, New Button, New Symbol (an editor for an empty symbol), Preferences, Keyboard Shortcuts, Animation, Justified and Stretched text alignment, Attach to Path, Check Spelling and the Commands menu.
+- Gradient and pattern fills for objects. (Gradients and patterns exist only as overlays in Photoshop Live Effects.)
 - The Polygon, Oval Marquee, Polygon Lasso, Smudge, Dodge, Burn and Replace Color tools.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
-- A package (`.deb`) for Pardus.
+- A ready-made package to download. For now the `.deb` is built from source.
 
 The program has not been tested side by side with Adobe Fireworks itself; the pixel results of filters and blend modes may differ from those of Fireworks. Reports of differences and bugs are welcome.
 

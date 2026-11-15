@@ -55,7 +55,25 @@ Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve aç
 
 ## Kurulum
 
-Henüz hazır bir paket yok; program kaynaktan derlenir. Derleme ve çalıştırma Linux Mint 22.3 üzerinde doğrulandı. Hedef Pardus 25'tir, ancak **Pardus 25 üzerinde henüz denenmedi**.
+Derleme, paketleme ve çalıştırma Linux Mint 22.3 üzerinde doğrulandı. Hedef Pardus 25'tir, ancak **Pardus 25 üzerinde henüz denenmedi**.
+
+### Paketle kurma
+
+Depoda hazır `.deb` dosyası bulunmaz; paket kaynaktan tek komutla üretilir (aşağıdaki derleme gereksinimleri kurulu olmalıdır):
+
+```bash
+packaging/build-deb.sh
+```
+
+Paket `target/deb/` klasörüne yazılır ve şöyle kurulur:
+
+```bash
+sudo apt install ./target/deb/pisiworks_0.1.0_amd64.deb
+```
+
+Kurulumdan sonra PisiWorks uygulama menüsünün Grafik bölümünde görünür ve `.pisi` dosyaları çift tıklayınca PisiWorks ile açılır. Pakete yazılan bakımcı adı `DEB_MAINTAINER` ortam değişkeninden, o yoksa git'in `user.name` ve `user.email` ayarlarından alınır.
+
+### Kaynaktan derleme
 
 Gerekenler: Rust 1.91 veya üzeri ([rustup](https://rustup.rs/) ile kurulabilir) ve şu paketler:
 
@@ -125,12 +143,12 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 ## Bu sürümde olmayanlar
 
-- Tercihler, Klavye Kısayolları, Toplu İşlem, düğme düzenleyicisi, animasyon sembolleri, yola metin ekleme ve yazım denetimi. Bunlar menülerde gri görünür.
-- Nesneler için degrade ve desen dolguları.
+- Menülerde gri görünen komutlar: Şablondan Yeni, Görüntü Önizleme, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon, metinde Yaslanmış ve Uzatılmış hizalama, Yola Ekle, Yazım Denetimi ve Komutlar menüsü.
+- Nesneler için degrade ve desen dolguları. (Degrade ve desen yalnızca Photoshop Canlı Efektleri'ndeki kaplama olarak vardır.)
 - Çokgen, Oval Seçim Çerçevesi, Çokgen Kement, Leke, Soldur, Yak ve Renk Değiştir araçları.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
-- Pardus için hazır paket (`.deb`).
+- İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.
 
 Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
 

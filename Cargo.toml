@@ -6,8 +6,8 @@ rust-version = "1.91"
 description = "A screen-design editor with a classic docked-panel workspace, built on GPUI."
 license = "MIT"
 authors = ["Med Amine Belbachir <https://medamineweb.com>"]
-repository = "https://github.com/gregstein/emberframe"
-homepage = "https://medamineweb.com/en/emberframe/"
+repository = "https://github.com/MuratSAPMAZ/PisiWorks"
+homepage = "https://github.com/MuratSAPMAZ/PisiWorks"
 readme = "README.md"
 
 [dependencies]
