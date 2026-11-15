@@ -1,34 +1,6 @@
 #![cfg_attr(not(test), windows_subsystem = "windows")]
 
-mod autoshape;
-mod batch;
-mod bitmap;
-mod blend;
-mod canvas_view;
-mod commands;
-mod effects;
-mod examples;
-mod export;
-mod fit;
-mod fonts;
-mod fwpng;
-mod i18n;
-mod icons;
-mod jpeg;
-mod library;
-mod menus;
-mod model;
-mod optimize;
-mod panels;
-mod print;
-mod pseffects;
-mod paths;
-mod settings;
-mod spell;
-mod templates;
-mod theme;
-mod ui;
-mod workspace;
+use pisiworks::{i18n, icons, settings, theme, workspace};
 
 use gpui::{
     point, prelude::*, px, size, App, Application, Bounds, TitlebarOptions, WindowBounds, WindowOptions,

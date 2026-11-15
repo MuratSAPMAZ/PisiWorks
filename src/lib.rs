@@ -1,0 +1,32 @@
+//! The code PisiWorks and PisiSahne share: the object model, the renderer, the
+//! filters, the fonts, the translations, and PisiWorks' own window.
+
+pub mod autoshape;
+pub mod batch;
+pub mod bitmap;
+pub mod blend;
+pub mod canvas_view;
+pub mod commands;
+pub mod effects;
+pub mod examples;
+pub mod export;
+pub mod fit;
+pub mod fonts;
+pub mod fwpng;
+pub mod i18n;
+pub mod icons;
+pub mod jpeg;
+pub mod library;
+pub mod menus;
+pub mod model;
+pub mod optimize;
+pub mod panels;
+pub mod print;
+pub mod pseffects;
+pub mod paths;
+pub mod settings;
+pub mod spell;
+pub mod templates;
+pub mod theme;
+pub mod ui;
+pub mod workspace;
