@@ -1073,4 +1073,7 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Centered Vertically", "Dikey Ortalanmış"),
     ("Justified Vertically", "Dikey Yaslanmış"),
     ("Stretched Vertically", "Dikey Uzatılmış"),
+    ("Opened {} with its Fireworks layers: {} layer(s), {} bitmap(s)", "{} Fireworks katmanlarıyla açıldı: {} katman, {} bitmap"),
+    ("{} effect(s) could not be read", "{} efekt okunamadı"),
+    ("Opened {} as a flat picture: {} Fireworks object(s) of kinds that cannot be read (paths, text, groups)", "{} düz görüntü olarak açıldı: okunamayan türde {} Fireworks nesnesi var (yollar, metin, gruplar)"),
 ];

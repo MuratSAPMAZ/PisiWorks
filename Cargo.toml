@@ -25,6 +25,7 @@ anyhow = "1"
 i_overlay = "9.1.0"
 png = "0.18"
 gif = "0.14"
+flate2 = "1"
 
 [profile.dev]
 opt-level = 1

@@ -10,6 +10,7 @@ mod effects;
 mod export;
 mod fit;
 mod fonts;
+mod fwpng;
 mod i18n;
 mod icons;
 mod jpeg;

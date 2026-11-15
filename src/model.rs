@@ -2177,7 +2177,7 @@ pub struct State {
 }
 
 impl State {
-    fn new(name: impl Into<String>) -> Self {
+    pub(crate) fn new(name: impl Into<String>) -> Self {
         Self { name: name.into(), delay_ms: DEFAULT_STATE_DELAY, exported: true, objects: Vec::new() }
     }
 }

@@ -144,11 +144,11 @@ The figures are from November 2026 and will drift as work goes on.
 ## Not in this version
 
 - Fireworks' JavaScript (JSF) scripts and extensions: Run Script plays only PisiWorks' own command files (one menu command on each line). Of the ready-made commands, Add Arrowheads, Add Picture Frame, Add Shadow, Auto Vector Mask and Twist and Fade are missing. Adobe's templates are not there either; New from Template lists our own and the ones you save.
-- Layers inside Fireworks PNG files. Only the flat image is read.
+- Paths, text and groups in Fireworks PNG files. Layers, states, bitmap objects and the Drop Shadow effect are read; a file that has a path, text or group opens as its flat picture. Adobe never published the format, so the reader was worked out from a few files written by Fireworks 8 and has not been tried on files from other versions. Fireworks PNG is not written.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
 - A ready-made package to download. For now the `.deb` is built from source.
 
-The program has not been tested side by side with Adobe Fireworks itself; the pixel results of filters and blend modes may differ from those of Fireworks. Reports of differences and bugs are welcome.
+The program has not been tested side by side with Adobe Fireworks itself; the pixel results of filters and blend modes may differ from those of Fireworks. The one exception: a Drop Shadow (softness 1) in a file written by Fireworks 8 was compared with our drawing of it, and 287 of 289 pixels came out the same. Reports of differences and bugs are welcome.
 
 ## License and credits
 

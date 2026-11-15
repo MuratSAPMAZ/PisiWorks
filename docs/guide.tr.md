@@ -187,3 +187,7 @@ Bir sembol kopyasına **çift tıklayınca** sembol olduğu yerde açılır: par
 ## Metin yönü
 
 Metin seçiliyken Özellikler'deki yön listesi dört seçenek sunar: **Soldan sağa yatay**, **Sağdan sola yatay** (satırın harfleri ters sırada dizilir), **Soldan sağa dikey** ve **Sağdan sola dikey**. Dikey metinde her satır bir sütundur ve harfler dik durarak alt alta dizilir. Hizalama düğmeleri dikey metinde sütun boyunca çalışır; **Metin > Hizala** menüsündeki Üst, Dikey Ortalanmış, Alt, Dikey Yaslanmış ve Dikey Uzatılmış aynı işi görür.
+
+## Fireworks PNG dosyaları
+
+Fireworks'ün kendi PNG dosyaları **Dosya > Aç** ile katmanlarıyla açılır: katman adları ve görünürlükleri, durumlar, bitmap nesneleri ve Alt Gölge efekti okunur. Dosyada yol, metin ya da grup varsa bunlar okunamaz; o zaman dosya düz görüntü olarak açılır ve durum çubuğu bunu söyler. Açılan belge yeni bir belgedir: kaydetmek Fireworks dosyasının üzerine yazmaz.

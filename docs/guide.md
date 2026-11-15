@@ -185,3 +185,7 @@ The **Commands** menu has ready-made commands: Creative (Convert to Grayscale, C
 ## Text orientation
 
 With text selected, the orientation list in Properties offers four choices: **Horizontal left to right**, **Horizontal right to left** (the letters of a line are set in the opposite order), **Vertical left to right** and **Vertical right to left**. In vertical text each line is a column and the letters stand upright one under another. The alignment buttons work down the column for vertical text; Top, Centered Vertically, Bottom, Justified Vertically and Stretched Vertically in **Text > Align** do the same.
+
+## Fireworks PNG files
+
+Fireworks' own PNG files open with their layers through **File > Open**: layer names and visibility, states, bitmap objects and the Drop Shadow effect are read. Paths, text and groups cannot be read; a file that has any opens as its flat picture, and the status bar says so. What opens is a new document: saving never writes over the Fireworks file.

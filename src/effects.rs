@@ -615,6 +615,36 @@ pub(crate) fn blur_channel(values: &[f32], width: usize, height: usize, radius: 
     current
 }
 
+/// Softens a channel the way Fireworks softens a shadow. A file written by Fireworks,
+/// with a drop shadow of softness 1, shows each pixel spread over its neighbours as
+/// 1, 2, 1 across and down: a box of softness + 1 pixels passed over twice, once
+/// leaning each way. Softness above 1 follows the same rule but was not in the file.
+pub(crate) fn soften(values: &[f32], width: usize, height: usize, softness: f32) -> Vec<f32> {
+    let reach = softness.round().max(0.0) as i64;
+    if reach == 0 || width == 0 || height == 0 {
+        return values.to_vec();
+    }
+    let weight = 1.0 / (reach + 1) as f32;
+    let pass = |source: &[f32], length: usize, stride: usize, lines: usize, line_stride: usize, forward: bool| {
+        let mut out = vec![0.0; source.len()];
+        for line in 0..lines {
+            let base = line * line_stride;
+            let get = |i: i64| if i < 0 || i >= length as i64 { 0.0 } else { source[base + i as usize * stride] };
+            for i in 0..length as i64 {
+                let window = if forward { i..=i + reach } else { i - reach..=i };
+                out[base + i as usize * stride] = window.map(get).sum::<f32>() * weight;
+            }
+        }
+        out
+    };
+    let mut current = values.to_vec();
+    for forward in [true, false] {
+        current = pass(&current, width, 1, height, width, forward);
+        current = pass(&current, height, width, width, 1, forward);
+    }
+    current
+}
+
 /// Blurs a layer, colors and transparency together.
 fn blur_layer(layer: &Layer, radius: f32) -> Layer {
     let (w, h) = (layer.width, layer.height);
@@ -923,7 +953,7 @@ fn shadow_or_glow(layer: &Layer, filter: &LiveFilter) -> Layer {
     match filter.kind {
         DropShadow => {
             let ((dx, dy), distance, opacity, knock_out) = (direction(v(3)), v(0), v(1) / 100.0, v(4) >= 0.5);
-            let shade = blur_channel(&shifted(&alpha, dx * distance, dy * distance), w, h, v(2));
+            let shade = soften(&shifted(&alpha, dx * distance, dy * distance), w, h, v(2));
             for (px, s) in out.pixels.iter_mut().zip(&shade) {
                 let shadow = [color[0], color[1], color[2], (s * opacity).clamp(0.0, 1.0)];
                 // Knocked out, the object leaves a hole in its own shadow.
@@ -985,7 +1015,7 @@ fn shadow_or_glow(layer: &Layer, filter: &LiveFilter) -> Layer {
                     *value = 1.0;
                 }
             }
-            let shade = blur_channel(&far, w, h, v(2));
+            let shade = soften(&far, w, h, v(2));
             for (px, s) in out.pixels.iter_mut().zip(&shade) {
                 let alpha = px[3];
                 let strength = (s * opacity).clamp(0.0, 1.0);

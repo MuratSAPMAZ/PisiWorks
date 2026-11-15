@@ -884,6 +884,10 @@ fn selection_mode(modifiers: gpui::Modifiers) -> MaskMode {
 enum Opened {
     Document(Document),
     Image(Bitmap),
+    /// A Fireworks PNG read with its layers.
+    Fireworks(Document, crate::fwpng::Report),
+    /// A Fireworks PNG with this many objects that could not be read, opened as its flat picture.
+    Flat(Bitmap, usize),
 }
 
 /// Identifies a file by content, so a misnamed file still opens correctly.
@@ -891,6 +895,12 @@ fn parse_file(bytes: &[u8]) -> Result<Opened> {
     if bytes.iter().find(|b| !b.is_ascii_whitespace()) == Some(&b'{') {
         let text = std::str::from_utf8(bytes).context(t("not an Emberframe document"))?;
         return document_from_json(text).map(Opened::Document);
+    }
+    // A Fireworks PNG opens with its layers if all of it can be read, and as the flat picture it carries if not.
+    match crate::fwpng::read(bytes) {
+        Ok(Some((document, report))) if report.complete() => return Ok(Opened::Fireworks(document, report)),
+        Ok(Some((_, report))) => return Bitmap::decode(bytes).map(|bitmap| Opened::Flat(bitmap, report.unread_objects)),
+        _ => {}
     }
     Bitmap::decode(bytes).map(Opened::Image)
 }
@@ -2316,7 +2326,8 @@ impl Workspace {
         };
         let open = |bytes: &[u8], path: &Path| match parse_file(bytes)? {
             Opened::Document(document) => Ok((document, true)),
-            Opened::Image(bitmap) => Ok((Document::from_bitmap(file_stem(path), bitmap), false)),
+            Opened::Fireworks(document, _) => Ok((document, false)),
+            Opened::Image(bitmap) | Opened::Flat(bitmap, _) => Ok((Document::from_bitmap(file_stem(path), bitmap), false)),
         };
         let mut failed = Vec::new();
         for path in &dialog.files {
@@ -3621,8 +3632,30 @@ impl Workspace {
                 self.status = tf("Opened {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]);
                 self.load_document(doc, Some(path));
             }
-            Ok(Opened::Image(bitmap)) => {
-                self.status = tf("Opened {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]);
+            Ok(Opened::Fireworks(doc, report)) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                self.status = tf("Opened {} with its Fireworks layers: {} layer(s), {} bitmap(s)", &[&name, &report.layers, &report.bitmaps]);
+                if report.unread_effects > 0 {
+                    self.status = format!("{}. {}", self.status, tf("{} effect(s) could not be read", &[&report.unread_effects]));
+                }
+                // Like any picture, it becomes a new document: saving it never writes over the Fireworks file.
+                self.load_document(doc, None);
+                self.source_image = Some(path);
+                self.fit_if_larger_than_view();
+            }
+            Ok(opened @ (Opened::Image(_) | Opened::Flat(..))) => {
+                let name = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                let bitmap = match opened {
+                    Opened::Flat(bitmap, unread) => {
+                        self.status = tf("Opened {} as a flat picture: {} Fireworks object(s) of kinds that cannot be read (paths, text, groups)", &[&name, &unread]);
+                        bitmap
+                    }
+                    Opened::Image(bitmap) => {
+                        self.status = tf("Opened {}", &[&name]);
+                        bitmap
+                    }
+                    _ => return,
+                };
                 let doc = Document::from_bitmap(file_stem(&path), bitmap);
                 let id = doc.next_id - 1;
                 self.load_document(doc, None);

@@ -144,11 +144,11 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 ## Bu sürümde olmayanlar
 
 - Fireworks'ün JavaScript (JSF) komut dosyaları ve uzantıları: Komut Dosyası Çalıştır yalnızca PisiWorks'ün kendi komut dosyalarını (her satırda bir menü komutu) çalıştırır. Komutlar menüsünün hazır komutlarından Ok Başları Ekle, Resim Çerçevesi Ekle, Gölge Ekle, Otomatik Vektör Maskesi ile Bük ve Soldur yoktur. Adobe'nin şablonları da yoktur; Şablondan Yeni kendi şablonlarımızı ve sizin kaydettiklerinizi listeler.
-- Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
+- Fireworks PNG dosyalarındaki yollar, metinler ve gruplar. Katmanlar, durumlar, bitmap nesneleri ve Alt Gölge efekti okunur; içinde yol, metin ya da grup olan dosya düz görüntü olarak açılır. Biçim Adobe tarafından yayımlanmadığı için okuyucu Fireworks 8 ile yazılmış birkaç dosyadan çıkarıldı; başka sürümlerin dosyalarıyla denenmedi. Fireworks PNG yazılmaz.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.
 
-Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
+Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Tek istisna: Fireworks 8 ile yazılmış bir dosyadaki Alt Gölge (yumuşaklık 1) bizim çizimimizle karşılaştırıldı ve 289 pikselin 287'si aynı çıktı. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
 
 ## Lisans ve teşekkür
 
