@@ -1742,7 +1742,7 @@ impl Workspace {
         let timeline = page.timeline.as_ref()?;
         const CELL: f32 = 11.;
         const ROW: f32 = 20.;
-        const NAMES: f32 = 150.;
+        const NAMES: f32 = 190.;
         let (current, count) = (timeline.current, timeline.frame_count());
         let shown = (count + 30).max(120).min(crate::model::MAX_FRAMES);
         // The numbers over the frames count from 1, as Flash's do.
@@ -1782,14 +1782,60 @@ impl Workspace {
             names.push(
                 div()
                     .h(px(ROW))
-                    .px_2()
+                    .px_1()
                     .flex()
                     .flex_none()
                     .items_center()
+                    .gap_1()
                     .border_b_1()
                     .border_color(rgb(BORDER))
                     .when(active, |d| d.bg(rgb(ACCENT)))
                     .when(!active, |d| d.hover(|s| s.bg(rgb(HOVER))))
+                    // Show or hide, and lock or unlock, as the two columns beside a layer's name do in Flash.
+                    .child(
+                        div()
+                            .w(px(14.))
+                            .h(px(14.))
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if let Some(layer) = this.ed.doc.page_mut().layers.get_mut(index) {
+                                        layer.visible = !layer.visible;
+                                    }
+                                    this.ed.commit(t("Show or Hide Layer"));
+                                    cx.notify();
+                                }),
+                            )
+                            .when(layer.visible, |d| d.child(icon("eye", 12., TEXT)))
+                            .when(!layer.visible, |d| d.child(div().w(px(8.)).h(px(1.)).bg(rgb(TEXT_DIM)))),
+                    )
+                    .child(
+                        div()
+                            .w(px(14.))
+                            .h(px(14.))
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .on_mouse_down(
+                                MouseButton::Left,
+                                cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if let Some(layer) = this.ed.doc.page_mut().layers.get_mut(index) {
+                                        layer.locked = !layer.locked;
+                                    }
+                                    this.ed.commit(t("Lock or Unlock Layer"));
+                                    cx.notify();
+                                }),
+                            )
+                            .when(layer.locked, |d| d.child(icon("lock", 12., TEXT)))
+                            .when(!layer.locked, |d| d.child(div().w(px(4.)).h(px(4.)).rounded_full().bg(rgb(TEXT_DIM)))),
+                    )
                     .on_mouse_down(
                         MouseButton::Left,
                         cx.listener(move |this, _, _, cx| {
@@ -1798,7 +1844,7 @@ impl Workspace {
                         }),
                     )
                     // A guide or a mask is named as one, and the layer it works on is set in under it.
-                    .when(index + 1 < page.layers.len() && timeline.kind(index + 1) != crate::model::LayerKind::Normal && timeline.kind(index) == crate::model::LayerKind::Normal, |d| d.pl_5())
+                    .when(timeline.master(index).is_some(), |d| d.pl_5())
                     .child(match timeline.kind(index) {
                         crate::model::LayerKind::Normal => layer.name.clone(),
                         crate::model::LayerKind::Guide => format!("{}: {}", t("Guide"), layer.name),
@@ -1816,7 +1862,7 @@ impl Workspace {
                     // Grey for frames that show something, a paler blue for a tween, white for empty ones and past the end.
                     let color = match span {
                         // A motion tween is blue and a shape tween green, as in Flash.
-                        Some(span) if span.tween.is_some_and(|tween| tween.shape) => 0xc4e6c0,
+                        Some(span) if span.tween.as_ref().is_some_and(|tween| tween.shape) => 0xc4e6c0,
                         Some(span) if span.tween.is_some() => 0xc3cdf0,
                         Some(span) if !holds(span) => 0xf4f4f4,
                         Some(_) => 0xcfcfcf,
@@ -1889,7 +1935,16 @@ impl Workspace {
                     .gap_1()
                     .child(label(t("Ease:")))
                     .child(self.field(FieldId::TweenEase, 40., cx))
-                    .when(!tween.shape, |d| d.child(label(t("Turns:"))).child(self.field(FieldId::TweenTurns, 32., cx)))
+                    .when(!tween.shape, |d| {
+                        d.child(label(t("Turns:"))).child(self.field(FieldId::TweenTurns, 32., cx)).child(self.check_box(t("Orient to path"), tween.orient, cx, |this| {
+                            if let Some(mut tween) = this.current_tween() {
+                                tween.orient = !tween.orient;
+                                this.ed.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(tween)));
+                                this.ed.commit(t("Tween"));
+                            }
+                        }))
+                    })
+                    .when(tween.shape, |d| d.child(label(tf("Hints: {}", &[&tween.hints.len()]))))
             }));
         Some(
             div()

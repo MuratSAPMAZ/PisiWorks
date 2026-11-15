@@ -1843,8 +1843,9 @@ impl Render for Workspace {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .child(self.document(cx))
+                            // The timeline lies over the stage, where Flash's classic workspace has it.
                             .children(self.timeline_view(cx))
+                            .child(self.document(cx))
                             .when(self.panel_open(Panel::Properties), |d| d.child(self.properties(cx))),
                     )
                     .children(self.dock(cx)),

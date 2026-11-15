@@ -165,13 +165,16 @@ Working at this stage:
 - The timeline: layers, frames, keyframes and blank keyframes (F5, F6, F7; Shift+F5 and Shift+F6 to remove).
 - Motion tweens: between two keyframes, place, size, turn and opacity change step by step. Changing an object on a frame inside a tween makes a keyframe of that frame, as in Flash.
 - Shape tweens: the shapes of a keyframe change, outline and color, into those of the next keyframe.
-- Guide layers: the tweened objects of the layer beneath travel along the guide's path. Mask layers: the layer beneath shows only where the mask has something drawn. Guides are not drawn when publishing; masks are applied in Preview and when publishing.
+- Shape hints (Ctrl+Shift+H): lettered marks, dragged on the stage, that say which point of a shape is to become which.
+- Guide layers: the tweened objects of the layers tied to one travel along its path, turning to face the way it runs if asked. Mask layers: the layers tied to one show only where the mask has something drawn. Several layers can be tied to one guide or mask. Guides are not drawn when publishing; masks are applied in Preview, when publishing and, as in Flash, on the stage once their layers are locked.
 - Easing (from −100 to 100) and, for a motion tween, a number of turns.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 
-Not there yet: movie clip symbols, frame and button actions, moving between scenes, sound, shape hints, orienting to the path, and a `.deb` package for PisiSahne. The window is not laid out as Flash's is yet either: the tools are on the left and Properties at the bottom.
+The window is laid out as Flash's classic workspace is: the timeline over the stage, the tools on the left, Properties at the bottom; layers are in the timeline. Enter plays. The `.deb` package installs both programs.
+
+Not there yet (the third stage): movie clip symbols, frame and button actions, moving between scenes, and sound.
 
 The Turkish terms are our own rendering, for want of a Turkish Flash installation to take them from, and may differ from the words in teachers' notes. They are all in one translation table and will be corrected if the right ones are reported.
 

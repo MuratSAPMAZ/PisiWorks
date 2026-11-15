@@ -568,6 +568,8 @@ pub enum Drag {
     FillHandle { end: bool, width: bool },
     /// The end of an animation's path is being dragged.
     MotionEnd,
+    /// A shape hint is being dragged: its number, and whether it is the end of the pair.
+    Hint { number: usize, end: bool },
     /// The start of an animation's path is being dragged: where its end is, and where the start was last.
     MotionStart { end: Vec2, last: Vec2 },
     /// Dragging a guide: one from the page, or with no index a new one out of a ruler.
@@ -925,8 +927,8 @@ pub fn about_text() -> String {
         tf("Version {}", &[&env!("CARGO_PKG_VERSION")]),
         String::new(),
         // The box does not wrap, so every line is short enough to fit it.
-        t("A Fireworks-like design program").to_string(),
-        t("for Pardus, in Turkish.").to_string(),
+        if is_sahne() { t("An animation program for Pardus,").to_string() } else { t("A Fireworks-like design program").to_string() },
+        if is_sahne() { t("built on PisiWorks.").to_string() } else { t("for Pardus, in Turkish.").to_string() },
         String::new(),
         t("Developed by Murat SAPMAZ").to_string(),
         "github.com/MuratSAPMAZ/PisiWorks".to_string(),
@@ -1084,7 +1086,8 @@ impl Workspace {
                 DockGroup { active: Panel::Mixer, collapsed: true },
                 DockGroup { active: Panel::Find, collapsed: true },
             ],
-            hidden_panels: Vec::new(),
+            // Flash keeps layers in the timeline and has no states: those two panels start closed in the animation program.
+            hidden_panels: if is_sahne() { vec![Panel::Layers, Panel::States] } else { Vec::new() },
             panels_off: false,
             open_combo: None,
             onion: false,
@@ -1280,7 +1283,12 @@ impl Workspace {
         }
         if wanted && self.page_raster.is_none() {
             // A group that is open is drawn whole, so that its own mask and filters still show.
-            let closed = self.ed.doc.page().open_groups_need_drawing().then(|| self.ed.doc.page().with_groups_closed());
+            // In an animation, masks whose layers are locked show at work on the stage, as in Flash.
+            let closed = if self.ed.doc.page().shows_locked_masks() {
+                Some(self.ed.doc.page().with_locked_masks())
+            } else {
+                self.ed.doc.page().open_groups_need_drawing().then(|| self.ed.doc.page().with_groups_closed())
+            };
             self.page_raster = crate::export::render_page(closed.as_ref().unwrap_or(self.ed.doc.page()))
                 .ok()
                 .and_then(|pixmap| crate::canvas_view::pixmap_texture(&pixmap))
@@ -1965,6 +1973,10 @@ impl Workspace {
             Cmd::TextOrientation(orientation) => self.shown_text_style().orientation == orientation,
             Cmd::Frame(crate::menus::FrameCmd::GuideLayer) => self.active_layer_kind() == crate::model::LayerKind::Guide,
             Cmd::Frame(crate::menus::FrameCmd::MaskLayer) => self.active_layer_kind() == crate::model::LayerKind::Mask,
+            Cmd::Frame(crate::menus::FrameCmd::BindLayer) => {
+                let page = self.ed.doc.page();
+                page.timeline.as_ref().is_some_and(|timeline| timeline.is_bound(page.active_layer))
+            }
             Cmd::PathOrientation(orientation) => self.ed.has_text_on_path() && self.shown_text_style().on_path == orientation,
             Cmd::Guides(GuideCmd::Show) => self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
@@ -2267,7 +2279,46 @@ impl Workspace {
         let page = self.ed.doc.page();
         let timeline = page.timeline.as_ref()?;
         let span = timeline.span_at(page.active_layer, timeline.current)?;
-        timeline.layers[page.active_layer][span].tween
+        timeline.layers[page.active_layer][span].tween.clone()
+    }
+
+    /// The shape hints to show on the stage: on the first keyframe of a shape tween the
+    /// places the hints start at, on the keyframe it ends in the places they go to.
+    /// Each comes with its number, and whether it is an end.
+    pub fn shape_hints(&self) -> Vec<(Vec2, usize, bool)> {
+        let page = self.ed.doc.page();
+        let Some(timeline) = page.timeline.as_ref().filter(|_| is_sahne() && self.view_mode == ViewMode::Original) else { return Vec::new() };
+        let (layer, frame) = (page.active_layer, timeline.current);
+        let Some(index) = timeline.span_at(layer, frame) else { return Vec::new() };
+        let spans = &timeline.layers[layer];
+        let of = |span: &crate::model::Span, end: bool| span.tween.as_ref().filter(|tween| tween.shape).map_or_else(Vec::new, |tween| tween.hints.iter().enumerate().map(|(i, (a, b))| (if end { *b } else { *a }, i, end)).collect());
+        if spans[index].start != frame {
+            return Vec::new();
+        }
+        let mut shown = of(&spans[index], false);
+        if index > 0 {
+            shown.extend(of(&spans[index - 1], true));
+        }
+        shown
+    }
+
+    /// Moves a shape hint to the point of its shape's outline nearest `place`.
+    fn move_hint(&mut self, number: usize, end: bool, place: Vec2) {
+        let outline = self.ed.doc.page().layers.get(self.ed.doc.page().active_layer).and_then(|layer| layer.objects.first()).map(|o| o.outline()).unwrap_or_default();
+        let dense = crate::model::outline_points(&outline, 256);
+        let Some(snapped) = dense.into_iter().min_by(|a, b| (a.x - place.x).hypot(a.y - place.y).total_cmp(&(b.x - place.x).hypot(b.y - place.y))) else { return };
+        let page = self.ed.doc.page_mut();
+        let layer = page.active_layer;
+        let Some(timeline) = page.timeline.as_mut() else { return };
+        let Some(index) = timeline.span_at(layer, timeline.current) else { return };
+        let span = if end { index.checked_sub(1) } else { Some(index) };
+        if let Some(hint) = span.and_then(|span| timeline.layers[layer][span].tween.as_mut()).and_then(|tween| tween.hints.get_mut(number)) {
+            if end {
+                hint.1 = snapped;
+            } else {
+                hint.0 = snapped;
+            }
+        }
     }
 
     /// The frame on show and the number of frames of the scene, if the page has a timeline.
@@ -2314,12 +2365,45 @@ impl Workspace {
                 self.ed.on_timeline(|timeline, layer, _| timeline.set_kind(layer, if timeline.kind(layer) == wanted { LayerKind::Normal } else { wanted }));
                 done(self, if cmd == FrameCmd::GuideLayer { t("Guide Layer") } else { t("Mask Layer") });
             }
+            FrameCmd::BindLayer => {
+                let tied = self.ed.on_timeline(|timeline, layer, _| {
+                    let now = !timeline.is_bound(layer);
+                    timeline.set_bound(layer, now)
+                });
+                if tied == Some(false) {
+                    self.status = t("Only a layer right under a guide, a mask or a layer tied to one can be tied").into();
+                }
+                done(self, t("Tie to Guide or Mask"));
+            }
+            FrameCmd::AddHint | FrameCmd::RemoveHints => {
+                let adding = cmd == FrameCmd::AddHint;
+                // A hint starts at the first point of each of the two shapes; it is then dragged to its place on each keyframe.
+                let added = self.ed.on_timeline(|timeline, layer, frame| {
+                    let index = timeline.span_at(layer, frame)?;
+                    let spans = &timeline.layers[layer];
+                    let start = spans[index].objects.first().map(|o| o.outline()).and_then(|line| line.first().copied())?;
+                    let end = spans.get(index + 1).and_then(|next| next.objects.first()).map(|o| o.outline()).and_then(|line| line.first().copied())?;
+                    let tween = timeline.layers[layer][index].tween.as_mut().filter(|tween| tween.shape)?;
+                    if adding {
+                        if tween.hints.len() < 26 {
+                            tween.hints.push((start, end));
+                        }
+                    } else {
+                        tween.hints.clear();
+                    }
+                    Some(())
+                });
+                if added.flatten().is_none() {
+                    self.status = t("Shape hints belong to a shape tween: go to its first keyframe").into();
+                }
+                done(self, if adding { t("Add Shape Hint") } else { t("Remove All Hints") });
+            }
             FrameCmd::Tween | FrameCmd::ShapeTween | FrameCmd::RemoveTween => {
                 let tween = (cmd != FrameCmd::RemoveTween).then(|| crate::model::Tween { shape: cmd == FrameCmd::ShapeTween, ..Default::default() });
                 // A tween needs a keyframe to go to: without one after it, there is nothing to move toward.
                 let has_next = self.ed.on_timeline(|timeline, layer, frame| {
                     let next = timeline.span_at(layer, frame).is_some_and(|index| index + 1 < timeline.layers[layer].len());
-                    timeline.set_tween(layer, frame, tween);
+                    timeline.set_tween(layer, frame, tween.clone());
                     next
                 });
                 if tween.is_some() && has_next == Some(false) {
@@ -4581,6 +4665,12 @@ impl Workspace {
                 return;
             }
         }
+        // A shape hint is dragged along the outline of its shape.
+        let reach = 7.0 / self.zoom;
+        if let Some((_, number, end)) = self.shape_hints().into_iter().rev().find(|(at, _, _)| (at.x - p.x).abs() <= reach && (at.y - p.y).abs() <= reach) {
+            self.drag = Some(Drag::Hint { number, end });
+            return;
+        }
         // The red end of an animation's path sets how far and which way the animation goes.
         if let Some(end) = self.motion_path().last().copied().filter(|_| self.motion_path().len() > 1) {
             let reach = 6.0 / self.zoom;
@@ -5443,6 +5533,10 @@ impl Workspace {
                     self.ed.set_animation(settings);
                 }
             }
+            Drag::Hint { number, end } => {
+                let (number, end) = (*number, *end);
+                self.move_hint(number, end, p);
+            }
             Drag::MotionEnd => {
                 if let (Some(index), Some(start)) = (self.ed.selected_animation(), self.motion_path().first().copied()) {
                     let mut settings = self.ed.doc.page().animations[index].settings;
@@ -5685,6 +5779,7 @@ impl Workspace {
             }
             Drag::FillHandle { .. } => self.ed.commit(t("Fill")),
             Drag::MotionEnd | Drag::MotionStart { .. } => self.ed.commit(t("Animate Selection")),
+            Drag::Hint { .. } => self.ed.commit(t("Shape Hint")),
             Drag::Reshape { ids, .. } => {
                 // Pushing works on many short pieces, and the result is a curved path again.
                 for id in ids {
@@ -6374,6 +6469,7 @@ impl Workspace {
             ("d", true, false) => Cmd::Clone,
             ("g", true, true) => Cmd::SnapToGrid,
             ("y", true, false) => Cmd::AttachToPath,
+            ("h", true, false) if is_sahne() => Cmd::Frame(crate::menus::FrameCmd::AddHint),
             ("t", true, true) => Cmd::TweenInstances,
             ("p", false, false) => Cmd::Print,
             (";", false, false) => Cmd::Guides(GuideCmd::Show),
@@ -6474,6 +6570,8 @@ impl Workspace {
             "delete" | "backspace" => self.run(Cmd::Clear, window, cx),
             "enter" if self.crop_area.is_some() => self.apply_crop(window, cx),
             "enter" if self.transform.is_some() => self.apply_transform(),
+            // With nothing waiting to be applied, Enter plays the timeline, as in Flash.
+            "enter" if is_sahne() && self.pen.is_empty() => self.run(Cmd::Frame(crate::menus::FrameCmd::Play), window, cx),
             "enter" => self.finish_pen(false),
             "escape" => {
                 self.polygon_lasso = None;

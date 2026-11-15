@@ -8,4 +8,11 @@
     <glob pattern="*.pisi"/>
     <glob pattern="*.ember"/>
   </mime-type>
+  <mime-type type="application/x-pisisahne">
+    <comment>PisiSahne animation</comment>
+    <comment xml:lang="tr">PisiSahne animasyonu</comment>
+    <sub-class-of type="application/json"/>
+    <icon name="pisisahne"/>
+    <glob pattern="*.sahne"/>
+  </mime-type>
 </mime-info>

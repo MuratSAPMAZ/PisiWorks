@@ -181,6 +181,8 @@ pub struct Scene {
     fill_handles: Option<(Vec2, Vec2, Option<Vec2>)>,
     /// The path of the selected animation: where its symbol is in each state.
     motion: Vec<Vec2>,
+    /// Shape hints: where each is, its number, and whether it is the end of its pair.
+    hints: Vec<(Vec2, usize, bool)>,
     /// The cuts of 9-slice scaling: the box of the selection, and where the two upright and two level cuts are.
     nine_cuts: Option<(Rect, [f32; 4])>,
     stroke: Option<Color>,
@@ -340,6 +342,7 @@ impl Scene {
             guide_lines: w.guide_lines(),
             fill_handles: w.fill_handles(),
             motion: w.motion_path(),
+            hints: w.shape_hints(),
             nine_cuts: w.ed.selection_bounds().zip(w.nine_slice_lines()),
             stroke: w.stroke,
             fill: w.fill,
@@ -439,6 +442,16 @@ impl Scene {
                     let knob = |at: Point<Pixels>| Bounds { origin: point(at.x - px(4.), at.y - px(4.)), size: size(px(8.), px(8.)) };
                     window.paint_quad(fill(knob(from), rgb(0xffffff)).corner_radii(px(4.)).border_widths(1.).border_color(rgb(0x000000)));
                     window.paint_quad(fill(knob(to), rgb(0xffffff)).border_widths(1.).border_color(rgb(0x000000)));
+                }
+                // Shape hints: a lettered disc each, yellow where it starts and green where it ends up, as in Flash.
+                for (place, number, end) in &self.hints {
+                    let at = map.to_screen(*place);
+                    let disc = Bounds { origin: point(at.x - px(7.), at.y - px(7.)), size: size(px(14.), px(14.)) };
+                    window.paint_quad(fill(disc, rgb(if *end { 0x40c040 } else { 0xf0d020 })).corner_radii(px(7.)).border_widths(1.).border_color(rgb(0x202020)));
+                    let letter = SharedString::from(((b'a' + (*number as u8).min(25)) as char).to_string());
+                    let run = TextRun { len: letter.len(), font: font(crate::fonts::family()), color: gpui::black(), background_color: None, underline: None, strikethrough: None };
+                    let shaped = window.text_system().shape_line(letter, px(10.), &[run], None);
+                    let _ = shaped.paint(point(at.x - px(3.), at.y - px(7.)), px(14.), window, cx);
                 }
                 // An animation's path: a dot for each state, green where it starts and red where it ends.
                 if self.motion.len() > 1 {
