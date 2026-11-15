@@ -879,6 +879,7 @@ impl Workspace {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: page.canvas.or(Some(Color::rgb(0xff, 0xff, 0xff))),
             stroke: None,
@@ -931,6 +932,10 @@ impl Workspace {
             }
             Tool::VectorPath | Tool::RedrawPath => rows.push(option(self, t("Precision:"), FieldId::PathPrecision, cx)),
             Tool::ReshapeArea => rows.push(option(self, t("Size:"), FieldId::FreeformSize, cx)),
+            Tool::ScrubAdd | Tool::ScrubSubtract => {
+                rows.push(option(self, t("Size:"), FieldId::FreeformSize, cx));
+                rows.push(option(self, t("Rate:"), FieldId::ScrubRate, cx));
+            }
             _ => {}
         }
         let brush_size = (!rows.is_empty()).then(|| div().flex().flex_col().flex_none().gap_1().children(rows));

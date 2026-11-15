@@ -658,6 +658,7 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         mask: None,
         mask_of: None,
         fill_style: None,
+        stroke_profile: Vec::new(),
         filters: Vec::new(),
         fill: None,
         stroke: None,

@@ -927,4 +927,9 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Shape:", "Şekil:"),
     ("Sides:", "Kenarlar:"),
     ("Precision:", "Kesinlik:"),
+    ("Path Scrubber - Additive (O)", "Yol Süpürgesi - artırıcı (O)"),
+    ("Path Scrubber - Subtractive (O)", "Yol Süpürgesi - çıkartıcı (O)"),
+    ("Path Scrubber", "Yol Süpürgesi"),
+    ("Rate:", "Hız:"),
+    ("Press on a path that has a stroke to change how heavy it is.", "Kalınlığını değiştirmek için konturu olan bir yola basın."),
 ];

@@ -63,6 +63,7 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         mask: None,
         mask_of: None,
         fill_style: None,
+        stroke_profile: Vec::new(),
         filters: Vec::new(),
         fill,
         stroke,

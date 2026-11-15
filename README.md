@@ -145,7 +145,6 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
 - Menülerde gri görünen komutlar: Şablondan Yeni, Görüntü Önizleme, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon, metinde Yaslanmış ve Uzatılmış hizalama, Yola Ekle, Yazım Denetimi ve Komutlar menüsü.
 - Dolguda kenar yumuşatma (Geçiş Yumuşatma), doku ve Web Renk Taklidi; metinde degrade dolgu.
-- Yol Temizleyici araçları (basınca duyarlı kontur gerektirir).
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.

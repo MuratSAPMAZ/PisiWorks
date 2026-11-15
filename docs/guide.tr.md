@@ -86,12 +86,12 @@ Köşesinde küçük üçgen olan düğme birkaç aracı temsil eder. Listelemek
 - Ölçek (Q): Eğriltme ve Deformasyon'dan sonra 9 dilimli ölçekleme gelir. Dört mavi çizgi seçimi dokuz parçaya böler; bir çizgiyi taşımak için sürükleyin, sonra seçimin bir tutamacını sürükleyin: köşeler boyutunu korur, yalnızca orta kısım uzar; böylece yuvarlak köşeler yuvarlak kalır.
 - Kırpma (C): Dışa Aktarma Alanı, sayfanın üzerinden sürüklediğiniz kısmını En İyileştir panelindeki ayarlarla görüntü olarak kaydeder. Dosyayı seçmek için Enter'a basın veya çift tıklayın.
 - Seçim Çerçevesi (M): Oval Seçim Çerçevesi oval bir alan seçer. Kement (L): Çokgen Kement düz kenarlarla seçer; her köşeye tıklayın, kapatmak için çift tıklayın veya ilk köşeye tıklayın.
-- Bulanıklaştırma (R): Keskinleştir, Soldurma (açar), Yakma (koyulaştırır) ve Leke (boyayı fırça boyunca sürükler) Bulanıklaştırma gibi fırçanın altında çalışır.
-- Lastik Damgası (S): Renk Değiştir, fırçanın başladığı yerdeki rengi fırça rengine çevirir. Kırmızı Göz Kaldırma, üzerinden sürüklediğiniz alandaki gözlerin kırmızısını alır.
+- Bulanıklaştırma (R): Keskinleştir, Soldurma (açar), Yakma (koyulaştırır) ve Leke (boyayı fırça boyunca sürükler) Bulanıklaştırma gibi fırçanın altında çalışır. Soldurma ve Yakma'nın Özellikler'de Pozlama ve ton Aralığı; Leke'nin Basınç ayarı vardır ve Leke, kontur rengiyle yüklü başlayabilir.
+- Lastik Damgası (S): Renk Değiştir, Kimden rengini Tolerans içinde Kime rengine çevirir; Kimden rengi yoksa fırçanın başladığı yerdeki rengi değiştirir. Kırmızı Göz Kaldırma, üzerinden sürüklediğiniz alandaki gözlerin kırmızısını Tolerans ve Güç ayarına göre alır.
 - Kalem (P): Vektör Yol serbest elle yol çizer. Yolu Yeniden Çiz bir yolun bir kısmını değiştirir: çizgiye yolun üzerinde başlayın ve yine yolun üzerinde bitirin.
-- Serbest Biçim (O): Alanı Yeniden Şekillendir, dairesinin içindeki bütün noktaları fareyle birlikte iter.
+- Serbest Biçim (O): Alanı Yeniden Şekillendir, dairesinin içindeki bütün noktaları fareyle birlikte iter. İki Yol Süpürgesi, üzerinden geçtiğiniz yerde konturu Özellikler'deki Hız kadar kalınlaştırır veya inceltir; bu işlemden geçen yol çok sayıda kısa düz parçaya dönüşür.
 - Sıcak Nokta (J): Daire Sıcak Nokta ortasından dışa doğru, Çokgen Sıcak Nokta ise Çokgen Kement gibi köşe köşe çizilir. Dilim (K): Çokgen Dilim de aynı biçimde çizilir. Dışa aktarılan görüntü eşleminde daire ve çokgen olarak yazılırlar.
-- Dikdörtgen (U): Elips ve ortasından dışa doğru çizilen Çokgen; kenar sayısı Otomatik Şekil Özellikleri panelindedir.
+- Dikdörtgen (U): Elips ve ortasından dışa doğru çizilen Çokgen; kenar sayısı ve yıldız seçeneği Özellikler'dedir.
 - Boya Kovası (G): Degrade, seçili nesneyi sürüklemeye başladığınız yerden bıraktığınız yere uzanan bir degradeyle doldurur.
 
 ## Degrade ve desen dolguları

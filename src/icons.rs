@@ -107,6 +107,14 @@ pub fn colored(name: &str) -> Option<&'static [Layer]> {
             (INK, r#"<path d="M2.500 12c2-7 4-7 5.500-4s3.500 3 5.500-4"/>"#),
             (BLUE, r#"<circle cx="8" cy="8" r="1.800" fill="black"/>"#),
         ],
+        "scrub-add" => &[
+            (INK, r#"<path stroke-width="1" d="M2 11c2-5 4-5 6-2"/><path stroke-width="3" d="M8 9c2 3 4 2 6-3"/>"#),
+            (GREEN, r#"<path stroke-width="1.500" d="M11.500 1.500v4M9.500 3.500h4"/>"#),
+        ],
+        "scrub-subtract" => &[
+            (INK, r#"<path stroke-width="3" d="M2 11c2-5 4-5 6-2"/><path stroke-width="1" d="M8 9c2 3 4 2 6-3"/>"#),
+            (RED, r#"<path stroke-width="1.500" d="M9.500 3.500h4"/>"#),
+        ],
         "nine-slice" => &[
             (GRAY, r#"<rect x="2.500" y="2.500" width="11" height="11" fill="black" stroke="none"/>"#),
             (INK, r#"<rect x="2.500" y="2.500" width="11" height="11"/>"#),

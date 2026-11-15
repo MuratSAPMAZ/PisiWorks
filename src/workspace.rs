@@ -193,6 +193,8 @@ pub struct ToolOptions {
     pub sides: f32,
     /// Vector Path and Redraw Path: how closely the path follows the hand, from 1 to 10.
     pub precision: f32,
+    /// The Path Scrubbers: how fast they change the stroke, in percent.
+    pub rate: f32,
 }
 
 impl Default for ToolOptions {
@@ -210,6 +212,7 @@ impl Default for ToolOptions {
             star: false,
             sides: 5.0,
             precision: 5.0,
+            rate: 20.0,
         }
     }
 }
@@ -312,6 +315,7 @@ pub enum FieldId {
     RedStrength,
     PolygonSides,
     PathPrecision,
+    ScrubRate,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -441,6 +445,8 @@ pub enum Drag {
     /// Moving the selection: where the mouse took hold, the box of the selection
     /// then, and how far it has been moved since, which snapping can make differ from the mouse.
     Move { start: Vec2, origin: Option<Rect>, moved: Vec2 },
+    /// A Path Scrubber at work on these paths: making their strokes heavier, or lighter.
+    Scrub { ids: Vec<u64>, add: bool },
     /// Reshape Area: pushing the points of these paths that lie within a radius of the mouse.
     Reshape { ids: Vec<u64>, last: Vec2, radius: f32 },
     /// 9-slice scaling by a handle of the selection box, from the box and the objects as they were.
@@ -3045,6 +3051,7 @@ impl Workspace {
             }
             Tool::RedrawPath => self.drag = Some(Drag::Freehand { points: vec![p], target: None }),
             Tool::ReshapeArea => self.reshape_down(p),
+            Tool::ScrubAdd | Tool::ScrubSubtract => self.scrub_down(p, tool == Tool::ScrubAdd),
             Tool::NineSlice => self.nine_slice_down(ev, p),
             Tool::PolygonLasso => self.polygon_lasso_down(ev, p),
             Tool::RedEye => match self.pixel_target(p) {
@@ -3905,6 +3912,7 @@ impl Workspace {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: if is_stroke_only { None } else { self.fill },
             stroke: self.stroke.map(|color| Stroke { color, width: self.stroke_width }),
@@ -4015,6 +4023,11 @@ impl Workspace {
             cx.notify();
             return;
         }
+        if matches!(self.drag, Some(Drag::Scrub { .. })) {
+            self.scrub_at(p);
+            cx.notify();
+            return;
+        }
         // Where the mouse is once guides have had their say, for the drags that draw and resize.
         let on_guides = self.guide_snapped(p);
         if let Some(Drag::Move { start, origin, moved }) = self.drag {
@@ -4039,6 +4052,7 @@ impl Workspace {
         match drag {
             Drag::Move { .. } => {}
             Drag::Guide { horizontal, at, .. } => *at = if *horizontal { p.y } else { p.x }.round(),
+            Drag::Scrub { .. } => {}
             Drag::Reshape { ids, last, radius } => {
                 let (delta, from, radius) = (v2(p.x - last.x, p.y - last.y), *last, *radius);
                 *last = p;
@@ -4297,6 +4311,7 @@ impl Workspace {
                 self.ed.commit(t("9-Slice Scaling"));
             }
             Drag::NineGuide(_) => {}
+            Drag::Scrub { .. } => self.ed.commit(t("Path Scrubber")),
             Drag::Guide { horizontal, index, at } => {
                 // Let go over a ruler or off the canvas, a guide is thrown away.
                 let bounds = self.canvas_bounds.get();
@@ -4516,6 +4531,32 @@ impl Workspace {
             return selected;
         }
         self.ed.doc.page().nearest_path(p, reach, &self.ed.selection).into_iter().collect()
+    }
+
+    /// A press with a Path Scrubber: the stroked paths under it are readied, and the stroke changes where the mouse is.
+    fn scrub_down(&mut self, p: Vec2, add: bool) {
+        let radius = self.freeform_size / 2.0;
+        let ids: Vec<u64> = self.paths_near(p, radius).into_iter().filter(|id| self.ed.object_mut(*id).is_some_and(|o| o.prepare_scrub())).collect();
+        if ids.is_empty() {
+            self.status = t("Press on a path that has a stroke to change how heavy it is.").into();
+            self.ed.rollback();
+            return;
+        }
+        self.ed.selection = ids.clone();
+        self.drag = Some(Drag::Scrub { ids, add });
+        self.scrub_at(p);
+    }
+
+    /// One touch of the Path Scrubber at a place, as strong as its rate.
+    fn scrub_at(&mut self, p: Vec2) {
+        let Some(Drag::Scrub { ids, add }) = &self.drag else { return };
+        let (ids, add) = (ids.clone(), *add);
+        let (radius, amount) = (self.freeform_size / 2.0, self.tool_options.rate / 100.0 * 0.25 * if add { 1.0 } else { -1.0 });
+        for id in ids {
+            if let Some(object) = self.ed.object_mut(id) {
+                object.scrub(p, radius, amount);
+            }
+        }
     }
 
     /// Reshape Area: every point of the paths within the circle is pushed along with the mouse.
@@ -4938,6 +4979,7 @@ impl Workspace {
             FieldId::RedStrength => number(self.tool_options.red_strength),
             FieldId::PolygonSides => number(self.tool_options.sides),
             FieldId::PathPrecision => number(self.tool_options.precision),
+            FieldId::ScrubRate => number(self.tool_options.rate),
             FieldId::FreeformSize => number(self.freeform_size),
             FieldId::Url => match first.map(|o| &o.shape) {
                 Some(Shape::Web { url, .. }) => url.clone(),
@@ -5123,6 +5165,10 @@ impl Workspace {
             FieldId::PolygonSides => {
                 let Some(v) = number.filter(|v| *v >= 3.0) else { return };
                 self.tool_options.sides = v.round().min(64.0);
+            }
+            FieldId::ScrubRate => {
+                let Some(v) = number.filter(|v| *v >= 1.0) else { return };
+                self.tool_options.rate = v.min(100.0);
             }
             FieldId::PathPrecision => {
                 let Some(v) = number.filter(|v| *v >= 1.0) else { return };

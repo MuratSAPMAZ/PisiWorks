@@ -440,6 +440,42 @@ fn draw_object(pixmap: &mut Pixmap, object: &Object) {
             line_join: LineJoin::Round,
             ..SkStroke::default()
         };
+        // A stroke of uneven weight is drawn as a ribbon: a piece between each two points, and a round joint at each.
+        if let Some(weights) = object.stroke_weights() {
+            let count = object.points.len();
+            let pieces = if object.is_closed() { count } else { count.saturating_sub(1) };
+            let half = |index: usize| (stroke.width * weights[index] / 2.0).max(0.0);
+            // Drawn on its own first, so where pieces overlap a see-through stroke is not painted twice.
+            let Some(mut layer) = Pixmap::new(pixmap.width(), pixmap.height()) else { return };
+            let ink = sk_paint(stroke.color, 1.0);
+            for (index, point) in object.points.iter().enumerate() {
+                if let Some(joint) = PathBuilder::from_circle(point.x, point.y, half(index)).filter(|_| half(index) > 0.05) {
+                    layer.fill_path(&joint, &ink, FillRule::Winding, Transform::identity(), None);
+                }
+            }
+            for index in 0..pieces {
+                let (a, b) = (object.points[index], object.points[(index + 1) % count]);
+                let (dx, dy) = (b.x - a.x, b.y - a.y);
+                let length = dx.hypot(dy);
+                if length < 0.001 {
+                    continue;
+                }
+                // Across the piece, as far as half the stroke at each end.
+                let (nx, ny, wa, wb) = (-dy / length, dx / length, half(index), half((index + 1) % count));
+                let mut piece = PathBuilder::new();
+                piece.move_to(a.x + nx * wa, a.y + ny * wa);
+                piece.line_to(b.x + nx * wb, b.y + ny * wb);
+                piece.line_to(b.x - nx * wb, b.y - ny * wb);
+                piece.line_to(a.x - nx * wa, a.y - ny * wa);
+                piece.close();
+                if let Some(piece) = piece.finish() {
+                    layer.fill_path(&piece, &ink, FillRule::Winding, Transform::identity(), None);
+                }
+            }
+            let paint = PixmapPaint { opacity: object.opacity, ..PixmapPaint::default() };
+            pixmap.draw_pixmap(0, 0, layer.as_ref(), &paint, Transform::identity(), None);
+            return;
+        }
         for (run, closed) in object.stroke_runs() {
             if let Some(path) = sk_path(&run, closed) {
                 pixmap.stroke_path(&path, &sk_paint(stroke.color, object.opacity), &style, Transform::identity(), None);
@@ -649,6 +685,7 @@ mod tests {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: Some(Color::rgb(255, 0, 0)),
             stroke: None,
@@ -709,6 +746,33 @@ mod tests {
         let img = render_page(&p).unwrap();
         assert_eq!(rgba(&img, 20, 20), (0, 0, 0, 255));
         assert_eq!(rgba(&img, 20, 5), (255, 255, 255, 255));
+    }
+
+    #[test]
+    fn a_scrubbed_stroke_is_heavier_where_it_was_scrubbed() {
+        let mut p = page();
+        p.canvas = None;
+        let mut line = red_box(0.0, 40.0);
+        line.shape = Shape::Line;
+        line.fill = None;
+        line.points = vec![Vec2 { x: 2.0, y: 20.0 }, Vec2 { x: 38.0, y: 20.0 }];
+        line.stroke = Some(Stroke { color: Color::rgb(0, 0, 0), width: 4.0 });
+        assert!(line.stroke_weights().is_none());
+        assert!(line.prepare_scrub());
+        assert_eq!(line.stroke_weights().map(|w| w.len()), Some(line.points.len()));
+        // Thicker on the left, thinner on the right, untouched in the middle.
+        line.scrub(Vec2 { x: 8.0, y: 20.0 }, 6.0, 1.0);
+        line.scrub(Vec2 { x: 32.0, y: 20.0 }, 6.0, -0.9);
+        p.layers[0].objects.push(line.clone());
+        let image = render_page(&p).unwrap();
+        let tall = |x: u32| (0..40).filter(|y| rgba(&image, x, *y).3 > 128).count();
+        assert!(tall(8) >= 7 && tall(20) == 4 && tall(32) <= 1, "{} {} {}", tall(8), tall(20), tall(32));
+        // The weights are kept in the file, and are let go once the path no longer has a number for each point.
+        let back: Object = serde_json::from_str(&serde_json::to_string(&line).unwrap()).unwrap();
+        assert_eq!(back.stroke_profile, line.stroke_profile);
+        line.points.pop();
+        assert!(line.stroke_weights().is_none());
+        assert!(!serde_json::to_string(&red_box(0.0, 4.0)).unwrap().contains("stroke_profile"));
     }
 
     #[test]

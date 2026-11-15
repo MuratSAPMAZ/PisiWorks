@@ -53,6 +53,9 @@ pub enum Tool {
     RedrawPath,
     ReshapeArea,
     NineSlice,
+    /// The Path Scrubber that makes a stroke heavier, and the one that makes it lighter.
+    ScrubAdd,
+    ScrubSubtract,
 }
 
 pub struct ToolSlot {
@@ -149,7 +152,12 @@ pub const TOOL_GROUPS: &[&[ToolSlot]] = &[
     ],
     &[on("Pen (P)", "pen", Tool::Pen), on("Vector Path (P)", "vector-path", Tool::VectorPath), on("Redraw Path (P)", "redraw-path", Tool::RedrawPath)],
     &[on("Crop (C)", "crop", Tool::Crop), on("Export Area (C)", "export-area", Tool::ExportArea)],
-    &[on("Freeform (O)", "freeform", Tool::Freeform), on("Reshape Area (O)", "reshape-area", Tool::ReshapeArea)],
+    &[
+        on("Freeform (O)", "freeform", Tool::Freeform),
+        on("Reshape Area (O)", "reshape-area", Tool::ReshapeArea),
+        on("Path Scrubber - Additive (O)", "scrub-add", Tool::ScrubAdd),
+        on("Path Scrubber - Subtractive (O)", "scrub-subtract", Tool::ScrubSubtract),
+    ],
     &[on("Hotspot (J)", "hotspot", Tool::Hotspot), on("Circle Hotspot (J)", "circle-hotspot", Tool::CircleHotspot), on("Polygon Hotspot (J)", "polygon-hotspot", Tool::PolygonHotspot)],
     &[on("Slice (K)", "slice", Tool::Slice), on("Polygon Slice (K)", "polygon-slice", Tool::PolygonSlice)],
     &[on("Rectangle (U)", "rect", Tool::Rect), on("Ellipse (U)", "ellipse", Tool::Ellipse), on("Polygon (U)", "polygon", Tool::Polygon)],

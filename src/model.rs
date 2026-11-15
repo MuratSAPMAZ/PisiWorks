@@ -679,6 +679,11 @@ pub struct Object {
     /// The fill color stays set, so everything that only asks whether there is a fill still works.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fill_style: Option<Arc<FillStyle>>,
+    /// How heavy the stroke is at each point of a path, as a part of its width: 1 is
+    /// the full width. Set by the Path Scrubber tools. It counts only while there
+    /// is one number for each point and the path has no curve handles.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stroke_profile: Vec<f32>,
     /// Live filters, applied in this order each time the object is drawn.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<crate::effects::LiveFilter>,
@@ -716,6 +721,7 @@ impl Object {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -741,6 +747,7 @@ impl Object {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -782,6 +789,40 @@ impl Object {
                 Some((0..48).map(|step| step as f32 / 48.0 * std::f32::consts::TAU).map(|turn| v2(center.x + radius * turn.cos(), center.y + radius * turn.sin())).collect())
             }
             WebForm::Polygon(corners) => Some(corners.iter().map(|p| v2(b.x + p.x * b.w, b.y + p.y * b.h)).collect()),
+        }
+    }
+
+    /// The weight of the stroke at each point, if the path has one that is in step with its points.
+    pub fn stroke_weights(&self) -> Option<&[f32]> {
+        let usable = !self.stroke_profile.is_empty() && self.stroke_profile.len() == self.points.len() && self.handles.is_empty() && self.placement.is_none();
+        (usable && matches!(self.shape, Shape::Path { .. } | Shape::Line)).then_some(&self.stroke_profile[..])
+    }
+
+    /// Readies a path for the Path Scrubber: it becomes many short straight pieces, each point with a weight of its own.
+    pub fn prepare_scrub(&mut self) -> bool {
+        if self.stroke.is_none() || !self.to_path() {
+            return false;
+        }
+        if self.stroke_weights().is_none() {
+            self.flatten();
+            self.points = subdivide(&self.points, self.is_closed(), 3.0);
+            self.stroke_profile = vec![1.0; self.points.len()];
+        }
+        true
+    }
+
+    /// The Path Scrubber: the stroke gets heavier, or with a negative amount lighter,
+    /// at the points within `radius` of a place, most at the place itself.
+    pub fn scrub(&mut self, at: Vec2, radius: f32, amount: f32) {
+        if self.stroke_weights().is_none() {
+            return;
+        }
+        for (point, weight) in self.points.iter().zip(&mut self.stroke_profile) {
+            let far = (point.x - at.x).hypot(point.y - at.y);
+            if far < radius {
+                let part = 0.5 + 0.5 * (std::f32::consts::PI * far / radius).cos();
+                *weight = (*weight + amount * part).clamp(0.0, 3.0);
+            }
         }
     }
 
@@ -1073,6 +1114,7 @@ impl Object {
                     mask: None,
                     mask_of: None,
                     fill_style: None,
+                    stroke_profile: Vec::new(),
                     filters: Vec::new(),
                     fill: self.fill,
                     stroke: None,
@@ -2619,7 +2661,7 @@ impl Editor {
     /// it has to be shown as the exporter renders it.
     pub fn needs_compositing(&self) -> bool {
         fn special(object: &Object) -> bool {
-            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
+            !object.blend.is_normal() || object.mask.is_some() || !object.filters.is_empty() || object.fill_style.is_some() || !object.stroke_profile.is_empty() || matches!(&object.shape, Shape::Group { objects } if objects.iter().any(special))
         }
         self.doc.page().objects().any(|o| o.visible && special(o))
     }
@@ -3263,6 +3305,7 @@ impl Editor {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -3575,6 +3618,7 @@ impl Editor {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: None,
             stroke: None,
@@ -4138,6 +4182,7 @@ mod tests {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: Some(Color::BLACK),
             stroke: None,

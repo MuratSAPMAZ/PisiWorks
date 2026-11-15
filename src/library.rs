@@ -37,6 +37,7 @@ fn base(shape: Shape, name: &str, bounds: Rect, fill: Option<Color>, stroke: Opt
         mask: None,
         mask_of: None,
         fill_style: None,
+        stroke_profile: Vec::new(),
         filters: Vec::new(),
         fill,
         stroke: stroke.map(|color| Stroke { color, width: 1.0 }),

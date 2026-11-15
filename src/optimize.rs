@@ -475,6 +475,7 @@ mod tests {
             mask: None,
             mask_of: None,
             fill_style: None,
+            stroke_profile: Vec::new(),
             filters: Vec::new(),
             fill: Some(Color::rgb(200, 10, 10)),
             stroke: None,
