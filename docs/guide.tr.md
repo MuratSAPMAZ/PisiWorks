@@ -255,13 +255,14 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 | Büyü Küçül | Büyür, eski boyuna döner | Büyüme yüzdesi, bir atım kaç saniye |
 | Yanıp Sön | Görünür, kaybolur | Bir yanıp sönme kaç saniye |
 | Belir Kaybol | Yavaşça silinir, geri gelir | Gidiş dönüş kaç saniye |
+| Bir Süre Sonra Kaybol | Süresi dolunca yok olur: kıvılcım ve patlamalar için | Saniye |
 | Fareyi İzle | Farenin peşinden gider | Hız (0: farenin üstünde durur) |
 | Ok Tuşlarıyla Yürü | İzleyen ok tuşlarıyla hareket ettirir; sahnenin dışına çıkmaz | Hız |
 | Düş ve Zıpla | Sahnenin alt kenarına düşer; Yukarı ok ya da Boşluk zıplatır | Çekim, zıplama hızı (0: zıplamaz) |
 | Sürüklenebilir | İzleyen fareyle sürükler | |
 | Katı | Yürüyen ya da düşen hiçbir şey içinden geçemez: yanında durur, üstünde ayakta kalır, altına başını çarpar | |
 
-İlk dokuzu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son beşi izleyenle ilgilidir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
+İlk onu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son beşi izleyenle ilgilidir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
 
 *İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
 
@@ -312,7 +313,7 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 1. Zemini ve üç platformu birer dikdörtgen olarak çizin; her birine **Katı** verin.
 2. Kahramanı çizin, adını "Kahraman" yapın, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin. Deneyin: yürür, zıplar, platformlara iner, altlarına başını çarpar.
 3. Her platformun üstüne bir altın koyun; hepsinin adı "Altın" olsun. Kural: *Kahraman nesnesi Altın nesnesine değince: Puan sayısını 1 artır; Altın nesnesini sil*.
-4. Zemine bir düşman çizin, adını "Düşman" yapın, ona **Git Gel** verin. Kural: *Kahraman nesnesi Düşman nesnesine değince: Can sayısını 1 azalt; Kahraman nesnesini 20, 262 konumuna koy* (kahramanın başladığı yer; X ve Y değerleri Özellikler'de yazar).
+4. Zemine bir düşman çizin, adını "Düşman" yapın, ona **Git Gel** verin. Kural: *Kahraman nesnesi Düşman nesnesine değince: Can sayısını 1 azalt; Kahraman nesnesini 30, 322 konumuna koy* (kahramanın başladığı yer; X ve Y değerleri Özellikler'de yazar).
 5. Bir kapı çizin, adını "Kapı" yapın. Kural: *Kahraman nesnesi Kapı nesnesine değince*, **Koşul** Puan, büyükse, 2: *2. sahneye git*.
 6. Kural: *Can sayısı 1 değerinin altına inince: 3. sahneye git*. 2. sahnede "Aferin", 3. sahnede "Oyun bitti" yazar; ikisinde de "Yeniden" adlı bir kutu ve Durdur kare eylemi vardır.
 
@@ -324,6 +325,14 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 4. Dört uzaylı çizin; hepsinin adı "Uzaylı" olsun, her biri bir öncekinden daha yukarıda dursun. Her birine çekimi küçük (22), zıplama hızı 0 olan **Düş ve Zıpla** verin.
 5. Kural: *Mermi nesnesi Uzaylı nesnesine değince: Puan sayısını 1 artır; Mermi nesnesini sil; Uzaylı nesnesini üstte rastgele bir yere koy; Uzaylı nesnesini yüzde 6 hızlandır*.
 6. Kural: *Uzaylı nesnesi sahnenin alt kenarına değince: Can sayısını 1 azalt; Uzaylı nesnesini üstte rastgele bir yere koy*. Kural: *Can sayısı 1 değerinin altına inince: 2. sahneye git*.
+
+**Oyunu canlandırmak.** Örnek oyunlar derslerdeki birkaç kuralı ve dört şeyi daha kullanır. Bir oyunu oynamaya değer yapan bunlardır; her biri bir tık ya da bir cümledir:
+
+- *Karakterler.* Karakteri birkaç şekilden çizin (gövde, gözler, şapka), hepsini seçip gruplayın (Ctrl+G) ve gruba ad verin. Grup, kurallar ve davranışlar için tek bir nesnedir. Bir örneği açıp kahramanın grubunu çözerek nasıl yapıldığına bakın.
+- *Bir şey olduğunda parlama.* Bir yıldız çizin, adını "Parıltı" yapın, ona **Büyü Küçül**, **Dön** ve **Bir Süre Sonra Kaybol** (0,35 saniye) verin. Kural: *Film başlayınca: Parıltı nesnesini gizle*. Sonra altının kuralına ekleyin: *Parıltı nesnesinin kopyasını Altın nesnesinin yerinde oluştur*. Alınan her altın parlar.
+- *Her şeye bir ses.* Kısa bir ses içe aktarın (**Ses İçe Aktar**) ve kurala *Ses çal* ekleyin. Örnekler kendileri için üretilmiş beş ses taşır: çın, vız, bum, eyvah ve zafer.
+- *Hareket eden manzara.* **Sürekli Git** verilmiş bulutlar, **Dön** verilmiş güneş, üç ayrı hızda akan yıldızlar, **Yanıp Sön** verilmiş lambalar. Hiçbiri bir kuralda yer almaz.
+- *Gittikçe zorlaşma.* Puan veren kurala *… nesnesini yüzde 5 hızlandır* ekleyin.
 
 Kuralların henüz yapmadıkları: hareket eden platform üstündekini taşımaz; değme, elipsler dışında kutulara göre hesaplanır; sayılar tam ya da ondalıklıdır, sözcük saklanmaz; bir kuralın tek koşulu vardır, "değilse" yoktur. Sahneden büyük bölümler, kamera ve birkaç animasyonu olan karakter kuralların değil, bir oyun stüdyosunun işidir.
 
@@ -360,4 +369,4 @@ Kuralların henüz yapmadıkları: hareket eden platform üstündekini taşımaz
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on dört hazır film vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış beş oyun, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on dört hazır film vardır (beş oyun karakterler, manzara, parlamalar ve seslerle çizilmiştir); her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış beş oyun, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.

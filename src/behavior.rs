@@ -22,6 +22,8 @@ pub enum BehaviorKind {
     Pulse,
     Blink,
     Fade,
+    /// Gone after some seconds: for sparks, bursts and anything else that is only to flash by.
+    Expire,
     FollowMouse,
     ArrowKeys,
     Gravity,
@@ -31,7 +33,7 @@ pub enum BehaviorKind {
 }
 
 /// Every kind, in the order the menu lists them: first those that move by themselves, then those the viewer moves.
-pub const KINDS: [BehaviorKind; 14] = [
+pub const KINDS: [BehaviorKind; 15] = [
     BehaviorKind::Spin,
     BehaviorKind::Bounce,
     BehaviorKind::BackAndForth,
@@ -41,6 +43,7 @@ pub const KINDS: [BehaviorKind; 14] = [
     BehaviorKind::Pulse,
     BehaviorKind::Blink,
     BehaviorKind::Fade,
+    BehaviorKind::Expire,
     BehaviorKind::FollowMouse,
     BehaviorKind::ArrowKeys,
     BehaviorKind::Gravity,
@@ -61,6 +64,7 @@ impl BehaviorKind {
             BehaviorKind::Pulse => "Grow and Shrink",
             BehaviorKind::Blink => "Blink",
             BehaviorKind::Fade => "Fade In and Out",
+            BehaviorKind::Expire => "Disappear After a While",
             BehaviorKind::FollowMouse => "Follow the Mouse",
             BehaviorKind::ArrowKeys => "Walk with the Arrow Keys",
             BehaviorKind::Gravity => "Fall and Jump",
@@ -81,6 +85,7 @@ impl BehaviorKind {
             BehaviorKind::Pulse => "pulse",
             BehaviorKind::Blink => "blink",
             BehaviorKind::Fade => "fade",
+            BehaviorKind::Expire => "expire",
             BehaviorKind::FollowMouse => "mouse",
             BehaviorKind::ArrowKeys => "keys",
             BehaviorKind::Gravity => "gravity",
@@ -101,6 +106,7 @@ impl BehaviorKind {
             BehaviorKind::Pulse => (("Growth (percent):", 25.0), Some(("Seconds for one beat:", 1.0))),
             BehaviorKind::Blink => (("Seconds for one blink:", 1.0), None),
             BehaviorKind::Fade => (("Seconds there and back:", 2.0), None),
+            BehaviorKind::Expire => (("Seconds:", 0.5), None),
             BehaviorKind::FollowMouse => (("Speed (pixels a second):", 200.0), None),
             BehaviorKind::ArrowKeys => (("Speed (pixels a second):", 160.0), None),
             BehaviorKind::Gravity => (("Pull (pixels a second, each second):", 900.0), Some(("Jump speed (pixels a second):", 420.0))),
@@ -187,6 +193,11 @@ pub fn moved(behaviors: &[Behavior], tick: usize, fps: f32, bounds: Rect, stage:
                 }
             }
             BehaviorKind::Fade => moved.alpha *= (1.0 + (TAU * t / span(a)).cos()) / 2.0,
+            BehaviorKind::Expire => {
+                if t >= a {
+                    moved.alpha = 0.0;
+                }
+            }
             BehaviorKind::FollowMouse | BehaviorKind::ArrowKeys | BehaviorKind::Gravity | BehaviorKind::Draggable | BehaviorKind::Solid => {}
         }
     }
@@ -217,6 +228,8 @@ mod tests {
         // Seen for the first half of a blink and not for the second.
         assert_eq!((after(BehaviorKind::Blink, 1.0, 0.0, 2).alpha, after(BehaviorKind::Blink, 1.0, 0.0, 7).alpha), (1.0, 0.0));
         assert!(after(BehaviorKind::Fade, 2.0, 0.0, 10).alpha.abs() < 1e-4);
+        // There for half a second, then gone.
+        assert_eq!((after(BehaviorKind::Expire, 0.5, 0.0, 4).alpha, after(BehaviorKind::Expire, 0.5, 0.0, 5).alpha), (1.0, 0.0));
         assert!(after(BehaviorKind::Shake, 3.0, 0.0, 3).dx.abs() <= 3.0);
         // Those that wait for the viewer do nothing by themselves.
         assert_eq!(after(BehaviorKind::ArrowKeys, 160.0, 0.0, 9), Moved { dx: 0.0, dy: 0.0, angle: 0.0, scale: 1.0, alpha: 1.0 });

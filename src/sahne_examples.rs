@@ -6,8 +6,8 @@
 use crate::autoshape::AutoKind;
 use crate::examples::{add, bold, boxed, centered, finish, gradient, layer, rect, Example, BLUE, INK, ORANGE, PALE, TEAL, WHITE, YELLOW};
 use crate::behavior::{Behavior, BehaviorKind};
-use crate::i18n::{t, tf};
-use crate::rules::{Condition, Event, EventKind, Rule, Step, StepKind, Variable};
+use crate::i18n::t;
+use crate::rules::{Event, EventKind, Rule, Step, StepKind};
 use crate::model::{Action, Color, Document, Editor, FillKind, LayerKind, Object, Shape, Span, Stroke, SymbolKind, TextStyle, Tween, Vec2, WebKind};
 
 pub const EXAMPLES: &[Example] = &[
@@ -19,15 +19,15 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "One after another", about: "Layers with times of their own: the car drives for four seconds and stops, then the sun rises, then the words appear", build: one_after_another },
     Example { name: "Stick fight", about: "Pose to pose: figures of lines that turn at their joints, a punch, a kick, and enemies that come and go at their own times", build: stick_fight },
     Example { name: "Behaviors", about: "Motion with no keyframes: every ready behavior on a single frame. Test the movie to walk, jump and drag", build: behaviors },
-    Example { name: "Game: catch the apples", about: "Rules and numbers: the arrow keys move the basket, each apple caught is a point, each one dropped costs a life", build: catch_the_apples },
-    Example { name: "Game: hit the targets", about: "Rules about clicks and a clock: click the moving targets before the time runs out", build: hit_the_targets },
-    Example { name: "Game: platform", about: "Solid ground and platforms, coins that are removed, and a door that opens only when every coin is collected", build: platform_game },
-    Example { name: "Game: space shooter", about: "Copies made by a rule: Space fires, each hit makes the aliens faster", build: space_shooter },
-    Example { name: "Game: quiz", about: "Rules across scenes: a question on each scene, a point for each right answer, the score at the end", build: quiz },
+    Example { name: "Game: catch the apples", about: "Rules and numbers: the arrow keys move the basket, each apple caught is a point, each one dropped costs a life", build: crate::sahne_games::catch_the_apples },
+    Example { name: "Game: hit the targets", about: "Rules about clicks and a clock: click the moving targets before the time runs out", build: crate::sahne_games::hit_the_targets },
+    Example { name: "Game: platform", about: "Solid ground and platforms, coins that are removed, and a door that opens only when every coin is collected", build: crate::sahne_games::platform_game },
+    Example { name: "Game: space shooter", about: "Copies made by a rule: Space fires, each hit makes the aliens faster", build: crate::sahne_games::space_shooter },
+    Example { name: "Game: quiz", about: "Rules across scenes: a question on each scene, a point for each right answer, the score at the end", build: crate::sahne_games::quiz },
     Example { name: "Two scenes with buttons", about: "Scenes, frame actions that stop the film, and buttons that lead from scene to scene", build: two_scenes },
 ];
 
-fn start(width: u32, height: u32, first_layer: &str, fps: f32) -> Editor {
+pub(crate) fn start(width: u32, height: u32, first_layer: &str, fps: f32) -> Editor {
     let mut e = Editor::new(Document::new(width, height));
     e.doc.page_mut().layers[0].name = first_layer.to_string();
     e.doc.page_mut().start_timeline(fps);
@@ -234,7 +234,7 @@ fn one_after_another() -> Document {
 }
 
 /// Makes the scene wait on the frame on show: without a Stop the film would go on to the next scene.
-fn stop_here(e: &mut Editor) {
+pub(crate) fn stop_here(e: &mut Editor) {
     e.on_timeline(|timeline, layer, frame| {
         if let Some(at) = timeline.span_at(layer, frame) {
             timeline.layers[layer][at].action = Action::Stop.text();
@@ -242,7 +242,7 @@ fn stop_here(e: &mut Editor) {
     });
 }
 
-fn rule(event: (EventKind, &str, &str, f32), steps: &[(StepKind, &str, f32, f32)]) -> Rule {
+pub(crate) fn rule(event: (EventKind, &str, &str, f32), steps: &[(StepKind, &str, f32, f32)]) -> Rule {
     Rule {
         event: Event { kind: event.0, a: event.1.to_string(), b: event.2.to_string(), n: event.3 },
         when: None,
@@ -250,206 +250,32 @@ fn rule(event: (EventKind, &str, &str, f32), steps: &[(StepKind, &str, f32, f32)
     }
 }
 
-fn give(e: &mut Editor, id: u64, list: &[(BehaviorKind, f32, f32)]) {
+pub(crate) fn give(e: &mut Editor, id: u64, list: &[(BehaviorKind, f32, f32)]) {
     e.selection = vec![id];
     e.for_selected(|o| o.behaviors = list.iter().map(|(kind, a, b)| Behavior { kind: *kind, a: *a, b: *b }).collect());
 }
 
 /// A text that shows a number: "Score: {Score}".
-fn counter(e: &mut Editor, number: &str, x: f32, y: f32, size: f32, color: Color) -> u64 {
+pub(crate) fn counter(e: &mut Editor, number: &str, x: f32, y: f32, size: f32, color: Color) -> u64 {
     crate::examples::text(e, &format!("{number}: {{{number}}}"), x, y, size, color, bold())
 }
 
 /// A scene the game ends on: a word, the score, and a box to click that starts the game again.
-fn last_scene(e: &mut Editor, width: f32, height: f32, word: &str, score: &str) {
+pub(crate) fn last_scene(e: &mut Editor, width: f32, height: f32, word: &str, score: &str) {
     e.add_page();
     e.doc.page_mut().layers[0].name = t("Background").to_string();
     let back = boxed(e, t("Background"), rect(0.0, 0.0, width, height), 0.0, INK);
     gradient(e, back, FillKind::Linear, INK, TEAL, (0.5, 0.0), (0.5, 1.0));
+    // A star turns slowly behind the words.
+    let rays = add(e, t("Star"), Shape::Auto { kind: AutoKind::Star, a: 0.6, b: 0.0, count: 16 }, rect(width / 2.0 - 150.0, height * 0.3 - 150.0, 300.0, 300.0), Some(WHITE), None);
+    e.for_selected(|o| o.opacity = 0.08);
+    give(e, rays, &[(BehaviorKind::Spin, 24.0, 0.0)]);
     centered(e, word, width / 2.0, height * 0.18, 40.0, WHITE, bold());
     centered(e, score, width / 2.0, height * 0.42, 26.0, YELLOW, bold());
     // The box is what the rule is about; the words on it are only words.
     boxed(e, t("Again"), rect(width / 2.0 - 90.0, height * 0.66, 180.0, 44.0), 10.0, BLUE);
     centered(e, t("Play again"), width / 2.0, height * 0.66 + 10.0, 18.0, WHITE, bold());
     stop_here(e);
-}
-
-fn platform_game() -> Document {
-    let (score, lives, hero, coin, enemy, door) = (t("Score"), t("Lives"), t("Hero"), t("Coin"), t("Enemy"), t("Door"));
-    let mut e = start(520, 320, t("Background"), 24.0);
-    let sky = boxed(&mut e, t("Sky"), rect(0.0, 0.0, 520.0, 320.0), 0.0, PALE);
-    gradient(&mut e, sky, FillKind::Linear, Color::rgb(0xbc, 0xdc, 0xf8), WHITE, (0.5, 0.0), (0.5, 1.0));
-    centered(&mut e, t("Collect the three coins, then go to the door. Arrows walk, Up jumps."), 260.0, 34.0, 13.0, INK, TextStyle::default());
-    counter(&mut e, score, 12.0, 8.0, 18.0, INK);
-    counter(&mut e, lives, 430.0, 8.0, 18.0, Color::rgb(0xc8, 0x30, 0x30));
-    layer(&mut e, t("Game"));
-    // The ground and the platforms are solid: the hero stands on them and bumps its head on them.
-    let ground = boxed(&mut e, t("Ground"), rect(0.0, 300.0, 520.0, 20.0), 0.0, TEAL);
-    give(&mut e, ground, &[(BehaviorKind::Solid, 0.0, 0.0)]);
-    for (x, y, w) in [(120.0, 235.0, 110.0), (290.0, 180.0, 110.0), (420.0, 120.0, 90.0)] {
-        let id = boxed(&mut e, t("Platform"), rect(x, y, w, 14.0), 4.0, INK);
-        give(&mut e, id, &[(BehaviorKind::Solid, 0.0, 0.0)]);
-        // A coin over each platform.
-        add(&mut e, coin, Shape::Ellipse, rect(x + w / 2.0 - 9.0, y - 28.0, 18.0, 18.0), Some(YELLOW), Some(Stroke { color: ORANGE, width: 2.0 }));
-    }
-    boxed(&mut e, door, rect(478.0, 250.0, 30.0, 50.0), 4.0, Color::rgb(0x9a, 0x64, 0x30));
-    // The enemy walks the ground by itself.
-    let id = boxed(&mut e, enemy, rect(230.0, 278.0, 26.0, 22.0), 6.0, Color::rgb(0xc8, 0x30, 0x30));
-    give(&mut e, id, &[(BehaviorKind::BackAndForth, 170.0, 3.0)]);
-    let id = boxed(&mut e, hero, rect(20.0, 262.0, 26.0, 38.0), 8.0, BLUE);
-    give(&mut e, id, &[(BehaviorKind::ArrowKeys, 170.0, 0.0), (BehaviorKind::Gravity, 1000.0, 440.0)]);
-    stop_here(&mut e);
-    last_scene(&mut e, 520.0, 320.0, t("Well done"), &format!("{score}: {{{score}}}"));
-    last_scene(&mut e, 520.0, 320.0, t("Game over"), &format!("{score}: {{{score}}}"));
-    e.set_active_page(0);
-    e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }, Variable { name: lives.to_string(), start: 3.0 }];
-    // The door lets the hero through only with every coin: a rule with "only if".
-    let mut open = rule((EventKind::Touch, hero, door, 0.0), &[(StepKind::GotoScene, "", 2.0, 0.0)]);
-    open.when = Some(Condition { number: score.to_string(), how: ">".to_string(), value: 2.0 });
-    e.doc.rules = vec![
-        rule((EventKind::Touch, hero, coin, 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::Remove, coin, 0.0, 0.0)]),
-        rule((EventKind::Touch, hero, enemy, 0.0), &[(StepKind::Add, lives, -1.0, 0.0), (StepKind::GoTo, hero, 20.0, 262.0)]),
-        open,
-        rule((EventKind::Number, lives, "<", 1.0), &[(StepKind::GotoScene, "", 3.0, 0.0)]),
-        rule((EventKind::Click, t("Again"), "", 0.0), &[(StepKind::Restart, "", 0.0, 0.0)]),
-    ];
-    finish(e)
-}
-
-fn space_shooter() -> Document {
-    let (score, lives, ship, bullet, alien) = (t("Score"), t("Lives"), t("Ship"), t("Bullet"), t("Alien"));
-    let mut e = start(480, 320, t("Background"), 24.0);
-    boxed(&mut e, t("Background"), rect(0.0, 0.0, 480.0, 320.0), 0.0, Color::rgb(0x10, 0x14, 0x2c));
-    centered(&mut e, t("Arrows move the ship, Space fires"), 240.0, 34.0, 13.0, PALE, TextStyle::default());
-    counter(&mut e, score, 12.0, 8.0, 18.0, WHITE);
-    counter(&mut e, lives, 390.0, 8.0, 18.0, YELLOW);
-    layer(&mut e, t("Game"));
-    // The aliens come down one after another; each starts higher than the one before.
-    for (place, x) in [40.0, 160.0, 280.0, 390.0].into_iter().enumerate() {
-        let id = add(&mut e, alien, Shape::Ellipse, rect(x, 44.0 - place as f32 * 80.0, 40.0, 28.0), Some(Color::rgb(0x50, 0xc8, 0x70)), Some(Stroke { color: WHITE, width: 2.0 }));
-        give(&mut e, id, &[(BehaviorKind::Gravity, 22.0, 0.0)]);
-    }
-    // One bullet is drawn, and hidden when the film starts: every shot is a copy of it. It keeps going up.
-    let id = boxed(&mut e, bullet, rect(237.0, 262.0, 6.0, 16.0), 3.0, YELLOW);
-    give(&mut e, id, &[(BehaviorKind::Drift, 380.0, 90.0)]);
-    // Falling keeps the ship on the bottom edge, so the arrows only move it sideways.
-    let id = boxed(&mut e, ship, rect(216.0, 290.0, 48.0, 22.0), 10.0, BLUE);
-    give(&mut e, id, &[(BehaviorKind::ArrowKeys, 280.0, 0.0), (BehaviorKind::Gravity, 900.0, 0.0)]);
-    stop_here(&mut e);
-    last_scene(&mut e, 480.0, 320.0, t("Game over"), &format!("{score}: {{{score}}}"));
-    e.set_active_page(0);
-    e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }, Variable { name: lives.to_string(), start: 3.0 }];
-    let mut fire = rule((EventKind::Key, " ", "", 0.0), &[(StepKind::Spawn, bullet, 0.0, 0.0)]);
-    fire.steps[0].b = ship.to_string();
-    e.doc.rules = vec![
-        rule((EventKind::Start, "", "", 0.0), &[(StepKind::Hide, bullet, 0.0, 0.0)]),
-        fire,
-        rule((EventKind::Edge, bullet, "top", 0.0), &[(StepKind::Remove, bullet, 0.0, 0.0)]),
-        rule((EventKind::Touch, bullet, alien, 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::Remove, bullet, 0.0, 0.0), (StepKind::RandomTop, alien, 0.0, 0.0), (StepKind::Faster, alien, 6.0, 0.0)]),
-        rule((EventKind::Edge, alien, "bottom", 0.0), &[(StepKind::Add, lives, -1.0, 0.0), (StepKind::RandomTop, alien, 0.0, 0.0)]),
-        rule((EventKind::Number, lives, "<", 1.0), &[(StepKind::GotoScene, "", 2.0, 0.0)]),
-        rule((EventKind::Click, t("Again"), "", 0.0), &[(StepKind::Restart, "", 0.0, 0.0)]),
-    ];
-    finish(e)
-}
-
-fn catch_the_apples() -> Document {
-    let (score, lives, apple, basket) = (t("Score"), t("Lives"), t("Apple"), t("Basket"));
-    let mut e = start(480, 320, t("Background"), 24.0);
-    let sky = boxed(&mut e, t("Sky"), rect(0.0, 0.0, 480.0, 320.0), 0.0, PALE);
-    gradient(&mut e, sky, FillKind::Linear, Color::rgb(0xbc, 0xdc, 0xf8), WHITE, (0.5, 0.0), (0.5, 1.0));
-    centered(&mut e, t("Catch the apples with the arrow keys"), 240.0, 34.0, 13.0, INK, TextStyle::default());
-    counter(&mut e, score, 12.0, 8.0, 18.0, INK);
-    counter(&mut e, lives, 390.0, 8.0, 18.0, Color::rgb(0xc8, 0x30, 0x30));
-    layer(&mut e, t("Game"));
-    // The apples fall by themselves; the second starts higher up, so it comes later.
-    for (x, y) in [(110.0, 2.0), (330.0, -170.0)] {
-        let id = add(&mut e, apple, Shape::Ellipse, rect(x, y, 30.0, 30.0), Some(Color::rgb(0xd8, 0x30, 0x30)), None);
-        give(&mut e, id, &[(BehaviorKind::Gravity, 70.0, 0.0)]);
-    }
-    // The basket walks with the arrow keys. Falling keeps it on the ground, so the up arrow does not lift it.
-    let id = boxed(&mut e, basket, rect(195.0, 292.0, 90.0, 28.0), 8.0, Color::rgb(0x9a, 0x64, 0x30));
-    give(&mut e, id, &[(BehaviorKind::ArrowKeys, 260.0, 0.0), (BehaviorKind::Gravity, 900.0, 0.0)]);
-    stop_here(&mut e);
-    last_scene(&mut e, 480.0, 320.0, t("Game over"), &format!("{score}: {{{score}}}"));
-    e.set_active_page(0);
-    e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }, Variable { name: lives.to_string(), start: 5.0 }];
-    e.doc.rules = vec![
-        // Each apple caught falls a little faster the next time: the game gets harder as it goes.
-        rule((EventKind::Touch, apple, basket, 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::RandomTop, apple, 0.0, 0.0), (StepKind::Faster, apple, 4.0, 0.0)]),
-        rule((EventKind::Edge, apple, "bottom", 0.0), &[(StepKind::Add, lives, -1.0, 0.0), (StepKind::RandomTop, apple, 0.0, 0.0)]),
-        rule((EventKind::Number, lives, "<", 1.0), &[(StepKind::GotoScene, "", 2.0, 0.0)]),
-        rule((EventKind::Click, t("Again"), "", 0.0), &[(StepKind::Restart, "", 0.0, 0.0)]),
-    ];
-    finish(e)
-}
-
-fn hit_the_targets() -> Document {
-    let (score, time, target) = (t("Score"), t("Time"), t("Target"));
-    let mut e = start(480, 320, t("Background"), 24.0);
-    boxed(&mut e, t("Background"), rect(0.0, 0.0, 480.0, 320.0), 0.0, INK);
-    centered(&mut e, t("Click the targets before the time runs out"), 240.0, 34.0, 13.0, PALE, TextStyle::default());
-    counter(&mut e, score, 12.0, 8.0, 18.0, WHITE);
-    counter(&mut e, time, 380.0, 8.0, 18.0, YELLOW);
-    layer(&mut e, t("Game"));
-    // Three targets, each moving its own way.
-    for (x, y, color, moves) in [
-        (60.0, 90.0, ORANGE, (BehaviorKind::BackAndForth, 140.0, 2.2)),
-        (300.0, 150.0, YELLOW, (BehaviorKind::UpAndDown, 70.0, 1.6)),
-        (180.0, 240.0, Color::rgb(0xd8, 0x40, 0x60), (BehaviorKind::Drift, 110.0, 0.0)),
-    ] {
-        let id = add(&mut e, target, Shape::Ellipse, rect(x, y, 46.0, 46.0), Some(color), Some(Stroke { color: WHITE, width: 4.0 }));
-        give(&mut e, id, &[moves]);
-    }
-    stop_here(&mut e);
-    last_scene(&mut e, 480.0, 320.0, t("Time is up"), &format!("{score}: {{{score}}}"));
-    e.set_active_page(0);
-    e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }, Variable { name: time.to_string(), start: 20.0 }];
-    e.doc.rules = vec![
-        rule((EventKind::Click, target, "", 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::Random, target, 0.0, 0.0)]),
-        rule((EventKind::Every, "", "", 1.0), &[(StepKind::Add, time, -1.0, 0.0)]),
-        rule((EventKind::Number, time, "<", 1.0), &[(StepKind::GotoScene, "", 2.0, 0.0)]),
-        rule((EventKind::Click, t("Again"), "", 0.0), &[(StepKind::Restart, "", 0.0, 0.0)]),
-    ];
-    finish(e)
-}
-
-fn quiz() -> Document {
-    let (score, right, wrong) = (t("Score"), t("Right answer"), t("Wrong answer"));
-    let questions = [
-        (t("How many legs does a spider have?"), ["6", "8", "10"], 1),
-        (t("How many days are there in a week?"), ["5", "9", "7"], 2),
-        (t("How many sides does a triangle have?"), ["3", "4", "5"], 0),
-    ];
-    let mut e = start(480, 320, t("Background"), 24.0);
-    for (index, (question, answers, correct)) in questions.iter().enumerate() {
-        if index > 0 {
-            e.add_page();
-            e.doc.page_mut().layers[0].name = t("Background").to_string();
-        }
-        e.doc.page_mut().name = tf("Question {}", &[&(index + 1)]);
-        let back = boxed(&mut e, t("Background"), rect(0.0, 0.0, 480.0, 320.0), 0.0, PALE);
-        gradient(&mut e, back, FillKind::Linear, WHITE, Color::rgb(0xc8, 0xdc, 0xf4), (0.5, 0.0), (0.5, 1.0));
-        counter(&mut e, score, 12.0, 8.0, 16.0, INK);
-        centered(&mut e, &tf("Question {}", &[&(index + 1)]), 240.0, 44.0, 16.0, TEAL, bold());
-        centered(&mut e, question, 240.0, 86.0, 24.0, INK, bold());
-        // Each answer is a box with its words on it. The boxes are named Right or Wrong: that is all the rules need.
-        for (place, answer) in answers.iter().enumerate() {
-            let x = 60.0 + place as f32 * 130.0;
-            boxed(&mut e, if place == *correct { right } else { wrong }, rect(x, 190.0, 100.0, 60.0), 10.0, BLUE);
-            centered(&mut e, answer, x + 50.0, 202.0, 28.0, WHITE, bold());
-        }
-        stop_here(&mut e);
-    }
-    last_scene(&mut e, 480.0, 320.0, t("Well done"), &format!("{score}: {{{score}}} / {}", questions.len()));
-    e.set_active_page(0);
-    e.doc.variables = vec![Variable { name: score.to_string(), start: 0.0 }];
-    e.doc.rules = vec![
-        rule((EventKind::Click, right, "", 0.0), &[(StepKind::Add, score, 1.0, 0.0), (StepKind::NextScene, "", 0.0, 0.0)]),
-        rule((EventKind::Click, wrong, "", 0.0), &[(StepKind::NextScene, "", 0.0, 0.0)]),
-        rule((EventKind::Click, t("Again"), "", 0.0), &[(StepKind::Restart, "", 0.0, 0.0)]),
-    ];
-    finish(e)
 }
 
 fn behaviors() -> Document {
@@ -469,6 +295,9 @@ fn behaviors() -> Document {
     give(&mut e, cloud, &[(Kind::Drift, 22.0, 0.0)]);
     let title = centered(&mut e, "PisiSahne", 280.0, 8.0, 26.0, BLUE, bold());
     give(&mut e, title, &[(Kind::Fade, 3.0, 0.0)]);
+    // A greeting that is gone after three seconds.
+    let hello = centered(&mut e, t("Hello!"), 500.0, 120.0, 18.0, TEAL, bold());
+    give(&mut e, hello, &[(Kind::Expire, 3.0, 0.0)]);
     let look = centered(&mut e, t("Look!"), 500.0, 150.0, 22.0, ORANGE, bold());
     give(&mut e, look, &[(Kind::Blink, 1.0, 0.0)]);
     let bell = add(&mut e, t("Bell"), Shape::Auto { kind: AutoKind::Polygon, a: 0.0, b: 0.0, count: 6 }, rect(34.0, 236.0, 48.0, 48.0), Some(Color::rgb(0xc8, 0x30, 0x30)), None);
@@ -867,28 +696,33 @@ mod tests {
         // with their names, and the texts that show numbers are written by the page.
         crate::i18n::set_language(crate::i18n::Language::English);
         let doc = find("Game: catch the apples");
-        assert_eq!(doc.rules[0].sentence(), "When Apple touches Basket: increase Score by 1; put Apple at the top, at random; make Apple faster by 4 percent");
-        assert_eq!(doc.rules[2].sentence(), "When Lives goes below 1: go to scene 2");
+        assert_eq!(doc.rules[1].sentence(), "When Apple touches Basket: increase Score by 1; make a copy of Plus at Basket; put Apple at the top, at random; make Apple faster by 4 percent; play the sound ding");
+        assert_eq!(doc.rules[3].sentence(), "When Lives goes below 1: go to scene 2");
         let html = crate::publish::html(&doc, "x").unwrap();
-        assert_eq!((html.matches("\"n\":\"Apple\"").count(), html.matches("\"n\":\"Basket\"").count(), html.matches("\"n\":\"Again\"").count()), (2, 1, 1));
-        assert!(html.contains("numbers: {\"Score\":0,\"Lives\":5}") && html.contains("{\"e\":[\"edge\",\"Apple\",\"bottom\",0],\"c\":null,\"s\":[[\"add\",\"Lives\",-1,0,\"\"],[\"top\",\"Apple\",0,0,\"\"]]}"));
+        assert_eq!((html.matches("\"n\":\"Apple\"").count(), html.matches("\"n\":\"Basket\"").count(), html.matches("\"n\":\"Again\"").count()), (3, 1, 1));
+        assert!(html.contains("numbers: {\"Score\":0,\"Lives\":5}") && html.contains("{\"e\":[\"edge\",\"Apple\",\"bottom\",0],\"c\":null,\"s\":[[\"add\",\"Lives\",-1,0,\"\"],[\"top\",\"Apple\",0,0,\"\"],[\"sound\",\"oops\",3,0,\"\"]]}"));
         assert_eq!(html.matches("[\"t\",").count(), 3, "the score and the lives on the first scene, the score on the last");
         assert!(html.contains("\"text\":\"Score: {Score}\""));
+        // Every game carries the five sounds made for it, and its characters are groups: one picture each.
+        assert_eq!((doc.sounds.len(), html.matches("data:audio/wav;base64,").count()), (5, 5));
+        assert!(doc.pages[0].objects().filter(|o| o.name == "Apple").all(|o| matches!(o.shape, Shape::Group { .. })));
         let doc = find("Game: hit the targets");
-        assert_eq!(doc.rules[1].sentence(), "Every 1 seconds: decrease Time by 1");
-        assert_eq!(crate::publish::html(&doc, "x").unwrap().matches("\"n\":\"Target\"").count(), 3);
-        // The platform game: three solid platforms and the ground, a door that waits for every coin, round coins.
+        assert_eq!(doc.rules[2].sentence(), "Every 1 seconds: decrease Time by 1");
+        assert_eq!(crate::publish::html(&doc, "x").unwrap().matches("\"n\":\"Target\"").count(), 4);
+        // The platform game: three solid platforms and the ground, a door that waits for every coin, a sparkle for each coin taken.
         let doc = find("Game: platform");
-        assert_eq!(doc.rules[2].sentence(), "When Hero touches Door, if Score is more than 2: go to scene 2");
-        assert_eq!(doc.rules[0].sentence(), "When Hero touches Coin: increase Score by 1; remove Coin");
+        assert_eq!(doc.rules[3].sentence(), "When Hero touches Door, if Score is more than 2: play the sound fanfare; go to scene 2");
+        assert_eq!(doc.rules[1].sentence(), "When Hero touches Coin: increase Score by 1; make a copy of Sparkle at Coin; remove Coin; play the sound ding");
         let html = crate::publish::html(&doc, "x").unwrap();
-        assert_eq!((html.matches("[\"solid\",0,0]").count(), html.matches("\"n\":\"Coin\",\"r\":1").count(), html.matches("\"n\":\"Hero\",\"r\":0").count()), (4, 3, 1));
-        assert!(html.contains("\"c\":[\"Score\",\">\",2]") && doc.scenes().len() == 3);
-        // The shooter: every shot is a copy of the one bullet, made where the ship is.
+        assert_eq!((html.matches("[\"solid\",0,0]").count(), html.matches("\"n\":\"Coin\"").count(), html.matches("\"n\":\"Hero\"").count()), (4, 3, 1));
+        assert!(html.contains("\"c\":[\"Score\",\">\",2]") && html.contains("[\"expire\",0.35,0]") && doc.scenes().len() == 3);
+        // The shooter: every shot is a copy of the one bullet, made where the ship is; every hit a copy of the one explosion.
         let doc = find("Game: space shooter");
-        assert_eq!(doc.rules[1].sentence(), "When the Space key is pressed: make a copy of Bullet at Ship");
-        assert_eq!(doc.rules[3].sentence(), "When Bullet touches Alien: increase Score by 1; remove Bullet; put Alien at the top, at random; make Alien faster by 6 percent");
-        assert!(crate::publish::html(&doc, "x").unwrap().contains("[\"spawn\",\"Bullet\",0,0,\"Ship\"]"));
+        assert_eq!(doc.rules[1].sentence(), "When the Space key is pressed: make a copy of Bullet at Ship; play the sound zap");
+        assert_eq!(doc.rules[3].sentence(), "When Bullet touches Alien: increase Score by 1; make a copy of Explosion at Alien; remove Bullet; put Alien at the top, at random; make Alien faster by 6 percent; play the sound boom");
+        let html = crate::publish::html(&doc, "x").unwrap();
+        assert!(html.contains("[\"spawn\",\"Bullet\",0,0,\"Ship\"]") && html.contains("[\"spawn\",\"Explosion\",0,0,\"Alien\"]"));
+        assert_eq!(html.matches("\"n\":\"Alien\"").count(), 5);
         let doc = find("Game: quiz");
         assert_eq!((doc.scenes().len(), doc.rules.len()), (4, 3));
         let html = crate::publish::html(&doc, "x").unwrap();

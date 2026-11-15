@@ -253,13 +253,14 @@ The **One after another** example shows all of this in eight seconds: a car driv
 | Grow and Shrink | Swells and goes back | Growth in percent, seconds for one beat |
 | Blink | Shows and hides | Seconds for one blink |
 | Fade In and Out | Fades away and comes back | Seconds there and back |
+| Disappear After a While | Is gone when its time is up: for sparks and bursts | Seconds |
 | Follow the Mouse | Goes after the mouse | Speed (0: stays on the mouse) |
 | Walk with the Arrow Keys | The viewer moves it with the arrow keys; it stays on the stage | Speed |
 | Fall and Jump | Falls to the bottom edge of the stage; Up or Space makes it jump | Pull, jump speed (0: no jumping) |
 | Can Be Dragged | The viewer drags it with the mouse | |
 | Is Solid | Nothing that walks or falls passes through it: it stops at its sides, stands on its top and bumps its head on its underside | |
 
-The first nine show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last five have to do with the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
+The first ten show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last five have to do with the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
 
 *A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
 
@@ -310,7 +311,7 @@ The first nine show when you play inside the program (Enter): the film then play
 1. Draw the ground and three platforms, each a rectangle, and give each **Is Solid**.
 2. Draw the hero, name it "Hero", and give it **Walk with the Arrow Keys** and **Fall and Jump**. Test it: it walks, jumps, lands on the platforms and bumps its head under them.
 3. Put a coin over each platform; name each "Coin". Rule: *When Hero touches Coin: increase Score by 1; remove Coin*.
-4. Draw an enemy on the ground, name it "Enemy" and give it **Go Back and Forth**. Rule: *When Hero touches Enemy: decrease Lives by 1; put Hero at 20, 262* (where the hero started; its X and Y are in Properties).
+4. Draw an enemy on the ground, name it "Enemy" and give it **Go Back and Forth**. Rule: *When Hero touches Enemy: decrease Lives by 1; put Hero at 30, 322* (where the hero started; its X and Y are in Properties).
 5. Draw a door and name it "Door". Rule: *When Hero touches Door*, **Only if** Score is more than 2: *go to scene 2*.
 6. Rule: *When Lives goes below 1: go to scene 3*. Scene 2 says "Well done", scene 3 "Game over"; each has a box named "Again" and the frame action Stop.
 
@@ -322,6 +323,14 @@ The first nine show when you play inside the program (Enter): the film then play
 4. Draw four aliens, each named "Alien", each higher than the one before, and give each **Fall and Jump** with a small pull (22) and a jump speed of 0.
 5. Rule: *When Bullet touches Alien: increase Score by 1; remove Bullet; put Alien at the top, at random; make Alien faster by 6 percent*.
 6. Rule: *When Alien touches the bottom edge of the stage: decrease Lives by 1; put Alien at the top, at random*. Rule: *When Lives goes below 1: go to scene 2*.
+
+**Making a game feel alive.** The example games use the same few rules as the lessons, and four things more. They are what makes a game worth playing, and each is a click or a sentence:
+
+- *Characters.* Draw a character from several shapes (a body, eyes, a cap), select them all and group them (Ctrl+G), and name the group. The group is one object to rules and behaviors. Open an example and ungroup its hero to see how it is made.
+- *A burst where something happens.* Draw a star, name it "Sparkle", and give it **Grow and Shrink**, **Spin** and **Disappear After a While** (0.35 seconds). Rule: *When the film starts: hide Sparkle*. Then add to the rule of the coin: *make a copy of Sparkle at Coin*. Every coin taken flashes.
+- *A sound for each thing.* Import a short sound (**Import Sound**) and add *Play a sound* to the rule. The examples carry five sounds made for them: ding, zap, boom, oops and fanfare.
+- *Scenery that moves.* Clouds with **Keep Going**, a sun with **Spin**, stars streaming past at three speeds, lamps with **Blink**. None of it is in a rule.
+- *Harder as it goes.* Add *make … faster by 5 percent* to the rule that gives a point.
 
 What rules do not do yet: a moving platform does not carry what stands on it; touching goes by boxes, except for ellipses; a number is whole or decimal, there are no words to keep; a rule has one "only if" and no "otherwise". Levels larger than the stage, a camera and a character with several animations belong to a game studio, not to rules.
 
@@ -358,4 +367,4 @@ What rules do not do yet: a moving platform does not carry what stands on it; to
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has fourteen ready films, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has fourteen ready films (the five games drawn with characters, scenery, bursts and sounds), each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.

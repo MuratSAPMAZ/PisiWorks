@@ -461,6 +461,7 @@ function moved(key, b) {
     else if (k === "pulse") m.scale *= 1 + p / 100 * (1 - Math.cos(TAU * t / span(q))) / 2;
     else if (k === "blink") { var one = Math.abs(span(p)); if (((t % one) + one) % one >= one / 2) m.alpha = 0; }
     else if (k === "fade") m.alpha *= (1 + Math.cos(TAU * t / span(p))) / 2;
+    else if (k === "expire") { if (t >= p) m.alpha = 0; }
   });
   return m;
 }
@@ -470,6 +471,12 @@ function step(key, b) {
   // An object a rule has made faster does everything faster: its own time runs quicker.
   var a = actor(key), dt = a.rate / movie.fps, box = b.box;
   a.n += a.rate;
+  // What is to disappear after a while is gone when its time is up; a copy is gone for good.
+  if (b.l.some(function (l) { return l[0] === "expire" && a.n / movie.fps >= l[1]; })) {
+    a.hidden = true;
+    clones = clones.filter(function (c) { return keyOf(c.op) !== key; });
+    return;
+  }
   if (dragging && dragging.key === key) return;
   var falls = has(b, "gravity"), fromX = a.x, fromY = a.y;
   b.l.forEach(function (l) {

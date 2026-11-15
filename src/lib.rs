@@ -25,6 +25,7 @@ pub mod panels;
 pub mod print;
 pub mod rules;
 pub mod sahne_examples;
+pub mod sahne_games;
 pub mod publish;
 pub mod pseffects;
 pub mod paths;
