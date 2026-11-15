@@ -913,7 +913,8 @@ pub fn meant<'a>(name: &str, known: &'a [String]) -> Option<&'a String> {
 /// The names in the rules that nothing in the document answers to: objects and sounds. They do no
 /// harm, but a rule about a thing that is not there does nothing.
 pub fn strangers(rules: &[Rule], commands: &[Command], objects: &[String], sounds: &[String]) -> Vec<String> {
-    let named = rules.iter().flat_map(|rule| rule.objects()).chain(commands.iter().flat_map(|command| crate::rules::objects_of(&command.steps)));
+    // Inside a command, the name of a value it takes stands for whatever it is given: it is no object of the document.
+    let named = rules.iter().flat_map(|rule| rule.objects()).chain(commands.iter().flat_map(|command| crate::rules::objects_of(&command.steps).into_iter().filter(|name| !command.params.iter().any(|param| param == name))));
     let mut missing: Vec<String> = named.filter(|name| !objects.iter().any(|known| known == name)).map(str::to_string).collect();
     let lists = rules.iter().flat_map(|rule| [&rule.steps, &rule.otherwise]).chain(commands.iter().map(|command| &command.steps));
     let played = lists.flat_map(|steps| crate::rules::every_step(steps)).filter(|step| step.kind == StepKind::Sound).map(|step| step.a.clone());
@@ -1193,6 +1194,15 @@ When the Right Arrow key is released:
         assert_eq!(kinds, vec![StepKind::Attach, StepKind::Go, StepKind::Slow, StepKind::Halt, StepKind::Detach]);
         assert_eq!((found.rules[2].event.kind, found.rules[2].steps[0].a.as_str(), found.rules[1].steps[0].b.as_str()), (EventKind::KeyUp, "Car", "right"));
         assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+    }
+
+    #[test]
+    fn a_value_of_a_command_is_not_taken_for_a_missing_object() {
+        set_language(Language::English);
+        let found = read("The command Turn with Who, Times:\n    repeat Times times:\n        turn Who by 45 degrees\n\nWhen Box is clicked:\n    do the command Turn with Box, 8\n").unwrap();
+        assert!(strangers(&found.rules, &found.commands, &["Box".to_string()], &[]).is_empty());
+        // What is not there is still told: the object the command is given, and one named outright inside it.
+        assert_eq!(strangers(&found.rules, &found.commands, &[], &[]), vec!["Box".to_string()]);
     }
 
     #[test]
