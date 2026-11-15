@@ -484,6 +484,14 @@ function acts(key, b) {
   return a.extra ? list.concat(a.extra) : list;
 }
 function has(key, b, kind) { return acts(key, b).some(function (l) { return l[0] === kind; }); }
+// The op of the object known by a number, if it is on the stage now.
+function opOf(key) {
+  var list = ops();
+  for (var i = 0; i < list.length; i += 1) if (keyOf(list[i]) === key && behaviorsOf(list[i])) return list[i];
+  return null;
+}
+// How deep one object tied to another is being followed: a ring of them is not gone round for ever.
+var tied = 0;
 // Where the middle of the first object of a name is now, if it is on the stage and not hidden.
 function middleOf(name) {
   var list = ops();
@@ -502,6 +510,16 @@ function moved(key, b) {
   var a = actor(key), t = a.n / movie.fps, box = b.box, TAU = Math.PI * 2;
   // What rules have done to it comes first: turned it, resized it, let it through by a part.
   var m = { dx: a.x, dy: a.y, angle: a.turn || 0, scale: a.size === undefined ? 1 : a.size, alpha: a.alpha === undefined ? 1 : a.alpha };
+  // What is tied to another object goes wherever that one has gone since it was tied.
+  if (a.parent && tied < 8) {
+    var held = opOf(a.parent.key);
+    if (held) {
+      tied += 1;
+      var hm = moved(a.parent.key, behaviorsOf(held));
+      tied -= 1;
+      m.dx += hm.dx - a.parent.dx; m.dy += hm.dy - a.parent.dy;
+    }
+  }
   var whole = t;
   acts(key, b).forEach(function (l) {
     var k = l[0], p = l[1], q = l[2];
@@ -521,6 +539,8 @@ function moved(key, b) {
     else if (k === "blink") { var one = Math.abs(span(p)); if (((t % one) + one) % one >= one / 2) m.alpha = 0; }
     else if (k === "fade") m.alpha *= (1 + Math.cos(TAU * t / span(p))) / 2;
     else if (k === "expire") { if (t >= p) m.alpha = 0; }
+    // A wheel has turned by the way it has gone, over its own radius.
+    else if (k === "roll") m.angle += (a.rolled || 0) / Math.max(box[3] / 2, 1);
   });
   return m;
 }
@@ -573,6 +593,13 @@ function step(key, b) {
       if (a.y < lowY) { a.y = lowY; a.ry = Math.abs(a.ry); } else if (a.y > highY) { a.y = highY; a.ry = -Math.abs(a.ry); }
     }
   });
+  // What a rule has set going gathers speed, or loses it, towards the speed it is to have.
+  if (a.go) {
+    var g = a.go, sx = g.tx - g.vx, sy = g.ty - g.vy, short = Math.sqrt(sx * sx + sy * sy), most = g.acc * dt;
+    if (short <= most) { g.vx = g.tx; g.vy = g.ty; } else { g.vx += sx / short * most; g.vy += sy / short * most; }
+    a.x += g.vx * dt; a.y += g.vy * dt;
+    if (!g.tx && !g.ty && !g.vx && !g.vy) a.go = null;
+  }
   // What a rule has sent after another object goes straight towards its middle, and stops on reaching it.
   if (a.chase) {
     var goal = middleOf(a.chase.name);
@@ -598,6 +625,15 @@ function step(key, b) {
       if (flies) a.ry = toY > fromY ? -Math.abs(a.ry) : Math.abs(a.ry);
     }
   }
+  rolled(key, b, a);
+}
+// Counts how far along the ground a wheel has gone since it was last looked at. A leap from one side of
+// the stage to the other, as Keep Going makes, is not rolled.
+function rolled(key, b, a) {
+  if (!has(key, b, "roll")) return;
+  var here = moved(key, b).dx;
+  if (a.at !== undefined && Math.abs(here - a.at) < movie.width / 2) a.rolled = (a.rolled || 0) + here - a.at;
+  a.at = here;
 }
 // Sets the stage to draw an object as its behaviors have it.
 function place(m, b) {
@@ -736,6 +772,25 @@ function take(step, who, players) {
       (a.off = a.off || {})[gone] = true;
       if (a.extra) a.extra = a.extra.filter(function (l) { return l[0] !== gone; });
       if (gone === "ricochet") { a.rx = undefined; a.ry = undefined; }
+    }
+    else if (k === "go") {
+      // It reaches its speed in a little under half a second, from whatever speed it has now.
+      var way = step[4], gx = way === "left" ? -1 : way === "right" ? 1 : 0, gy = way === "up" ? -1 : way === "down" ? 1 : 0;
+      var was = a.go || { vx: 0, vy: 0 };
+      a.go = { vx: was.vx, vy: was.vy, tx: gx * x, ty: gy * x, acc: Math.max(Math.abs(x), 1) / 0.4 };
+    }
+    else if (k === "slow") {
+      // From the speed it has, it stands still in a second and a half.
+      if (a.go) { var pace3 = Math.sqrt(a.go.vx * a.go.vx + a.go.vy * a.go.vy); a.go.tx = 0; a.go.ty = 0; a.go.acc = Math.max(pace3, 1) / 1.5; }
+    }
+    else if (k === "stand") a.go = null;
+    else if (k === "attach") {
+      var holder = players.filter(function (q) { return meant(q, named(step[4])) && q.key !== p.key; })[0];
+      if (holder) { var hm = moved(holder.key, holder.b); a.parent = { key: holder.key, dx: hm.dx, dy: hm.dy }; }
+    }
+    else if (k === "detach") {
+      // It stays where it is: what it was carried by is kept as its own.
+      if (a.parent) { var now2 = moved(p.key, p.b); a.parent = null; var bare = moved(p.key, p.b); a.x += now2.dx - bare.dx; a.y += now2.dy - bare.dy; }
     }
     else if (k === "chase") a.chase = x > 0 ? { name: named(step[4]), speed: x } : null;
     else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
@@ -1028,11 +1083,15 @@ canvas.addEventListener("mouseup", function (event) {
   draw();
 });
 // The keys held down. In a film that listens to them the arrows and Space do not scroll the page.
-var listens = JSON.stringify(movie.scenes).search(/\["(keys|gravity)",/) >= 0 || movie.rules.some(function (rule) { return rule.e[0] === "key"; });
+var listens = JSON.stringify(movie.scenes).search(/\["(keys|gravity)",/) >= 0 || movie.rules.some(function (rule) { return rule.e[0] === "key" || rule.e[0] === "keyup"; });
 function keyed(event, down) {
   if (down && !event.repeat && !frozen) {
     var pressedKey = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     happen("key", function (e) { return e[1] === pressedKey; });
+  }
+  if (!down && !frozen) {
+    var letGo = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+    happen("keyup", function (e) { return e[1] === letGo; });
   }
   keys[event.key] = down;
   if (listens && (event.key.indexOf("Arrow") === 0 || event.key === " ")) event.preventDefault();

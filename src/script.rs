@@ -23,7 +23,7 @@
 //! writes it can always read back.
 
 use crate::i18n::{t, tf};
-use crate::rules::{choice_name, Command, Condition, Event, EventKind, Pick, Rule, Step, StepKind, Variable, EDGES, KEYS};
+use crate::rules::{choice_name, Command, Condition, Event, EventKind, Pick, Rule, Step, StepKind, Variable, EDGES, KEYS, WAYS};
 
 // ---- Sums ---------------------------------------------------------------------------------
 
@@ -302,10 +302,11 @@ fn choice(pick: Pick, list: &[(&str, &str)], shown: &str) -> Option<String> {
 }
 
 /// The sentences an event can be, each with the kind it gives and, for a number held against a value, which way.
-const EVENT_FORMS: [(&str, EventKind, &str); 11] = [
+const EVENT_FORMS: [(&str, EventKind, &str); 12] = [
     ("When the film starts", EventKind::Start, ""),
     ("When a scene starts", EventKind::Scene, ""),
     ("When the {} key is pressed", EventKind::Key, ""),
+    ("When the {} key is released", EventKind::KeyUp, ""),
     ("When {} is clicked", EventKind::Click, ""),
     ("When {} touches {} of the stage", EventKind::Edge, ""),
     ("When {} touches {}", EventKind::Touch, ""),
@@ -323,7 +324,7 @@ fn event(line: &str, known: &Known) -> Result<Event, Fault> {
         let plain = |text: &str| text.replace(',', ".").parse::<f32>().ok().filter(|n| n.is_finite());
         let made = match kind {
             EventKind::Start | EventKind::Scene => Some(Event::new(kind)),
-            EventKind::Key => choice(Pick::Key, &KEYS, &gaps[0]).map(|key| Event { kind, a: key, ..Default::default() }),
+            EventKind::Key | EventKind::KeyUp => choice(Pick::Key, &KEYS, &gaps[0]).map(|key| Event { kind, a: key, ..Default::default() }),
             EventKind::Click => Some(Event { kind, a: gaps[0].clone(), ..Default::default() }),
             EventKind::Touch => Some(Event { kind, a: gaps[0].clone(), b: gaps[1].clone(), ..Default::default() }),
             EventKind::Edge => choice(Pick::Edge, &EDGES, &gaps[1]).map(|edge| Event { kind, a: gaps[0].clone(), b: edge, ..Default::default() }),
@@ -397,7 +398,12 @@ enum Gap {
 
 /// The sentences a step can be: the kind each gives, what its gaps hold in the order they stand, and
 /// whether the first number is taken away ("decrease", "slower").
-const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 35] = [
+const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 40] = [
+    ("make {} go {} at {}", StepKind::Go, &[Gap::A, Gap::B, Gap::X], false),
+    ("make {} slow down and stop", StepKind::Slow, &[Gap::A], false),
+    ("make {} stop", StepKind::Halt, &[Gap::A], false),
+    ("attach {} to {}", StepKind::Attach, &[Gap::A, Gap::B], false),
+    ("let {} go", StepKind::Detach, &[Gap::A], false),
     ("make {} spin {} turns a second", StepKind::Whirl, &[Gap::A, Gap::X], false),
     ("turn {} by {} degrees", StepKind::Turn, &[Gap::A, Gap::X], false),
     ("make {} {} percent of its size", StepKind::Resize, &[Gap::A, Gap::X], false),
@@ -474,6 +480,13 @@ fn step(line: &str, known: &Known) -> Result<Step, Fault> {
                         continue 'forms;
                     }
                 },
+                Gap::B if kind.needs().1 == Some(Pick::Way) => match choice(Pick::Way, &WAYS, text) {
+                    Some(way) => made.b = way,
+                    None => {
+                        fault = fault.or(Some(tf("{} is not a way to go: it is to the right, to the left, upwards or downwards", &[text])));
+                        continue 'forms;
+                    }
+                },
                 Gap::B => made.b = text.clone(),
                 Gap::X | Gap::Y => {
                     let read = match amount(text, &known.all_numbers()) {
@@ -523,7 +536,7 @@ pub fn offers(edge: bool) -> Vec<(String, Opens)> {
         let events = EVENT_FORMS.iter().map(|(pattern, kind, _)| {
             let opens = match kind {
                 _ if !gap_first(pattern) => Opens::Words,
-                EventKind::Key => Opens::Name(Pick::Key),
+                EventKind::Key | EventKind::KeyUp => Opens::Name(Pick::Key),
                 EventKind::Every | EventKind::After => Opens::Amount,
                 EventKind::Number => Opens::Name(Pick::Variable),
                 _ => Opens::Name(Pick::Object),
@@ -1146,6 +1159,28 @@ When Button is clicked:
         doc.rules = found.rules;
         let page = crate::publish::html(&doc, "x").unwrap();
         assert!(page.contains(r#"["give","Box",0,0,"spin"]"#) && page.contains(r#""spin":[2,0]"#) && page.contains(r#"["whirl","Box",-2,0,""]"#) && page.contains(r#""ricochet":[220,50]"#), "{}", &page[page.find("rules:").unwrap()..][..600]);
+    }
+
+    #[test]
+    fn a_car_is_set_going_slowed_and_stopped() {
+        set_language(Language::English);
+        let text = "\
+When the film starts:
+    attach Wheel to Car
+
+When the Right Arrow key is pressed:
+    make Car go to the right at 320
+
+When the Right Arrow key is released:
+    make Car slow down and stop
+    make Car stop
+    let Wheel go
+";
+        let found = read(text).unwrap();
+        let kinds: Vec<StepKind> = found.rules.iter().flat_map(|rule| &rule.steps).map(|step| step.kind).collect();
+        assert_eq!(kinds, vec![StepKind::Attach, StepKind::Go, StepKind::Slow, StepKind::Halt, StepKind::Detach]);
+        assert_eq!((found.rules[2].event.kind, found.rules[2].steps[0].a.as_str(), found.rules[1].steps[0].b.as_str()), (EventKind::KeyUp, "Car", "right"));
+        assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
     }
 
     #[test]

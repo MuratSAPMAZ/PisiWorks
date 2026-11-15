@@ -389,7 +389,8 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
             cmd("Game: platform", "", Cmd::SahneExample(11)),
             cmd("Game: space shooter", "", Cmd::SahneExample(12)),
             cmd("Game: quiz", "", Cmd::SahneExample(13)),
-            cmd("Two scenes with buttons", "", Cmd::SahneExample(14)),
+            cmd("Driving a car", "", Cmd::SahneExample(14)),
+            cmd("Two scenes with buttons", "", Cmd::SahneExample(15)),
             Sep,
             cmd("How These Are Made: the Lessons", "F1", Cmd::Guide),
         ],
@@ -415,16 +416,16 @@ pub enum BehaviorCmd {
 /// PisiSahne's Behaviors menu: every kind, those that move by themselves first, then those the viewer moves.
 pub const BEHAVIOR_MENU: &[Entry] = &{
     use crate::behavior::KINDS;
-    let mut entries = [Sep; 20];
+    let mut entries = [Sep; 21];
     let mut index = 0;
-    while index < 16 {
+    while index < 17 {
         // The first ten go by themselves; a line parts them from the five that have to do with the viewer.
         let at = if index < 10 { index } else { index + 1 };
         entries[at] = cmd(KINDS[index].name(), "", Cmd::Behavior(BehaviorCmd::Toggle(KINDS[index])));
         index += 1;
     }
-    entries[18] = cmd("Behavior Settings...", "", Cmd::Behavior(BehaviorCmd::Settings));
-    entries[19] = cmd("Remove All Behaviors", "", Cmd::Behavior(BehaviorCmd::Clear));
+    entries[19] = cmd("Behavior Settings...", "", Cmd::Behavior(BehaviorCmd::Settings));
+    entries[20] = cmd("Remove All Behaviors", "", Cmd::Behavior(BehaviorCmd::Clear));
     entries
 };
 

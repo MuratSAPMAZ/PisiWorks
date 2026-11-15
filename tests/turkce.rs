@@ -21,7 +21,7 @@ fn every_game_reads_back_from_its_own_turkish_text() {
         let sounds: Vec<String> = doc.sounds.iter().map(|s| s.name.clone()).collect();
         assert!(strangers(&doc.rules, &doc.commands, &doc.object_names(), &sounds).is_empty(), "{}", example.name);
     }
-    assert_eq!(games, 6, "the showcase and the five small games");
+    assert_eq!(games, 7, "the showcase, the five small games and the car");
 }
 
 #[test]
@@ -170,4 +170,30 @@ Düğme nesnesine tıklanınca:
     assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
     let told = read("Film başlayınca:\n    Top nesnesine Uç davranışını ver\n").unwrap_err();
     assert_eq!((told[0].line, told[0].what.as_str()), (2, "Uç adında bir davranış yok"));
+}
+
+#[test]
+fn a_car_is_driven_in_turkish() {
+    set_language(Language::Turkish);
+    let text = "\
+Film başlayınca:
+    Tekerlek nesnesini Araba nesnesine bağla
+
+Sağ Ok tuşuna basılınca:
+    Araba nesnesi sağa 300 hızla gitsin
+
+Sağ Ok tuşu bırakılınca:
+    Araba nesnesi yavaşlayarak dursun
+
+Boşluk tuşuna basılınca:
+    Araba nesnesi dursun
+    Tekerlek nesnesini serbest bırak
+";
+    let found = read(text).unwrap();
+    assert_eq!(found.rules.iter().map(|rule| rule.event.kind.key()).collect::<Vec<_>>(), vec!["start", "key", "keyup", "key"]);
+    assert_eq!(found.rules.iter().flat_map(|rule| &rule.steps).map(|step| step.kind.key()).collect::<Vec<_>>(), vec!["attach", "go", "slow", "stand", "detach"]);
+    assert_eq!((found.rules[1].steps[0].b.as_str(), found.rules[1].steps[0].x), ("right", 300.0));
+    assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+    let told = read("Film başlayınca:\n    Araba nesnesi ileri 300 hızla gitsin\n").unwrap_err();
+    assert_eq!((told[0].line, told[0].what.as_str()), (2, "ileri bir yön değil: sağa, sola, yukarı ya da aşağı yazılır"));
 }

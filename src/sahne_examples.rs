@@ -25,6 +25,7 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "Game: platform", about: "Solid ground and platforms, coins that are removed, and a door that opens only when every coin is collected", build: crate::sahne_games::platform_game },
     Example { name: "Game: space shooter", about: "Copies made by a rule: Space fires, each hit makes the aliens faster", build: crate::sahne_games::space_shooter },
     Example { name: "Game: quiz", about: "Rules across scenes: a question on each scene, a point for each right answer, the score at the end", build: crate::sahne_games::quiz },
+    Example { name: "Driving a car", about: "A car that gathers speed and slows down by itself, with wheels tied to it that turn as far as it goes", build: crate::sahne_games::driving },
     Example { name: "Two scenes with buttons", about: "Scenes, frame actions that stop the film, and buttons that lead from scene to scene", build: two_scenes },
 ];
 
@@ -317,6 +318,9 @@ fn behaviors() -> Document {
     // A marble that never stops: it comes back from every edge, and from the ledge too.
     let marble = add(&mut e, t("Marble"), Shape::Ellipse, rect(250.0, 70.0, 18.0, 18.0), Some(Color::rgb(0x70, 0x40, 0xc0)), None);
     give(&mut e, marble, &[(Kind::Ricochet, 170.0, 35.0)]);
+    // A wheel the arrows roll along the ground: it turns as far as it goes.
+    let wheel = add(&mut e, t("Wheel"), Shape::Auto { kind: AutoKind::Star, a: 0.75, b: 0.0, count: 8 }, rect(200.0, 268.0, 32.0, 32.0), Some(INK), None);
+    give(&mut e, wheel, &[(Kind::ArrowKeys, 160.0, 0.0), (Kind::Roll, 0.0, 0.0)]);
     // A ledge the box can jump onto: it is solid.
     let ledge = boxed(&mut e, t("Ledge"), rect(330.0, 240.0, 80.0, 12.0), 4.0, TEAL);
     give(&mut e, ledge, &[(Kind::Solid, 0.0, 0.0)]);

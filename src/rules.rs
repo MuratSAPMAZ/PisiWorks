@@ -27,6 +27,8 @@ pub enum EventKind {
     Scene,
     /// A key goes down: `a` is the key.
     Key,
+    /// A key comes up again: `a` is the key.
+    KeyUp,
     /// An object is clicked: `a` is its name.
     Click,
     /// An object comes to touch another: `a` and `b` are their names.
@@ -41,7 +43,7 @@ pub enum EventKind {
     Number,
 }
 
-pub const EVENTS: [EventKind; 9] = [EventKind::Start, EventKind::Scene, EventKind::Key, EventKind::Click, EventKind::Touch, EventKind::Edge, EventKind::Every, EventKind::After, EventKind::Number];
+pub const EVENTS: [EventKind; 10] = [EventKind::Start, EventKind::Scene, EventKind::Key, EventKind::KeyUp, EventKind::Click, EventKind::Touch, EventKind::Edge, EventKind::Every, EventKind::After, EventKind::Number];
 
 /// What a name in a rule is chosen from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +51,8 @@ pub enum Pick {
     Object,
     Key,
     Edge,
+    /// One of the four ways an object can be sent.
+    Way,
     Compare,
     /// One of the three ways of "only if".
     Condition,
@@ -67,6 +71,7 @@ impl EventKind {
             EventKind::Start => "When the film starts",
             EventKind::Scene => "When a scene starts",
             EventKind::Key => "When a key is pressed",
+            EventKind::KeyUp => "When a key is released",
             EventKind::Click => "When an object is clicked",
             EventKind::Touch => "When an object touches another",
             EventKind::Edge => "When an object touches the edge of the stage",
@@ -82,6 +87,7 @@ impl EventKind {
             EventKind::Start => "start",
             EventKind::Scene => "scene-start",
             EventKind::Key => "key",
+            EventKind::KeyUp => "keyup",
             EventKind::Click => "click",
             EventKind::Touch => "touch",
             EventKind::Edge => "edge",
@@ -95,7 +101,7 @@ impl EventKind {
     pub const fn needs(self) -> (Option<Pick>, Option<Pick>, Option<&'static str>) {
         match self {
             EventKind::Start | EventKind::Scene => (None, None, None),
-            EventKind::Key => (Some(Pick::Key), None, None),
+            EventKind::Key | EventKind::KeyUp => (Some(Pick::Key), None, None),
             EventKind::Click => (Some(Pick::Object), None, None),
             EventKind::Touch => (Some(Pick::Object), Some(Pick::Object), None),
             EventKind::Edge => (Some(Pick::Object), Some(Pick::Edge), None),
@@ -169,6 +175,16 @@ pub enum StepKind {
     Take,
     /// Keeps the object spinning at `x` turns a second, clockwise; below zero the other way, and at 0 it stops.
     Whirl,
+    /// Ties the object to the object `b`: from then on it goes wherever that one goes.
+    Attach,
+    /// Lets go an object that was tied to another.
+    Detach,
+    /// Sets the object going the way `b` at `x` pixels a second: it gathers speed, and keeps going.
+    Go,
+    /// Lets the object that is going lose its speed little by little until it stands still.
+    Slow,
+    /// Stops the object that is going, at once.
+    Halt,
     /// Sends the object after the object `b` at `x` pixels a second; at 0 it stops going after anything.
     Chase,
     /// Waits `x` seconds before the steps that follow it.
@@ -188,7 +204,7 @@ pub enum StepKind {
     Restart,
 }
 
-pub const STEPS: [StepKind; 32] = [
+pub const STEPS: [StepKind; 37] = [
     StepKind::Add,
     StepKind::Set,
     StepKind::RandomNumber,
@@ -210,6 +226,11 @@ pub const STEPS: [StepKind; 32] = [
     StepKind::Give,
     StepKind::Take,
     StepKind::Chase,
+    StepKind::Go,
+    StepKind::Slow,
+    StepKind::Halt,
+    StepKind::Attach,
+    StepKind::Detach,
     StepKind::Wait,
     StepKind::Call,
     StepKind::Sound,
@@ -254,6 +275,11 @@ impl StepKind {
             StepKind::Take => "Take a behavior from an object",
             StepKind::Whirl => "Keep an object spinning",
             StepKind::Chase => "Send an object after another",
+            StepKind::Go => "Set an object going",
+            StepKind::Slow => "Let an object slow down and stop",
+            StepKind::Halt => "Stop an object",
+            StepKind::Attach => "Attach an object to another",
+            StepKind::Detach => "Let an attached object go",
             StepKind::Wait => "Wait",
             StepKind::Call => "Do a command",
             StepKind::Repeat => "Repeat",
@@ -294,6 +320,11 @@ impl StepKind {
             StepKind::Take => "take",
             StepKind::Whirl => "whirl",
             StepKind::Chase => "chase",
+            StepKind::Go => "go",
+            StepKind::Slow => "slow",
+            StepKind::Halt => "stand",
+            StepKind::Attach => "attach",
+            StepKind::Detach => "detach",
             StepKind::Wait => "wait",
             StepKind::Call => "call",
             StepKind::Repeat => "repeat",
@@ -324,6 +355,9 @@ impl StepKind {
             StepKind::Give | StepKind::Take => (Some(Pick::Object), Some(Pick::Behavior), None, None),
             StepKind::Whirl => (Some(Pick::Object), None, Some(("Turns a second:", 1.0)), None),
             StepKind::Chase => (Some(Pick::Object), Some(Pick::Object), Some(("Speed:", 100.0)), None),
+            StepKind::Go => (Some(Pick::Object), Some(Pick::Way), Some(("Speed:", 250.0)), None),
+            StepKind::Slow | StepKind::Halt | StepKind::Detach => (Some(Pick::Object), None, None, None),
+            StepKind::Attach => (Some(Pick::Object), Some(Pick::Object), None, None),
             StepKind::Wait => (None, None, Some(("Seconds:", 1.0)), None),
             StepKind::Call => (Some(Pick::Command), None, None, None),
             StepKind::Repeat => (None, None, Some(("Times:", 3.0)), None),
@@ -545,6 +579,9 @@ pub const KEYS: [(&str, &str); 42] = [
 /// The edges of the stage: the word the script knows each by, and its name in English.
 pub const EDGES: [(&str, &str); 5] = [("any", "any edge"), ("bottom", "the bottom edge"), ("top", "the top edge"), ("left", "the left edge"), ("right", "the right edge")];
 
+/// The four ways an object can be sent: the word the script knows each by, and its name in English.
+pub const WAYS: [(&str, &str); 4] = [("right", "to the right"), ("left", "to the left"), ("up", "upwards"), ("down", "downwards")];
+
 /// The ways a number is held against a value.
 pub const COMPARES: [(&str, &str); 3] = [("=", "becomes"), (">", "goes above"), ("<", "goes below")];
 
@@ -553,6 +590,7 @@ pub fn choice_name(pick: Pick, value: &str) -> String {
     let list: &[(&str, &str)] = match pick {
         Pick::Key => &KEYS,
         Pick::Edge => &EDGES,
+        Pick::Way => &WAYS,
         Pick::Compare => &COMPARES,
         Pick::Condition => &CONDITIONS,
         Pick::Object | Pick::Variable | Pick::Sound | Pick::Command => return value.to_string(),
@@ -577,6 +615,7 @@ impl Event {
             EventKind::Start => t("When the film starts").to_string(),
             EventKind::Scene => t("When a scene starts").to_string(),
             EventKind::Key => tf("When the {} key is pressed", &[&choice_name(Pick::Key, a)]),
+            EventKind::KeyUp => tf("When the {} key is released", &[&choice_name(Pick::Key, a)]),
             EventKind::Click => tf("When {} is clicked", &[a]),
             EventKind::Touch => tf("When {} touches {}", &[a, &self.b]),
             EventKind::Edge => tf("When {} touches {} of the stage", &[a, &choice_name(Pick::Edge, &self.b)]),
@@ -658,6 +697,11 @@ impl Step {
             StepKind::Take => tf("take from {} the behavior {}", &[a, &choice_name(Pick::Behavior, &self.b)]),
             StepKind::Whirl => tf("make {} spin {} turns a second", &[a, &x]),
             StepKind::Chase => tf("send {} after {} at {}", &[a, &self.b, &x]),
+            StepKind::Go => tf("make {} go {} at {}", &[a, &choice_name(Pick::Way, &self.b), &x]),
+            StepKind::Slow => tf("make {} slow down and stop", &[a]),
+            StepKind::Halt => tf("make {} stop", &[a]),
+            StepKind::Attach => tf("attach {} to {}", &[a, &self.b]),
+            StepKind::Detach => tf("let {} go", &[a]),
             StepKind::Wait => tf("wait {} seconds", &[&x]),
             StepKind::Call if !self.args.is_empty() => tf("do the command {} with {}", &[a, &self.args.join(", ")]),
             StepKind::Call => tf("do the command {}", &[a]),

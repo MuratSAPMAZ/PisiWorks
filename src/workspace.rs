@@ -3815,7 +3815,7 @@ impl Workspace {
 
     /// What a name in a rule can be chosen from: the value kept, and how the list shows it.
     pub fn rule_choices(&self, pick: crate::rules::Pick) -> Vec<(String, String)> {
-        use crate::rules::{choice_name, Pick, COMPARES, CONDITIONS, EDGES, KEYS};
+        use crate::rules::{choice_name, Pick, COMPARES, CONDITIONS, EDGES, KEYS, WAYS};
         let listed = |list: &[(&str, &str)]| list.iter().map(|(key, _)| (key.to_string(), choice_name(pick, key))).collect();
         let own = |names: Vec<String>| names.into_iter().map(|name| (name.clone(), name)).collect();
         match pick {
@@ -3826,6 +3826,7 @@ impl Workspace {
             Pick::Behavior => crate::behavior::KINDS.iter().map(|kind| (kind.key().to_string(), t(kind.name()).to_string())).collect(),
             Pick::Key => listed(&KEYS),
             Pick::Edge => listed(&EDGES),
+            Pick::Way => listed(&WAYS),
             Pick::Compare => listed(&COMPARES),
             Pick::Condition => listed(&CONDITIONS),
         }
