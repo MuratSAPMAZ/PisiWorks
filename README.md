@@ -176,7 +176,8 @@ Bu aşamada çalışanlar:
 - Filmi Test Et (Ctrl+Enter): filmi yayımlayıp tarayıcıda açar.
 - Sağ tık menüleri: zaman çizelgesinde bir kareye sağ tıklayınca ara doldurma, kare ve anahtar kare komutları; katman adına sağ tıklayınca katman komutları; sahnede bir nesneye ya da boş yere sağ tıklayınca düzenleme, yerleştirme, dönüştürme ve sembol komutları. PisiWorks'ün tuvalinde de aynı menü vardır.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
-- Örnekler menüsünde altı hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, düğmeli iki sahne.
+- Flash'taki gibi sona kadar bir kez oynatma, seçenek olarak Döngülü Oynat; doğrudan bir kareye ya da saniyeye gitme kutuları, cetvelde saniye işaretleri, uzun filmlerde oynatma kafasını izleyen zaman çizelgesi.
+- Örnekler menüsünde yedi hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, sırayla (kendi zamanı olan katmanlar), düğmeli iki sahne.
 - PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.

@@ -414,6 +414,10 @@ pub enum FieldId {
     TweenSteps,
     GifDelay,
     FrameRate,
+    /// The frame on show, counted from 1: typing a number goes there.
+    CurrentFrame,
+    /// The time of the frame on show, in seconds: typing a time goes there.
+    CurrentSecond,
     /// The number or address an action takes: of the frame's action, or of the selected button's.
     ActionParam(bool),
     TweenEase,
@@ -743,6 +747,10 @@ pub struct Workspace {
     pub gif_dialog: Option<GifDialog>,
     /// Whether the timeline is being played.
     pub frames_playing: bool,
+    /// Whether playing in the program starts over at the end. Off, as in Flash, it plays once and stops on the last frame.
+    pub loop_playback: bool,
+    /// Where the frames of the timeline are scrolled to.
+    pub timeline_scroll: gpui::ScrollHandle,
     /// The menu a right-click opened: where the click was, and what the menu offers.
     pub context_menu: Option<(Point<Pixels>, &'static [crate::menus::Entry])>,
     /// In Preview, the button under the mouse and the look it shows for it: 1 Over, 2 Down.
@@ -968,6 +976,9 @@ pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Res
     Document::from_frames(t("Bitmap"), frames, loops).ok_or_else(|| t("An animation needs at least two pictures").to_string())
 }
 
+/// How wide a frame is in the timeline, in pixels.
+pub const TIMELINE_CELL: f32 = 11.0;
+
 /// The frame rate a new animation starts with, as Flash's does.
 pub const DEFAULT_FPS: f32 = 24.0;
 
@@ -1135,6 +1146,8 @@ impl Workspace {
             tween_dialog: None,
             gif_dialog: None,
             frames_playing: false,
+            loop_playback: false,
+            timeline_scroll: gpui::ScrollHandle::new(),
             context_menu: None,
             preview_button: None,
             animate_dialog: None,
@@ -2012,6 +2025,7 @@ impl Workspace {
             Cmd::TextOrientation(orientation) => self.shown_text_style().orientation == orientation,
             Cmd::Frame(crate::menus::FrameCmd::GuideLayer) => self.active_layer_kind() == crate::model::LayerKind::Guide,
             Cmd::Frame(crate::menus::FrameCmd::MaskLayer) => self.active_layer_kind() == crate::model::LayerKind::Mask,
+            Cmd::Frame(crate::menus::FrameCmd::LoopPlayback) => self.loop_playback,
             Cmd::Frame(crate::menus::FrameCmd::BindLayer) => {
                 let page = self.ed.doc.page();
                 page.timeline.as_ref().is_some_and(|timeline| timeline.is_bound(page.active_layer))
@@ -2373,6 +2387,17 @@ impl Workspace {
             self.ed.set_active_layer(layer);
         }
         self.ed.goto_frame(frame);
+        self.reveal_frame(frame);
+    }
+
+    /// Scrolls the timeline, if need be, so that a frame is in sight.
+    pub fn reveal_frame(&mut self, frame: usize) {
+        let (offset, view) = (self.timeline_scroll.offset(), self.timeline_scroll.bounds().size.width);
+        let (left, view) = (-f32::from(offset.x), f32::from(view));
+        let at = frame as f32 * TIMELINE_CELL;
+        if view > 0.0 && (at < left || at + TIMELINE_CELL > left + view) {
+            self.timeline_scroll.set_offset(point(px(-(at - view / 2.0).max(0.0)), offset.y));
+        }
     }
 
     fn run_frame(&mut self, cmd: crate::menus::FrameCmd, window: &mut Window, cx: &mut Context<Self>) {
@@ -2460,11 +2485,17 @@ impl Workspace {
                 } else if count < 2 {
                     self.status = t("The scene has only one frame: insert frames (F5) or a keyframe (F6) to animate").into();
                 } else {
+                    // From the last frame there is nowhere to play to: it starts from the first again.
+                    if current + 1 >= count {
+                        self.ed.goto_frame(0);
+                        self.reveal_frame(0);
+                    }
                     self.frames_playing = true;
                     self.play_token += 1;
                     self.schedule_timeline(self.play_token, cx);
                 }
             }
+            FrameCmd::LoopPlayback => self.loop_playback = !self.loop_playback,
             FrameCmd::Rewind => self.show_frame(0, None),
             FrameCmd::Forward => self.show_frame((current + 1).min(count.saturating_sub(1)), None),
             FrameCmd::Back => self.show_frame(current.saturating_sub(1), None),
@@ -2486,8 +2517,15 @@ impl Workspace {
             this.update(cx, |this, cx| {
                 if this.frames_playing && this.play_token == token {
                     if let Some((current, count)) = this.frame_position() {
+                        // At the end it stops, as Flash does, unless Loop Playback is on.
+                        if current + 1 >= count && !this.loop_playback {
+                            this.frames_playing = false;
+                            cx.notify();
+                            return;
+                        }
                         let next = if current + 1 >= count { 0 } else { current + 1 };
                         this.ed.goto_frame(next);
+                        this.reveal_frame(next);
                         for sound in this.sounds_starting(next) {
                             this.play_sound(sound);
                         }
@@ -6910,6 +6948,8 @@ impl Workspace {
             }
             FieldId::TweenEase => self.current_tween().map_or_else(String::new, |tween| number(tween.ease)),
             FieldId::TweenTurns => self.current_tween().map_or_else(String::new, |tween| tween.turns.to_string()),
+            FieldId::CurrentFrame => self.frame_position().map_or_else(String::new, |(frame, _)| (frame + 1).to_string()),
+            FieldId::CurrentSecond => self.ed.doc.page().timeline.as_ref().map_or_else(String::new, |timeline| format!("{:.1}", timeline.current as f32 / timeline.fps.max(1.0))),
             FieldId::FrameRate => self.ed.doc.page().timeline.as_ref().map_or_else(String::new, |timeline| number(timeline.fps)),
             FieldId::GifDelay => self.gif_dialog.as_ref().map_or_else(String::new, |d| d.delay_ms.to_string()),
             FieldId::TweenSteps => self.tween_dialog.map_or_else(String::new, |d| d.0.to_string()),
@@ -7177,6 +7217,17 @@ impl Workspace {
                 }
                 self.ed.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(tween)));
                 self.ed.commit(t("Tween"));
+            }
+            FieldId::CurrentFrame => {
+                if let Some(v) = number.filter(|v| *v >= 1.0) {
+                    self.show_frame((v.round() as usize - 1).min(crate::model::MAX_FRAMES - 1), None);
+                }
+            }
+            FieldId::CurrentSecond => {
+                let fps = self.ed.doc.page().timeline.as_ref().map_or(DEFAULT_FPS, |timeline| timeline.fps);
+                if let Some(v) = number.or_else(|| text.replace(',', ".").parse::<f32>().ok()).filter(|v| *v >= 0.0) {
+                    self.show_frame(((v * fps).round() as usize).min(crate::model::MAX_FRAMES - 1), None);
+                }
             }
             FieldId::FrameRate => {
                 if let (Some(v), Some(timeline)) = (number.filter(|v| *v >= 1.0), self.ed.doc.page_mut().timeline.as_mut()) {

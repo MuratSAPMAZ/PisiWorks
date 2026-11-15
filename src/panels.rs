@@ -1763,21 +1763,39 @@ impl Workspace {
         }
         let page = self.ed.doc.page();
         let timeline = page.timeline.as_ref()?;
-        const CELL: f32 = 11.;
+        const CELL: f32 = crate::workspace::TIMELINE_CELL;
         const ROW: f32 = 20.;
         const NAMES: f32 = 190.;
         let (current, count) = (timeline.current, timeline.frame_count());
-        let shown = (count + 30).max(120).min(crate::model::MAX_FRAMES);
+        let shown = (count + 60).max(120).min(crate::model::MAX_FRAMES);
+        // Only the frames in sight are laid out, with empty stretches standing for the rest, so that a long film
+        // does not slow the window down.
+        let (scrolled, wide) = (-f32::from(self.timeline_scroll.offset().x), f32::from(self.timeline_scroll.bounds().size.width));
+        let wide = if wide > 0.0 { wide } else { 1400.0 };
+        let first = ((scrolled / CELL).floor().max(0.0) as usize).saturating_sub(8).min(shown);
+        let last = (first + (wide / CELL).ceil() as usize + 16).min(shown);
+        let stretch = |frames: usize| div().w(px(frames as f32 * CELL)).h(px(ROW)).flex_none().into_any_element();
+        let whole_seconds = timeline.fps.round().max(1.0) as usize;
         // The numbers over the frames count from 1, as Flash's do.
-        let header: Vec<AnyElement> = (0..shown)
+        let header: Vec<AnyElement> = (first..last)
             .map(|frame| {
-                let label = if frame == 0 || (frame + 1) % 5 == 0 { (frame + 1).to_string() } else { String::new() };
+                // Every second is marked with its number of seconds; between them every fifth frame has its number.
+                let second = frame > 0 && frame % whole_seconds == 0;
+                let label = if second {
+                    tf("{}s", &[&(frame / whole_seconds)])
+                } else if frame == 0 || ((frame + 1) % 5 == 0 && frame % whole_seconds >= 4 && whole_seconds - frame % whole_seconds >= 2) {
+                    (frame + 1).to_string()
+                } else {
+                    String::new()
+                };
                 div()
                     .w(px(CELL))
                     .h(px(ROW))
                     .flex_none()
+                    .whitespace_nowrap()
                     .text_size(px(9.))
-                    .text_color(rgb(if frame == current { 0xffffff } else { TEXT_DIM }))
+                    .text_color(rgb(if frame == current { 0xffffff } else if second { 0x1050b0 } else { TEXT_DIM }))
+                    .when(second, |d| d.border_l_1().border_color(rgb(0x1050b0)).font_weight(FontWeight::BOLD))
                     .when(frame == current, |d| d.bg(rgb(0xd03030)))
                     .on_mouse_down(
                         MouseButton::Left,
@@ -1798,7 +1816,7 @@ impl Workspace {
             })
             .collect();
         let mut names = vec![div().h(px(ROW)).flex_none().into_any_element()];
-        let mut rows = vec![div().flex().flex_none().children(header).into_any_element()];
+        let mut rows = vec![div().flex().flex_none().child(stretch(first)).children(header).child(stretch(shown - last)).into_any_element()];
         for index in (0..page.layers.len()).rev() {
             let layer = &page.layers[index];
             let active = index == page.active_layer;
@@ -1887,7 +1905,7 @@ impl Workspace {
             // The keyframe the frame on show belongs to holds what the layer has now: that work is written into the timeline only on leaving the frame.
             let shown_here = !layer.objects.is_empty();
             let holds = |span: &crate::model::Span| if (span.start..span.start + span.length).contains(&current) && (span.tween.is_none() || span.start == current) { shown_here } else { !span.objects.is_empty() };
-            let cells: Vec<AnyElement> = (0..shown)
+            let cells: Vec<AnyElement> = (first..last)
                 .map(|frame| {
                     let span = spans.iter().find(|span| (span.start..span.start + span.length).contains(&frame));
                     // Grey for frames that show something, a paler blue for a tween, white for empty ones and past the end.
@@ -1942,7 +1960,7 @@ impl Workspace {
                         .into_any_element()
                 })
                 .collect();
-            rows.push(div().flex().flex_none().children(cells).into_any_element());
+            rows.push(div().flex().flex_none().child(stretch(first)).children(cells).child(stretch(shown - last)).into_any_element());
         }
         let button = |this: &Self, text: &'static str, cmd: crate::menus::FrameCmd, cx: &mut Context<Self>| this.text_button(text, true, cx, move |this, window, cx| this.run(Cmd::Frame(cmd), window, cx));
         use crate::menus::FrameCmd;
@@ -1961,13 +1979,18 @@ impl Workspace {
             .child(button(self, t("Rewind"), FrameCmd::Rewind, cx))
             .child(button(self, if self.frames_playing { t("Stop") } else { t("Play") }, FrameCmd::Play, cx))
             .child(div().w(px(8.)))
-            .child(label(tf("Frame {} of {}", &[&(current + 1), &count.max(1)])))
+            // The frame on show and its time can both be typed, to go straight to a frame or a second of a long film.
+            .child(label(crate::i18n::tc("timeline", "Frame")))
+            .child(self.field(FieldId::CurrentFrame, 44., cx))
+            .child(label(format!("/ {}", count.max(1))))
+            .child(self.field(FieldId::CurrentSecond, 40., cx))
+            .child(label(tf("of {} s", &[&format!("{:.1}", count.max(1) as f32 / timeline.fps.max(1.0))])))
             .child(div().w(px(8.)))
             .child(self.field(FieldId::FrameRate, 40., cx))
             .child(label(t("fps")))
-            .child(label(tf("{} s", &[&format!("{:.1}", current as f32 / timeline.fps.max(1.0))])))
             .child(div().w(px(8.)))
             .child(self.check_box(t("Onion Skin"), self.onion, cx, |this| this.onion = !this.onion))
+            .child(self.check_box(t("Loop"), self.loop_playback, cx, |this| this.loop_playback = !this.loop_playback))
             // The tween the frame on show belongs to: how it eases, and for a motion tween how many turns it makes.
             .children(self.current_tween().map(|tween| {
                 div()
@@ -2026,7 +2049,7 @@ impl Workspace {
                         .flex()
                         .overflow_y_scroll()
                         .child(div().w(px(NAMES)).flex().flex_col().flex_none().border_r_1().border_color(rgb(BORDER)).children(names))
-                        .child(div().id("timeline-frames").flex_1().min_w_0().overflow_x_scroll().child(div().flex().flex_col().children(rows))),
+                        .child(div().id("timeline-frames").flex_1().min_w_0().overflow_x_scroll().track_scroll(&self.timeline_scroll).child(div().w(px(shown as f32 * CELL)).flex().flex_col().flex_none().children(rows))),
                 )
                 .child(controls)
                 .child(frame_row)

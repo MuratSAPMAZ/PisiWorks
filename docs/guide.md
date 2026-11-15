@@ -224,9 +224,21 @@ PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline ove
 | F6 | Insert keyframe (starting with what the frame shows) |
 | F7 | Insert blank keyframe |
 | Shift+F6 | Clear keyframe |
-| Enter | Play or stop |
+| Enter | Play once to the end, or stop |
 | . and , | One frame forward, one back |
 | Ctrl+Enter | Test Movie |
+
+**Playing.** Enter plays the film once from the frame on show and stops on the last frame, as Flash does; pressed on the last frame it starts from the first. To have it go round and round, tick **Loop** under the timeline, or choose **Control > Loop Playback**. This is only about playing inside the program: the published film always starts over after its last scene, unless the last keyframe has a **Stop** action.
+
+**Long films.** The blue marks on the ruler are whole seconds (at 24 frames a second, 20 seconds is frame 480). Under the timeline, the **Frame** box shows the frame on show and the box after it its time in seconds; type a number in either and press Enter to go straight there. The timeline scrolls sideways with the wheel, and follows the playhead while the film plays.
+
+**Each layer has its own time.** A layer's keyframes are its own, so shapes can move at different times:
+
+- *Moving, then standing still.* Make the motion tween between frame 1 and, say, frame 480. Then click a later frame of the same layer (frame 960) and press F5: the last keyframe lasts until there, and the shape stays where it arrived.
+- *Starting late.* Add a new layer, click frame 480 in it and press F7 (blank keyframe), then draw the shape there. The layer shows nothing until that frame. Give it its own later keyframe (F6) and tween.
+- *Leaving early.* On the frame where the shape is to go, press F7: from that blank keyframe on the layer is empty.
+
+The **One after another** example shows all of this in eight seconds: a car drives for four seconds and stops, then the sun rises, then the words fade in.
 
 **Right-click.** A right-click on a frame goes to it and opens a menu of the tween, frame and keyframe commands; those that do not fit the frame are greyed. A right-click on a layer's name opens the layer commands (new layer, delete, guide, mask, tie). A right-click on an object on the stage selects it and opens Cut, Copy, Arrange, Transform, Group, Convert to Symbol and the like; PisiWorks' canvas has the same menu.
 
@@ -248,4 +260,4 @@ PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline ove
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has six ready animations, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has seven ready animations, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.

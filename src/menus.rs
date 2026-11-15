@@ -407,6 +407,7 @@ pub enum FrameCmd {
     TestMovie,
     ImportSound,
     DeleteLayer,
+    LoopPlayback,
 }
 
 /// What a right-click on a frame of the timeline offers, in the order Flash has it: tweens, frames, keyframes.
@@ -522,6 +523,7 @@ pub const SAHNE_MENUS: &[(&str, &[Entry])] = &[
         "Control",
         &[
             cmd("Play", "Enter", Cmd::Frame(FrameCmd::Play)),
+            cmd("Loop Playback", "", Cmd::Frame(FrameCmd::LoopPlayback)),
             cmd("Rewind", "", Cmd::Frame(FrameCmd::Rewind)),
             cmd("Step Forward One Frame", ".", Cmd::Frame(FrameCmd::Forward)),
             cmd("Step Backward One Frame", ",", Cmd::Frame(FrameCmd::Back)),

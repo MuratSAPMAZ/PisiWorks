@@ -226,9 +226,21 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 | F6 | Anahtar kare ekle (o karedeki görüntüyle başlar) |
 | F7 | Boş anahtar kare ekle |
 | Shift+F6 | Anahtar kareyi temizle |
-| Enter | Oynat ya da durdur |
+| Enter | Sona kadar bir kez oynat ya da durdur |
 | . ve , | Bir kare ileri, bir kare geri |
 | Ctrl+Enter | Filmi Test Et |
+
+**Oynatma.** Enter, filmi o anki kareden başlayarak bir kez oynatır ve son karede durur; Flash'ta da böyledir. Son karedeyken basılırsa baştan başlar. Filmin dönüp durması için zaman çizelgesinin altındaki **Döngü** kutusunu işaretleyin ya da **Kontrol > Döngülü Oynat**'ı seçin. Bu yalnızca program içindeki oynatma içindir: yayımlanan film, son anahtar karesinde **Dur** eylemi yoksa, son sahneden sonra hep baştan başlar.
+
+**Uzun filmler.** Cetveldeki mavi işaretler tam saniyelerdir (saniyede 24 karede 20. saniye 480. karedir). Zaman çizelgesinin altındaki **Kare** kutusu o anki kareyi, yanındaki kutu saniye olarak zamanını gösterir; birine sayı yazıp Enter'a basınca doğrudan oraya gidilir. Zaman çizelgesi fare tekerleğiyle yana kayar, film oynarken de oynatma kafasını izler.
+
+**Her katmanın kendi zamanı vardır.** Bir katmanın anahtar kareleri yalnız ona aittir; bu yüzden şekiller ayrı zamanlarda hareket edebilir:
+
+- *Hareket edip durmak.* Hareket ara doldurmasını 1. kare ile, diyelim, 480. kare arasında yapın. Sonra aynı katmanın daha ilerideki bir karesine (960. kare) tıklayıp F5'e basın: son anahtar kare oraya kadar sürer, şekil vardığı yerde kalır.
+- *Geç başlamak.* Yeni bir katman ekleyin, o katmanda 480. kareye tıklayıp F7'ye (boş anahtar kare) basın, şekli orada çizin. Katman o kareye kadar hiçbir şey göstermez. Daha ileriye kendi anahtar karesini (F6) ve ara doldurmasını ekleyin.
+- *Erken çıkmak.* Şeklin kaybolacağı karede F7'ye basın: o boş anahtar kareden sonra katman boştur.
+
+**Sırayla** örneği bunların hepsini sekiz saniyede gösterir: araba dört saniye gidip durur, sonra güneş doğar, sonra yazı belirir.
 
 **Sağ tık.** Bir kareye sağ tıklamak o kareye gider ve ara doldurma, kare ve anahtar kare komutlarının menüsünü açar; o kareye uymayan komutlar gri görünür. Katman adına sağ tıklamak katman komutlarını (yeni katman, sil, kılavuz, maske, bağla) açar. Sahnede bir nesneye sağ tıklamak onu seçer ve Kes, Kopyala, Yerleştir, Dönüştür, Grupla, Sembole Dönüştür gibi komutları açar; PisiWorks'ün tuvalinde de aynı menü vardır.
 
@@ -250,4 +262,4 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde altı hazır animasyon vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde yedi hazır animasyon vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.

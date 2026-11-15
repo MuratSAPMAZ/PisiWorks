@@ -14,6 +14,7 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "Along a path", about: "A guide layer: the arrow follows the path and turns to face the way it goes", build: along_a_path },
     Example { name: "Spotlight", about: "A mask layer: a moving circle lets the bright words show", build: spotlight },
     Example { name: "Turning gears", about: "A movie clip with a timeline of its own, placed twice on the stage", build: turning_gears },
+    Example { name: "One after another", about: "Layers with times of their own: the car drives for four seconds and stops, then the sun rises, then the words appear", build: one_after_another },
     Example { name: "Two scenes with buttons", about: "Scenes, frame actions that stop the film, and buttons that lead from scene to scene", build: two_scenes },
 ];
 
@@ -180,6 +181,49 @@ fn turning_gears() -> Document {
     finish(e)
 }
 
+fn one_after_another() -> Document {
+    // Twelve frames a second, eight seconds: every layer has its own keyframes, so each part has its own time.
+    let mut e = start(520, 300, t("Background"), 12.0);
+    let sky = boxed(&mut e, t("Sky"), rect(0.0, 0.0, 520.0, 300.0), 0.0, PALE);
+    gradient(&mut e, sky, FillKind::Linear, Color::rgb(0xc8, 0xdc, 0xf4), WHITE, (0.5, 0.0), (0.5, 1.0));
+    // A blank keyframe on a later frame: until then the layer shows nothing.
+    let blank = |e: &mut Editor, frame: usize| {
+        e.goto_frame(frame);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, true));
+    };
+    // The sun is not there for the first four seconds. Then it rises for two, and stays.
+    layer(&mut e, t("Sun"));
+    blank(&mut e, 48);
+    let sun = add(&mut e, t("Sun"), Shape::Ellipse, rect(380.0, 240.0, 80.0, 80.0), Some(YELLOW), None);
+    gradient(&mut e, sun, FillKind::Radial, YELLOW, ORANGE, (0.5, 0.5), (1.0, 0.5));
+    keyframe(&mut e, 72, &[sun], |o| o.translate(0.0, -200.0));
+    tween(&mut e, 48, Tween { ease: 100.0, ..Tween::default() });
+    e.goto_frame(0);
+    layer(&mut e, t("Ground"));
+    boxed(&mut e, t("Ground"), rect(0.0, 230.0, 520.0, 70.0), 0.0, TEAL);
+    // The car drives for the first four seconds. Its last keyframe has no tween: it stands still to the end.
+    layer(&mut e, t("Car"));
+    let body = boxed(&mut e, t("Car"), rect(20.0, 186.0, 110.0, 34.0), 8.0, BLUE);
+    let top = boxed(&mut e, t("Car"), rect(42.0, 162.0, 60.0, 30.0), 8.0, BLUE);
+    let back = add(&mut e, t("Wheel"), Shape::Ellipse, rect(34.0, 208.0, 28.0, 28.0), Some(INK), None);
+    let front = add(&mut e, t("Wheel"), Shape::Ellipse, rect(90.0, 208.0, 28.0, 28.0), Some(INK), None);
+    keyframe(&mut e, 48, &[body, top, back, front], |o| o.translate(250.0, 0.0));
+    tween(&mut e, 0, Tween { ease: 100.0, ..Tween::default() });
+    e.goto_frame(0);
+    // The words come last: from the sixth second they fade in for a second.
+    layer(&mut e, t("Words"));
+    blank(&mut e, 72);
+    let words = centered(&mut e, t("Good morning!"), 200.0, 60.0, 40.0, INK, bold());
+    e.selection = vec![words];
+    e.for_selected(|o| o.opacity = 0.0);
+    keyframe(&mut e, 84, &[words], |o| o.opacity = 1.0);
+    tween(&mut e, 72, Tween::default());
+    // The film is eight seconds long: the last keyframes last until then.
+    e.on_timeline(|timeline, layer, _| timeline.insert_frames(layer, 95, 1));
+    fill_out(&mut e);
+    finish(e)
+}
+
 fn two_scenes() -> Document {
     let mut e = start(480, 300, t("Background"), 24.0);
     // A button that leads to a scene: a symbol with an Over look, and an action on its copy.
@@ -276,6 +320,14 @@ mod tests {
         assert_eq!((doc.symbols.len(), doc.scenes().len(), doc.pages.len()), (1, 1, 2));
         assert_eq!(doc.pages[1].timeline.as_ref().unwrap().frame_count(), 48);
         assert_eq!(doc.pages[0].objects().filter(|o| matches!(o.shape, Shape::Instance { .. })).count(), 2);
+        // Each layer keeps its own time: the car is done after four seconds, when the sun first shows; the words come at six.
+        let doc = find("One after another");
+        let page = &doc.pages[0];
+        assert_eq!(page.timeline.as_ref().unwrap().frame_count(), 96);
+        let (sun, car, words) = (|frame: usize| page.at_frame(frame).layers[1].objects.clone(), |frame: usize| page.at_frame(frame).layers[3].objects[0].bounds.x, |frame: usize| page.at_frame(frame).layers[4].objects.clone());
+        assert!(sun(47).is_empty() && sun(48).len() == 1 && sun(72)[0].bounds.y < sun(60)[0].bounds.y && sun(95)[0].bounds.y == sun(72)[0].bounds.y);
+        assert!(car(0) < car(24) && car(24) < car(48) && car(48) == car(95));
+        assert!(words(71).is_empty() && words(72)[0].opacity == 0.0 && words(78)[0].opacity > 0.3 && words(95)[0].opacity == 1.0);
         // Two scenes, each stopping on its frame, each with a button that leads to the other.
         let doc = find("Two scenes with buttons");
         assert_eq!(doc.scenes().len(), 2);
