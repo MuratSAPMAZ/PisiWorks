@@ -165,11 +165,14 @@ Bu aşamada çalışanlar:
 
 - Zaman çizelgesi: katmanlar, kareler, anahtar kareler ve boş anahtar kareler (F5, F6, F7; kaldırmak için Shift+F5, Shift+F6).
 - Hareket ara doldurma: iki anahtar kare arasında konum, boyut, dönüş ve opaklık adım adım değişir. Ara doldurmanın içindeki bir karede nesneyi değiştirmek, Flash'ta olduğu gibi o kareyi anahtar kare yapar.
+- Şekil ara doldurma: bir anahtar karedeki şekiller, dış hatları ve renkleriyle, sonraki anahtar karedekilere dönüşür.
+- Kılavuz katmanı: altındaki katmanın ara doldurulan nesneleri kılavuzdaki yol boyunca ilerler. Maske katmanı: altındaki katman yalnızca maskede çizili olan yerde görünür. Kılavuzlar yayımda çizilmez; maskeler Önizleme'de ve yayımda uygulanır.
+- Yavaşlama (−100 ile 100 arası) ve hareket ara doldurmada tur sayısı.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 
-Henüz olmayanlar: şekil ara doldurma, kılavuz ve maske katmanları, film klibi sembolleri, kare ve düğme eylemleri, sahneler arası geçiş, ses, yavaşlama ayarının arayüzü ve PisiSahne'nin `.deb` paketi. Pencere düzeni de henüz Flash'ınki değil: araçlar solda, Özellikler altta durur.
+Henüz olmayanlar: film klibi sembolleri, kare ve düğme eylemleri, sahneler arası geçiş, ses, şekil ipuçları, yola yönlendirme ve PisiSahne'nin `.deb` paketi. Pencere düzeni de henüz Flash'ınki değil: araçlar solda, Özellikler altta durur.
 
 Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") elimizde Türkçe Flash kurulumu olmadığı için bizim çevirimizdir ve ders notlarındaki sözcüklerden farklı olabilir. Hepsi tek bir çeviri tablosundadır; doğrusunu bildirirseniz düzeltilir.
 

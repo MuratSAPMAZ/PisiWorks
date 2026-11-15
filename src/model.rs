@@ -3659,6 +3659,10 @@ impl Editor {
         let mut page = self.doc.pages.get(index).unwrap_or(self.doc.page()).clone();
         page.button_symbols = self.doc.symbols.iter().filter(|s| s.kind == SymbolKind::Button).map(|s| s.id).collect();
         page.button_looks = self.button_looks();
+        // A scene of an animation goes out as the finished animation shows it: guides left out, masks at work.
+        if page.timeline.is_some() {
+            page = page.played();
+        }
         page
     }
 

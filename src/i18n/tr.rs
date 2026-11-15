@@ -1194,4 +1194,11 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("This document has no timeline", "Bu belgenin zaman çizelgesi yok"),
     ("The animation has too many frames to publish as one page", "Animasyon tek sayfa olarak yayımlanamayacak kadar çok kare içeriyor"),
     ("PisiSahne needs a Vulkan graphics driver, and none was found. Install the mesa-vulkan-drivers package, then start PisiSahne again.", "PisiSahne için bir Vulkan grafik sürücüsü gerekiyor, ancak bulunamadı. mesa-vulkan-drivers paketini kurup PisiSahne'yi yeniden başlatın."),
+    ("Create Shape Tween", "Şekil Ara Doldurması Oluştur"),
+    ("Guide Layer", "Kılavuz Katmanı"),
+    ("Mask Layer", "Maske Katmanı"),
+    ("Guide", "Kılavuz"),
+    ("Tween", "Ara Doldurma"),
+    ("Ease:", "Yavaşlama:"),
+    ("Turns:", "Tur:"),
 ];

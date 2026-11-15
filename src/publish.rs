@@ -111,7 +111,7 @@ mod tests {
         for layer in 1..e.doc.page().layers.len() {
             e.doc.page_mut().edit_timeline(|timeline| timeline.insert_frames(layer, 0, 3));
         }
-        let page = e.export_page();
+        let page = e.doc.page().clone();
         let html = html(&page, "Bahar <Şenliği>").unwrap();
         assert!(html.contains("<title>Bahar &lt;Şenliği&gt;</title>") && html.contains("width=\"728\" height=\"90\""));
         assert!(html.contains("var fps = 12;") && html.contains("var order = [0,1,2,3];"));
@@ -122,8 +122,10 @@ mod tests {
         let mut still = Editor::new(Document::new(20, 10));
         still.doc.page_mut().start_timeline(24.0);
         still.doc.page_mut().edit_timeline(|timeline| timeline.insert_frames(0, 0, 9));
-        let html = super::html(&still.export_page(), "x").unwrap();
+        let html = super::html(still.doc.page(), "x").unwrap();
         assert!(html.contains("var order = [0,0,0,0,0,0,0,0,0,0];") && html.matches("data:image/png").count() == 1);
-        assert!(super::html(&Editor::new(Document::new(20, 10)).export_page(), "x").is_err());
+        assert!(super::html(Editor::new(Document::new(20, 10)).doc.page(), "x").is_err());
+        // What the exporter is handed is the finished picture of one frame, not a scene to go through.
+        assert!(super::html(&still.export_page(), "x").is_err());
     }
 }

@@ -1797,7 +1797,13 @@ impl Workspace {
                             cx.notify();
                         }),
                     )
-                    .child(layer.name.clone())
+                    // A guide or a mask is named as one, and the layer it works on is set in under it.
+                    .when(index + 1 < page.layers.len() && timeline.kind(index + 1) != crate::model::LayerKind::Normal && timeline.kind(index) == crate::model::LayerKind::Normal, |d| d.pl_5())
+                    .child(match timeline.kind(index) {
+                        crate::model::LayerKind::Normal => layer.name.clone(),
+                        crate::model::LayerKind::Guide => format!("{}: {}", t("Guide"), layer.name),
+                        crate::model::LayerKind::Mask => format!("{}: {}", t("Mask"), layer.name),
+                    })
                     .into_any_element(),
             );
             let spans = timeline.layers.get(index).map_or(&[][..], Vec::as_slice);
@@ -1809,6 +1815,8 @@ impl Workspace {
                     let span = spans.iter().find(|span| (span.start..span.start + span.length).contains(&frame));
                     // Grey for frames that show something, a paler blue for a tween, white for empty ones and past the end.
                     let color = match span {
+                        // A motion tween is blue and a shape tween green, as in Flash.
+                        Some(span) if span.tween.is_some_and(|tween| tween.shape) => 0xc4e6c0,
                         Some(span) if span.tween.is_some() => 0xc3cdf0,
                         Some(span) if !holds(span) => 0xf4f4f4,
                         Some(_) => 0xcfcfcf,
@@ -1871,7 +1879,18 @@ impl Workspace {
             .child(label(t("fps")))
             .child(label(tf("{} s", &[&format!("{:.1}", current as f32 / timeline.fps.max(1.0))])))
             .child(div().w(px(8.)))
-            .child(self.check_box(t("Onion Skin"), self.onion, cx, |this| this.onion = !this.onion));
+            .child(self.check_box(t("Onion Skin"), self.onion, cx, |this| this.onion = !this.onion))
+            // The tween the frame on show belongs to: how it eases, and for a motion tween how many turns it makes.
+            .children(self.current_tween().map(|tween| {
+                div()
+                    .ml_2()
+                    .flex()
+                    .items_center()
+                    .gap_1()
+                    .child(label(t("Ease:")))
+                    .child(self.field(FieldId::TweenEase, 40., cx))
+                    .when(!tween.shape, |d| d.child(label(t("Turns:"))).child(self.field(FieldId::TweenTurns, 32., cx)))
+            }));
         Some(
             div()
                 .id("timeline")

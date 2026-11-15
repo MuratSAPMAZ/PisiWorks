@@ -411,6 +411,8 @@ pub enum FieldId {
     TweenSteps,
     GifDelay,
     FrameRate,
+    TweenEase,
+    TweenTurns,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
     Twist(usize),
     /// Reverse State Range: the first state, or the last.
@@ -1961,6 +1963,8 @@ impl Workspace {
             Cmd::TextAlign(align) => !self.shown_text_style().orientation.is_vertical() && self.shown_text_style().align == align,
             Cmd::TextAlignDown(align) => self.shown_text_style().orientation.is_vertical() && self.shown_text_style().align == align,
             Cmd::TextOrientation(orientation) => self.shown_text_style().orientation == orientation,
+            Cmd::Frame(crate::menus::FrameCmd::GuideLayer) => self.active_layer_kind() == crate::model::LayerKind::Guide,
+            Cmd::Frame(crate::menus::FrameCmd::MaskLayer) => self.active_layer_kind() == crate::model::LayerKind::Mask,
             Cmd::PathOrientation(orientation) => self.ed.has_text_on_path() && self.shown_text_style().on_path == orientation,
             Cmd::Guides(GuideCmd::Show) => self.show_guides,
             Cmd::Guides(GuideCmd::Lock) => self.lock_guides,
@@ -2252,6 +2256,20 @@ impl Workspace {
         self.frames_playing = false;
     }
 
+    /// What the active layer is for in the timeline.
+    pub fn active_layer_kind(&self) -> crate::model::LayerKind {
+        let page = self.ed.doc.page();
+        page.timeline.as_ref().map_or_else(Default::default, |timeline| timeline.kind(page.active_layer))
+    }
+
+    /// The tween of the keyframe the frame on show belongs to, on the active layer.
+    pub fn current_tween(&self) -> Option<crate::model::Tween> {
+        let page = self.ed.doc.page();
+        let timeline = page.timeline.as_ref()?;
+        let span = timeline.span_at(page.active_layer, timeline.current)?;
+        timeline.layers[page.active_layer][span].tween
+    }
+
     /// The frame on show and the number of frames of the scene, if the page has a timeline.
     pub fn frame_position(&self) -> Option<(usize, usize)> {
         self.ed.doc.page().timeline.as_ref().map(|timeline| (timeline.current, timeline.frame_count()))
@@ -2289,8 +2307,15 @@ impl Workspace {
                 self.ed.on_timeline(|timeline, layer, frame| timeline.clear_keyframe(layer, frame));
                 done(self, t("Clear Keyframe"));
             }
-            FrameCmd::Tween | FrameCmd::RemoveTween => {
-                let tween = (cmd == FrameCmd::Tween).then(crate::model::Tween::default);
+            FrameCmd::GuideLayer | FrameCmd::MaskLayer => {
+                use crate::model::LayerKind;
+                let wanted = if cmd == FrameCmd::GuideLayer { LayerKind::Guide } else { LayerKind::Mask };
+                // Chosen again, the layer goes back to being an ordinary one.
+                self.ed.on_timeline(|timeline, layer, _| timeline.set_kind(layer, if timeline.kind(layer) == wanted { LayerKind::Normal } else { wanted }));
+                done(self, if cmd == FrameCmd::GuideLayer { t("Guide Layer") } else { t("Mask Layer") });
+            }
+            FrameCmd::Tween | FrameCmd::ShapeTween | FrameCmd::RemoveTween => {
+                let tween = (cmd != FrameCmd::RemoveTween).then(|| crate::model::Tween { shape: cmd == FrameCmd::ShapeTween, ..Default::default() });
                 // A tween needs a keyframe to go to: without one after it, there is nothing to move toward.
                 let has_next = self.ed.on_timeline(|timeline, layer, frame| {
                     let next = timeline.span_at(layer, frame).is_some_and(|index| index + 1 < timeline.layers[layer].len());
@@ -2300,7 +2325,11 @@ impl Workspace {
                 if tween.is_some() && has_next == Some(false) {
                     self.status = t("The tween will show once a keyframe follows this one: go to a later frame and insert a keyframe (F6)").into();
                 }
-                done(self, if tween.is_some() { t("Create Motion Tween") } else { t("Remove Tween") });
+                done(self, match cmd {
+                    FrameCmd::Tween => t("Create Motion Tween"),
+                    FrameCmd::ShapeTween => t("Create Shape Tween"),
+                    _ => t("Remove Tween"),
+                });
             }
             FrameCmd::Play => {
                 if self.frames_playing {
@@ -2343,7 +2372,8 @@ impl Workspace {
         self.ed.leave_symbol_for_good();
         self.ed.end_mask_edit();
         self.ed.close_groups();
-        let page = self.ed.export_page();
+        // The scene itself, with its timeline: publishing goes through its frames one by one.
+        let page = self.ed.doc.page().clone();
         let stem = self.path.as_ref().map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
         let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.html")));
         cx.spawn_in(window, async move |this, cx| {
@@ -6526,6 +6556,8 @@ impl Workspace {
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
+            FieldId::TweenEase => self.current_tween().map_or_else(String::new, |tween| number(tween.ease)),
+            FieldId::TweenTurns => self.current_tween().map_or_else(String::new, |tween| tween.turns.to_string()),
             FieldId::FrameRate => self.ed.doc.page().timeline.as_ref().map_or_else(String::new, |timeline| number(timeline.fps)),
             FieldId::GifDelay => self.gif_dialog.as_ref().map_or_else(String::new, |d| d.delay_ms.to_string()),
             FieldId::TweenSteps => self.tween_dialog.map_or_else(String::new, |d| d.0.to_string()),
@@ -6766,6 +6798,16 @@ impl Workspace {
                     4 => s.scale = v.clamp(1.0, 1000.0),
                     _ => s.fade_to = v.clamp(0.0, 100.0),
                 }
+            }
+            FieldId::TweenEase | FieldId::TweenTurns => {
+                let (Some(v), Some(mut tween)) = (number, self.current_tween()) else { return };
+                if field.id == FieldId::TweenEase {
+                    tween.ease = v.clamp(-100.0, 100.0);
+                } else {
+                    tween.turns = v.round().clamp(-50.0, 50.0) as i32;
+                }
+                self.ed.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(tween)));
+                self.ed.commit(t("Tween"));
             }
             FieldId::FrameRate => {
                 if let (Some(v), Some(timeline)) = (number.filter(|v| *v >= 1.0), self.ed.doc.page_mut().timeline.as_mut()) {
