@@ -33,7 +33,7 @@ Ok, dümdüz gitmek yerine kavisli çizgiyi izliyor ve gittiği yöne dönüyor.
 1. Yeni bir filmde bir ok çiz (sağdaki {{Otomatik Şekiller}} panelinden **Ok**'u sahneye sürükle).
 2. 48. karede [[F6]]'ya bas ve oku sahnenin öbür ucuna taşı. 1. kareye dönüp {{Hareket Ara Doldurması Oluştur}} de. Ok şimdilik dümdüz gidiyor.
 3. {{Yeni Katman}}'a tıkla. Yeni katman okun katmanının üstüne gelir.
-4. Bu yeni katmanda, {{Kalem}} ya da {{Vektör Yolu}} aracıyla okun izlemesini istediğin çizgiyi çiz. Çizgi okun başladığı yerden başlayıp bittiği yerde bitsin.
+4. Bu yeni katmanda, {{Kalem}} ya da {{Vektör Yol}} aracıyla okun izlemesini istediğin çizgiyi çiz. Çizgi okun başladığı yerden başlayıp bittiği yerde bitsin.
 5. Yeni katmanın adına **sağ tıkla** ve {{Kılavuz Katmanı}}'nı seç.
 6. Okun katmanına, ara doldurmalı bir kareye tıkla ve altta beliren {{Yola yönlendir}} kutusunu işaretle.
 
