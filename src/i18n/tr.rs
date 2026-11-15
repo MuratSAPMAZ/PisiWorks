@@ -1597,4 +1597,6 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("The command {} with {}", "{} komutu, {} ile"),
     ("the command {} takes {} values, and is given {}", "{} komutu {} değer alır, {} değer verilmiş"),
     ("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes", "Tab öneriyi alır ya da sonraki ? yerine gider, oklar seçer. Ctrl+Z geri alır. Ctrl+S metni alır, Ctrl+Enter alıp filmi test eder, Esc kapatır"),
+    ("make {} jump {} high", "{} nesnesini {} yükseğe zıplat"),
+    ("A jump of {} pixels is too small to see: try 100", "{} piksellik zıplama gözle görülmez: 100 deneyin"),
 ];

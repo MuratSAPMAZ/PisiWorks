@@ -3652,7 +3652,12 @@ impl Workspace {
             .collect();
         // A jump needs something to pull the object down again.
         let lists = read.rules.iter().flat_map(|rule| [&rule.steps, &rule.otherwise]).chain(read.commands.iter().map(|command| &command.steps));
-        let mut jumpers: Vec<&str> = lists.flat_map(|steps| crate::rules::every_step(steps)).filter(|step| step.kind == StepKind::Jump).map(|step| step.a.as_str()).collect();
+        let jumps: Vec<&crate::rules::Step> = lists.flat_map(|steps| crate::rules::every_step(steps)).filter(|step| step.kind == StepKind::Jump).collect();
+        // A jump of a few pixels cannot be seen: the number is a height, and a figure's height is tens of pixels.
+        for step in jumps.iter().filter(|step| step.ex.is_empty() && step.x < 15.0) {
+            advice.push(tf("A jump of {} pixels is too small to see: try 100", &[&crate::rules::Step::first(step)]));
+        }
+        let mut jumpers: Vec<&str> = jumps.iter().map(|step| step.a.as_str()).collect();
         jumpers.sort();
         jumpers.dedup();
         for name in jumpers {

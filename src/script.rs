@@ -406,7 +406,7 @@ const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 28] = [
     ("put {} at {}, {}", StepKind::GoTo, &[Gap::A, Gap::X, Gap::Y], false),
     ("show {}", StepKind::Show, &[Gap::A], false),
     ("hide {}", StepKind::Hide, &[Gap::A], false),
-    ("make {} jump at {}", StepKind::Jump, &[Gap::A, Gap::X], false),
+    ("make {} jump {} high", StepKind::Jump, &[Gap::A, Gap::X], false),
     ("decrease {} by {}", StepKind::Add, &[Gap::A, Gap::X], true),
     ("increase {} by {}", StepKind::Add, &[Gap::A, Gap::X], false),
     ("make a copy of {} at {}", StepKind::Spawn, &[Gap::A, Gap::B], false),
@@ -1083,8 +1083,20 @@ When Coin is clicked:
         let mut object = crate::model::Object::new_web(e.alloc_id(), crate::model::WebKind::Slice, crate::model::Rect { x: 20.0, y: 50.0, w: 40.0, h: 40.0 });
         (object.name, object.shape, object.fill) = ("Box".to_string(), crate::model::Shape::Rect { radius: 4.0 }, Some(crate::model::Color::rgb(30, 120, 210)));
         e.add_object(object);
+        // A ring that falls and can jump, and a copy of a button symbol, as a student would have them.
+        let mut ring = crate::model::Object::new_web(e.alloc_id(), crate::model::WebKind::Slice, crate::model::Rect { x: 200.0, y: 100.0, w: 40.0, h: 40.0 });
+        (ring.name, ring.shape, ring.fill) = ("Ring".to_string(), crate::model::Shape::Ellipse, Some(crate::model::Color::rgb(210, 50, 50)));
+        ring.behaviors = vec![crate::behavior::Behavior::new(crate::behavior::BehaviorKind::Gravity)];
+        e.add_object(ring);
+        let symbol = e.new_symbol("Button", crate::model::SymbolKind::Button);
+        e.edit_symbol(symbol, None, true);
+        let mut face = crate::model::Object::new_web(e.alloc_id(), crate::model::WebKind::Slice, crate::model::Rect { x: 100.0, y: 20.0, w: 80.0, h: 24.0 });
+        (face.shape, face.fill) = (crate::model::Shape::Rect { radius: 12.0 }, Some(crate::model::Color::rgb(40, 40, 40)));
+        e.add_object(face);
+        e.leave_symbol();
+        e.for_selected(|o| o.name = "Button".to_string());
         // What the page is made from can be given from outside, to try a text as it was written by hand.
-        let text = std::env::var("RULES").unwrap_or_else(|_| "When the film starts:\n    make kTop jump at 5\n".to_string());
+        let text = std::env::var("RULES").unwrap_or_else(|_| "When Box is clicked:\n    make Box jump 80 high\n".to_string());
         let found = read(&text).unwrap();
         (e.doc.rules, e.doc.variables, e.doc.commands) = (found.rules, found.variables, found.commands);
         std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/dil.html"), crate::publish::html(&e.doc, "dil").unwrap()).unwrap();

@@ -773,7 +773,8 @@ impl Workspace {
                         .occlude()
                         // The lists of Rules and Numbers hold whole phrases.
                         .w(px(if matches!(combo, Combo::RuleNew | Combo::RuleEvent | Combo::RuleStepAdd | Combo::RuleStep(_) | Combo::ScriptEvent | Combo::ScriptStep) { 330. } else { 170. }))
-                        .max_h(px(COMBO_MAX_HEIGHT))
+                        // The lists of sentences are long: they are let grow as tall as they are, where there is room.
+                        .max_h(px(if matches!(combo, Combo::ScriptEvent | Combo::ScriptStep | Combo::RuleStepAdd | Combo::RuleStep(_)) { 640. } else { COMBO_MAX_HEIGHT }))
                         .overflow_y_scroll()
                         .py_1()
                         .flex()

@@ -127,7 +127,7 @@ pub enum StepKind {
     RandomTop,
     Show,
     Hide,
-    /// Throws the object up at `x` pixels a second; it comes down if it has Fall and Jump.
+    /// Makes the object jump `x` pixels high. It needs Fall and Jump, which is what brings it down again.
     Jump,
     /// Adds `x` to the number `a`.
     #[default]
@@ -274,7 +274,7 @@ impl StepKind {
             StepKind::GoTo => (Some(Pick::Object), None, Some(("X:", 0.0)), Some(("Y:", 0.0))),
             StepKind::Random | StepKind::RandomTop | StepKind::Show | StepKind::Hide | StepKind::Remove | StepKind::Flash => (Some(Pick::Object), None, None, None),
             StepKind::Spawn => (Some(Pick::Object), Some(Pick::Object), None, None),
-            StepKind::Jump => (Some(Pick::Object), None, Some(("Speed:", 400.0)), None),
+            StepKind::Jump => (Some(Pick::Object), None, Some(("Height:", 100.0)), None),
             StepKind::Faster => (Some(Pick::Object), None, Some(("Percent:", 10.0)), None),
             StepKind::Add => (Some(Pick::Variable), None, Some(("By:", 1.0)), None),
             StepKind::Set => (Some(Pick::Variable), None, Some(("Value:", 0.0)), None),
@@ -601,7 +601,7 @@ impl Step {
             StepKind::RandomTop => tf("put {} at the top, at random", &[a]),
             StepKind::Show => tf("show {}", &[a]),
             StepKind::Hide => tf("hide {}", &[a]),
-            StepKind::Jump => tf("make {} jump at {}", &[a, &x]),
+            StepKind::Jump => tf("make {} jump {} high", &[a, &x]),
             StepKind::Add if down => tf("decrease {} by {}", &[a, &plain(-self.x)]),
             StepKind::Add => tf("increase {} by {}", &[a, &x]),
             StepKind::Spawn => tf("make a copy of {} at {}", &[a, &self.b]),

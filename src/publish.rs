@@ -646,7 +646,12 @@ function take(step, who, players) {
     else if (k === "random") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = Math.random() * (movie.height - box[3]) - box[1]; a.vy = 0; }
     else if (k === "top") { a.x = Math.random() * (movie.width - box[2]) - box[0]; a.y = 1 - box[1]; a.vy = 0; a.ground = false; }
     else if (k === "hide") a.hidden = true;
-    else if (k === "jump") { a.vy = -x; a.ground = false; }
+    else if (k === "jump") {
+      // As high as asked: the speed that the pull of Fall and Jump takes that long a way to stop. What has
+      // no such pull cannot jump.
+      var pull = p.b.l.filter(function (l) { return l[0] === "gravity"; })[0];
+      if (pull && x > 0) { a.vy = -Math.sqrt(2 * Math.max(pull[1], 1) * x); a.ground = false; }
+    }
     else if (k === "flash") a.flash = ticks + Math.round(movie.fps * 1.2);
     else if (k === "faster") a.rate = Math.max(0.05, Math.min(a.rate * (1 + x / 100), 20));
     else if (k === "remove") {
