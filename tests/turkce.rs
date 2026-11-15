@@ -113,7 +113,7 @@ fn what_is_typed_first_decides_what_is_offered() {
     let score = offered("puan");
     assert!(score.contains(&"Puan sayısını ? artır".to_string()) && score.contains(&"Puan kez yinele:".to_string()) && !score.iter().any(|s| s.contains("nesnesini")), "{score:?}");
     // For a command, the one sentence that does it; for a figure, what opens with one; for a sound, playing it.
-    assert_eq!(offered("patlat")[0], "Patlat komutunu yap");
+    assert!(offered("patlat").contains(&"Patlat komutunu yap".to_string()) && offered("patlat").iter().filter(|s| s.contains(' ')).all(|s| s.starts_with("Patlat komutunu")));
     assert!(offered("3").contains(&"3 kez yinele:".to_string()) && offered("3").contains(&"3 saniye bekle".to_string()));
     assert_eq!(offered("bum"), vec!["bum sesini çal"]);
     // Further into a sentence, what still fits it; and the beginning of a name brings the name.
@@ -125,4 +125,26 @@ fn what_is_typed_first_decides_what_is_offered() {
     let mut edit = ScriptEdit::new("");
     edit.insert("boşluk");
     assert_eq!(edit.offers(&names)[0].shown(), "Boşluk tuşuna basılınca:");
+}
+
+#[test]
+fn a_command_takes_values_in_turkish() {
+    set_language(Language::Turkish);
+    let text = "\
+Sayılar:
+    Puan = 0
+
+Ödül komutu, Kaç, Kim ile:
+    Puan sayısını Kaç * 2 artır
+    Kim nesnesini bir an yanıp söndür
+
+Altın nesnesine tıklanınca:
+    Ödül komutunu 10, Altın ile yap
+";
+    let found = read(text).unwrap();
+    assert_eq!((found.commands[0].name.as_str(), found.commands[0].params.len()), ("Ödül", 2));
+    assert_eq!(found.rules[0].steps[0].args, vec!["10", "Altın"]);
+    assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), text.trim());
+    let told = read("Ödül komutu, Kaç ile:\n    filmi durdur\n\nFilm başlayınca:\n    Ödül komutunu yap\n").unwrap_err();
+    assert_eq!((told[0].line, told[0].what.as_str()), (5, "Ödül komutu 1 değer alır, 0 değer verilmiş"));
 }

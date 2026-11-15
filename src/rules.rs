@@ -314,6 +314,9 @@ pub struct Step {
     /// What an "if" does when its conditions do not hold.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub otherwise: Vec<Step>,
+    /// The values a command is done with, each as it is written: a number, a sum, or the name of an object.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
     #[serde(default)]
     pub x: f32,
     #[serde(default)]
@@ -340,6 +343,10 @@ pub struct Rule {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Command {
     pub name: String,
+    /// The names of the values the command is given when it is done. Inside it each is a number to
+    /// reckon with, or stands for the object it was given the name of.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub params: Vec<String>,
     #[serde(default)]
     pub steps: Vec<Step>,
 }
@@ -367,8 +374,10 @@ pub fn objects_of(steps: &[Step]) -> Vec<&str> {
             names.push(step.b.as_str());
         }
         // And the objects whose places its sums ask for: `Hero.x`.
-        let sums = [step.ex.as_str(), step.ey.as_str()].into_iter().chain(step.only.iter().map(|only| only.expr.as_str()));
+        let sums = [step.ex.as_str(), step.ey.as_str()].into_iter().chain(step.only.iter().map(|only| only.expr.as_str())).chain(step.args.iter().map(String::as_str));
         names.extend(sums.flat_map(crate::script::objects_in));
+        // A value given to a command may be the name of an object: whatever is not a figure is taken for one here.
+        names.extend(step.args.iter().map(|arg| arg.trim_matches('"')).filter(|arg| arg.replace(',', ".").parse::<f32>().is_err()));
     }
     names.retain(|name| !name.is_empty());
     names
@@ -390,7 +399,11 @@ pub fn steps_text(steps: &[Step], sounds: &[String]) -> String {
             };
             let y = if step.ey.is_empty() { step.y.to_string() } else { quoted(&step.ey) };
             let own = format!("\"{}\",{},{x},{y},{}", step.kind.key(), quoted(&step.a), quoted(&step.b));
-            if matches!(step.kind, StepKind::Repeat | StepKind::If | StepKind::While) {
+            if step.kind == StepKind::Call {
+                // The values the command is given go after its own five parts, each as it is written.
+                let args: Vec<String> = step.args.iter().map(|arg| quoted(arg)).collect();
+                format!("[{own},[{}]]", args.join(","))
+            } else if matches!(step.kind, StepKind::Repeat | StepKind::If | StepKind::While) {
                 let only: Vec<String> = step.only.iter().map(Condition::text).collect();
                 format!("[{own},[{}],[{}],[{}]]", steps_text(&step.body, sounds), only.join(","), steps_text(&step.otherwise, sounds))
             } else {
@@ -595,6 +608,7 @@ impl Step {
             StepKind::Remove => tf("remove {}", &[a]),
             StepKind::Flash => tf("make {} blink for a moment", &[a]),
             StepKind::Wait => tf("wait {} seconds", &[&x]),
+            StepKind::Call if !self.args.is_empty() => tf("do the command {} with {}", &[a, &self.args.join(", ")]),
             StepKind::Call => tf("do the command {}", &[a]),
             StepKind::Repeat => tf("repeat {} times", &[&x]),
             StepKind::If => tf("if {}", &[&self.told_conditions()]),

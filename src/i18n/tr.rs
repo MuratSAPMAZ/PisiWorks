@@ -1589,4 +1589,12 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Written in Rules as Text: {}", "Kuralları Yaz'da yazılmış: {}"),
     ("Commands, written in Rules as Text: {}", "Kuralları Yaz'da yazılmış komutlar: {}"),
     ("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes", "Tab öneriyi alır ya da sonraki ? yerine gider, oklar seçer. Ctrl+S metni alır, Ctrl+Enter alıp filmi test eder, Esc kapatır"),
+    ("Nothing in the document is called {}. Did you mean {}?", "Belgede {} adında bir şey yok. {} mi demek istediniz?"),
+    ("Nothing in the document is called {}: give an object that name in Properties", "Belgede {} adında bir şey yok: Özellikler'den bir nesneye bu adı verin"),
+    ("Nothing in the document is called {}", "Belgede {} adında bir şey yok"),
+    ("{} cannot jump yet: give it the behavior Fall and Jump", "{} henüz zıplayamaz: ona Düş ve Zıpla davranışını verin"),
+    ("do the command {} with {}", "{} komutunu {} ile yap"),
+    ("The command {} with {}", "{} komutu, {} ile"),
+    ("the command {} takes {} values, and is given {}", "{} komutu {} değer alır, {} değer verilmiş"),
+    ("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes", "Tab öneriyi alır ya da sonraki ? yerine gider, oklar seçer. Ctrl+Z geri alır. Ctrl+S metni alır, Ctrl+Enter alıp filmi test eder, Esc kapatır"),
 ];

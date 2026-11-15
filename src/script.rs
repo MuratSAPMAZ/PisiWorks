@@ -218,6 +218,18 @@ fn find_outside(line: &str, from: usize, mark: &str) -> Option<usize> {
     None
 }
 
+/// A text cut at each `mark` that stands outside brackets and quotation marks.
+fn split_outside<'a>(text: &'a str, mark: &str) -> Vec<&'a str> {
+    let mut parts = Vec::new();
+    let mut from = 0;
+    while let Some(at) = find_outside(text, from, mark) {
+        parts.push(&text[from..at]);
+        from = at + mark.len();
+    }
+    parts.push(&text[from..]);
+    parts
+}
+
 /// What stands in the gaps of a sentence, if the line is that sentence: `pattern` has `{}` for each gap.
 /// A gap takes as little as it can, and the last one what is left.
 fn fit(pattern: &str, line: &str) -> Option<Vec<String>> {
@@ -263,12 +275,20 @@ type Fault = String;
 /// What the reading knows: the numbers there are, and what it has found doubtful.
 struct Known<'a> {
     numbers: &'a [String],
-    commands: &'a [String],
+    /// The commands there are, each with how many values it takes.
+    commands: &'a [(String, usize)],
+    /// The names of the values of the command being read, which are numbers inside it.
+    params: &'a [String],
 }
 
 impl Known<'_> {
+    /// Every name that counts as a number here: the numbers of the film, and the values of the command being read.
+    fn all_numbers(&self) -> Vec<String> {
+        self.numbers.iter().chain(self.params.iter()).cloned().collect()
+    }
+
     fn number(&self, name: &str) -> Result<String, Fault> {
-        if self.numbers.iter().any(|known| known == name) {
+        if self.numbers.iter().chain(self.params.iter()).any(|known| known == name) {
             Ok(name.to_string())
         } else {
             Err(tf("there is no number called {}", &[&name]))
@@ -330,7 +350,7 @@ fn condition(text: &str, known: &Known) -> Result<Condition, Fault> {
     let mut fault = None;
     for (pattern, how) in CONDITION_FORMS {
         let Some(gaps) = fit(t(pattern), text) else { continue };
-        match (known.number(&gaps[0]), amount(&gaps[1], known.numbers)) {
+        match (known.number(&gaps[0]), amount(&gaps[1], &known.all_numbers())) {
             (Ok(number), Ok(Amount::Plain(value))) => return Ok(Condition { number, how: how.to_string(), value, ..Default::default() }),
             (Ok(number), Ok(Amount::Sum(expr))) => return Ok(Condition { number, how: how.to_string(), expr, ..Default::default() }),
             (Err(why), _) | (_, Err(why)) => fault = fault.or(Some(why)),
@@ -371,11 +391,14 @@ enum Gap {
     B,
     X,
     Y,
+    /// The values a command is done with, with commas between them.
+    Values,
 }
 
 /// The sentences a step can be: the kind each gives, what its gaps hold in the order they stand, and
 /// whether the first number is taken away ("decrease", "slower").
-const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 27] = [
+const STEP_FORMS: [(&str, StepKind, &[Gap], bool); 28] = [
+    ("do the command {} with {}", StepKind::Call, &[Gap::A, Gap::Values], false),
     ("do the command {}", StepKind::Call, &[Gap::A], false),
     ("move {} by {} right and {} down", StepKind::Move, &[Gap::A, Gap::X, Gap::Y], false),
     ("put {} somewhere at random", StepKind::Random, &[Gap::A], false),
@@ -420,16 +443,25 @@ fn step(line: &str, known: &Known) -> Result<Step, Fault> {
                     }
                 },
                 Gap::A if kind == StepKind::Call => {
-                    if !known.commands.contains(text) {
-                        fault = fault.or(Some(tf("there is no command called {}", &[text])));
-                        continue 'forms;
+                    // The command must be there, and be given as many values as it takes.
+                    let given = if gaps.contains(&Gap::Values) { found.get(1).map_or(0, |values| split_outside(values, ",").len()) } else { 0 };
+                    match known.commands.iter().find(|(name, _)| name == text) {
+                        Some((_, takes)) if *takes == given => made.a = text.clone(),
+                        Some((_, takes)) => {
+                            fault = fault.or(Some(tf("the command {} takes {} values, and is given {}", &[text, takes, &given])));
+                            continue 'forms;
+                        }
+                        None => {
+                            fault = fault.or(Some(tf("there is no command called {}", &[text])));
+                            continue 'forms;
+                        }
                     }
-                    made.a = text.clone();
                 }
+                Gap::Values => made.args = split_outside(text, ",").into_iter().map(|value| value.trim().to_string()).collect(),
                 Gap::A => made.a = text.clone(),
                 Gap::B => made.b = text.clone(),
                 Gap::X | Gap::Y => {
-                    let read = match amount(text, known.numbers) {
+                    let read = match amount(text, &known.all_numbers()) {
                         Ok(read) => read,
                         Err(why) => {
                             fault = fault.or(Some(why));
@@ -519,7 +551,7 @@ pub fn declared(text: &str) -> (Vec<String>, Vec<String>) {
         if line.indent == 0 {
             let title = line.text.trim_end_matches(':').trim();
             in_numbers = title.to_lowercase() == t("Numbers").to_lowercase();
-            commands.extend(command_name(title).filter(|_| !in_numbers));
+            commands.extend(command_head(title).filter(|_| !in_numbers).map(|(name, _)| name));
         } else if in_numbers {
             numbers.extend(line.text.split_once('=').map(|(name, _)| name.trim().to_string()).filter(|name| !name.is_empty()));
         }
@@ -564,7 +596,7 @@ fn block(title: &str, known: &Known) -> Result<Step, Fault> {
     for (pattern, kind) in BLOCK_FORMS {
         let Some(gaps) = fit(t(pattern), title).or_else(|| fit(t(pattern), &recased(title))) else { continue };
         if kind == StepKind::Repeat {
-            match amount(&gaps[0], known.numbers) {
+            match amount(&gaps[0], &known.all_numbers()) {
                 Ok(Amount::Plain(x)) => return Ok(Step { kind, x, ..Default::default() }),
                 Ok(Amount::Sum(ex)) => return Ok(Step { kind, ex, ..Default::default() }),
                 Err(why) => fault = fault.or(Some(why)),
@@ -624,7 +656,8 @@ pub fn write(variables: &[Variable], commands: &[Command], rules: &[Rule]) -> St
         text.push('\n');
     }
     for command in commands {
-        text.push_str(&format!("{}:\n", tf("The command {}", &[&command.name])));
+        let head = if command.params.is_empty() { tf("The command {}", &[&command.name]) } else { tf("The command {} with {}", &[&command.name, &command.params.join(", ")]) };
+        text.push_str(&format!("{head}:\n"));
         write_steps(&mut text, &command.steps, 1);
         text.push('\n');
     }
@@ -662,10 +695,19 @@ fn lines_of(text: &str) -> Vec<Line<'_>> {
         .collect()
 }
 
-/// The name of the command a line at the edge defines, if it defines one.
-fn command_name(title: &str) -> Option<String> {
+/// The command a line at the edge defines, if it defines one: its name, and the names of the values it takes.
+/// Each name is one word.
+fn command_head(title: &str) -> Option<(String, Vec<String>)> {
+    let one_word = |name: &str| !name.is_empty() && !name.contains(char::is_whitespace);
+    let with = t("The command {} with {}");
+    if let Some(gaps) = fit(with, title).or_else(|| fit(with, &recased(title))) {
+        let params: Vec<String> = split_outside(&gaps[1], ",").into_iter().map(|name| name.trim().to_string()).collect();
+        if one_word(&gaps[0]) && params.iter().all(|name| one_word(name)) {
+            return Some((gaps[0].clone(), params));
+        }
+    }
     let gaps = fit(t("The command {}"), title).or_else(|| fit(t("The command {}"), &recased(title)))?;
-    (!gaps[0].contains(char::is_whitespace)).then(|| gaps[0].clone())
+    one_word(&gaps[0]).then(|| (gaps[0].clone(), Vec::new()))
 }
 
 /// Reads the steps written further in than `parent`, from line `at` on, each with the steps it holds.
@@ -723,11 +765,11 @@ pub fn read(text: &str) -> Result<Read, Vec<Mistake>> {
         if line.indent == 0 {
             let title = line.text.trim_end_matches(':').trim();
             in_numbers = is_numbers(title);
-            if let Some(name) = command_name(title).filter(|_| !in_numbers) {
-                if names.contains(&name) {
+            if let Some((name, params)) = command_head(title).filter(|_| !in_numbers) {
+                if names.iter().any(|(known, _)| *known == name) {
                     mistakes.push(Mistake { line: line.number, what: tf("the command {} is written twice", &[&name]) });
                 }
-                names.push(name);
+                names.push((name, params.len()));
             }
         } else if in_numbers {
             match line.text.split_once('=') {
@@ -741,7 +783,7 @@ pub fn read(text: &str) -> Result<Read, Vec<Mistake>> {
         }
     }
     let numbers: Vec<String> = found.variables.iter().map(|v| v.name.clone()).collect();
-    let known = Known { numbers: &numbers, commands: &names };
+    let known = Known { numbers: &numbers, commands: &names, params: &[] };
     let mut at = 0;
     // Whether the last thing read at the edge was a rule, which an "otherwise" may follow.
     let mut after_rule = false;
@@ -774,10 +816,12 @@ pub fn read(text: &str) -> Result<Read, Vec<Mistake>> {
                 None => mistakes.push(Mistake { line: line.number, what: t("\"otherwise\" comes after the steps of a rule or of an \"if\"").to_string() }),
             }
             after_rule = false;
-        } else if let Some(name) = command_name(title) {
-            let steps = steps_under(&lines, &mut at, 0, &known, &mut mistakes);
+        } else if let Some((name, params)) = command_head(title) {
+            // Inside the command the names of its values are numbers to reckon with.
+            let inside = Known { numbers: &numbers, commands: &names, params: &params };
+            let steps = steps_under(&lines, &mut at, 0, &inside, &mut mistakes);
             if !found.commands.iter().any(|c| c.name == name) {
-                found.commands.push(Command { name, steps });
+                found.commands.push(Command { name, params, steps });
             }
             after_rule = false;
         } else {
@@ -802,6 +846,28 @@ pub fn read(text: &str) -> Result<Read, Vec<Mistake>> {
         mistakes.sort_by_key(|mistake| mistake.line);
         Err(mistakes)
     }
+}
+
+/// How many letters must be changed, put in or taken out to make one word of another.
+fn distance(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.to_lowercase().chars().collect(), b.to_lowercase().chars().collect());
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+    for (i, x) in a.iter().enumerate() {
+        let mut last = row[0];
+        row[0] = i + 1;
+        for (j, y) in b.iter().enumerate() {
+            let now = row[j + 1];
+            row[j + 1] = if x == y { last } else { 1 + last.min(now).min(row[j]) };
+            last = now;
+        }
+    }
+    row[b.len()]
+}
+
+/// The name that was most likely meant by one that is not there: one that differs from it by a letter or
+/// two, or only in its capitals.
+pub fn meant<'a>(name: &str, known: &'a [String]) -> Option<&'a String> {
+    known.iter().map(|other| (distance(name, other), other)).filter(|(far, other)| *far <= 2 && *far < other.chars().count()).min_by_key(|(far, _)| *far).map(|(_, other)| other)
 }
 
 /// The names in the rules that nothing in the document answers to: objects and sounds. They do no
@@ -935,12 +1001,61 @@ otherwise:
         assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), PROGRAM.trim());
         let page = rule.text(&["boom".to_string(), "zap".to_string()]);
         assert!(page.contains("[\"repeat\",\"\",\"Shots\",0,\"\",[[\"spawn\",\"Bullet\",0,0,\"Ship\"],[\"wait\",\"\",0.2,0,\"\"]],[],[]]"), "{page}");
-        assert!(page.contains("[\"while\",\"\",0,0,\"\",[[\"add\",\"Score\",-3,0,\"\"]],[[\"Score\",\">\",0]],[]]") && page.contains("[\"call\",\"Burst\",0,0,\"\"]"), "{page}");
+        assert!(page.contains("[\"while\",\"\",0,0,\"\",[[\"add\",\"Score\",-3,0,\"\"]],[[\"Score\",\">\",0]],[]]") && page.contains("[\"call\",\"Burst\",0,0,\"\",[]]"), "{page}");
         // The objects of what is nested and of the commands are known, for the page to keep them apart.
         assert_eq!(rule.objects(), vec!["Bullet", "Ship"]);
         assert_eq!(strangers(&found.rules, &found.commands, &[], &[]), vec!["Bullet", "Enemy", "Explosion", "Ship", "boom", "zap"]);
         // On one line, as a list shows it.
         assert_eq!(rule.steps[0].told(), "repeat Shots times [make a copy of Bullet at Ship; wait 0.2 seconds]");
+    }
+
+    const WITH_VALUES: &str = "\
+Numbers:
+    Score = 0
+
+The command Award with Points, Who:
+    increase Score by Points * 2
+    make Who blink for a moment
+    if Points is more than 5:
+        do the command Award with Points - 5, Who
+
+When Coin is clicked:
+    do the command Award with 10, Coin
+    do the command Award with Score + random(1, 3), \"Giant Rat\"
+";
+
+    #[test]
+    fn a_command_is_given_values_by_name() {
+        set_language(Language::English);
+        let found = read(WITH_VALUES).unwrap();
+        let award = &found.commands[0];
+        assert_eq!((award.name.as_str(), award.params.clone()), ("Award", vec!["Points".to_string(), "Who".to_string()]));
+        // Inside the command its values are numbers to reckon with; a value that is no number names an object.
+        assert_eq!(award.steps[0].ex, "Points * 2");
+        assert_eq!(award.steps[1].a, "Who");
+        assert_eq!(award.steps[2].body[0].args, vec!["Points - 5", "Who"]);
+        let calls = &found.rules[0].steps;
+        assert_eq!((calls[0].args.clone(), calls[1].args.clone()), (vec!["10".to_string(), "Coin".to_string()], vec!["Score + random(1, 3)".to_string(), "\"Giant Rat\"".to_string()]));
+        assert_eq!(write(&found.variables, &found.commands, &found.rules).trim(), WITH_VALUES.trim());
+        // The page gets the values as they are written, and the objects named among them are kept apart for the rules.
+        assert!(found.rules[0].text(&[]).contains("[\"call\",\"Award\",0,0,\"\",[\"10\",\"Coin\"]]"));
+        let named = found.rules[0].objects();
+        assert!(named.contains(&"Coin") && named.contains(&"Giant Rat"), "{named:?}");
+        // As many values as the command takes, no more and no fewer; and outside it its values are not numbers.
+        let told = |text: &str| read(text).unwrap_err().into_iter().map(|m| (m.line, m.what)).collect::<Vec<_>>();
+        assert_eq!(told("The command Award with Points:\n    stop the film\n\nWhen the film starts:\n    do the command Award\n"), vec![(5, "the command Award takes 1 values, and is given 0".to_string())]);
+        assert_eq!(told("The command Award with Points:\n    stop the film\n\nWhen the film starts:\n    do the command Award with 1, 2\n")[0].0, 5);
+        assert_eq!(told("The command Award with Points:\n    stop the film\n\nWhen the film starts:\n    wait Points seconds\n"), vec![(5, "there is no number called Points".to_string())]);
+    }
+
+    #[test]
+    fn a_name_that_is_not_there_is_guessed_at() {
+        let known = vec!["Top".to_string(), "Sepet".to_string(), "Kahraman".to_string()];
+        assert_eq!(meant("kTop", &known), Some(&known[0]));
+        assert_eq!(meant("top", &known), Some(&known[0]));
+        assert_eq!(meant("Kahrman", &known), Some(&known[2]));
+        assert_eq!(meant("Elma", &known), None);
+        assert_eq!(meant("Xy", &known), None, "a short name is not guessed from one as short");
     }
 
     #[test]
@@ -968,7 +1083,9 @@ otherwise:
         let mut object = crate::model::Object::new_web(e.alloc_id(), crate::model::WebKind::Slice, crate::model::Rect { x: 20.0, y: 50.0, w: 40.0, h: 40.0 });
         (object.name, object.shape, object.fill) = ("Box".to_string(), crate::model::Shape::Rect { radius: 4.0 }, Some(crate::model::Color::rgb(30, 120, 210)));
         e.add_object(object);
-        let found = read("Numbers:\n    Score = 0\n    Count = 0\n    Steps = 0\n\nThe command Count3:\n    repeat 3 times:\n        increase Count by 1\n\nWhen Box is clicked:\n    do the command Count3\n    repeat 2 times:\n        increase Score by 10\n        wait 0.2 seconds\n    if Count is more than 2:\n        set Steps to 0\n        repeat while Steps is less than 5:\n            increase Steps by 1\n    otherwise:\n        set Steps to -1\n    repeat while Score is more than -1:\n        increase Score by 1\n").unwrap();
+        // What the page is made from can be given from outside, to try a text as it was written by hand.
+        let text = std::env::var("RULES").unwrap_or_else(|_| "When the film starts:\n    make kTop jump at 5\n".to_string());
+        let found = read(&text).unwrap();
         (e.doc.rules, e.doc.variables, e.doc.commands) = (found.rules, found.variables, found.commands);
         std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/dil.html"), crate::publish::html(&e.doc, "dil").unwrap()).unwrap();
     }

@@ -319,7 +319,14 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
     let sounds: Vec<String> = doc.sounds.iter().map(|sound| format!("\"data:{};base64,{}\"", sound.mime, sound.data)).collect();
     let sound_names: Vec<String> = doc.sounds.iter().map(|sound| sound.name.clone()).collect();
     let rules: Vec<String> = doc.rules.iter().map(|rule| rule.text(&sound_names)).collect();
-    let commands: Vec<String> = doc.commands.iter().map(|command| format!("{}:[{}]", serde_json::to_string(&command.name).unwrap_or_default(), crate::rules::steps_text(&command.steps, &sound_names))).collect();
+    let commands: Vec<String> = doc
+        .commands
+        .iter()
+        .map(|command| {
+            let params: Vec<String> = command.params.iter().map(|name| serde_json::to_string(name).unwrap_or_default()).collect();
+            format!("{}:{{\"p\":[{}],\"s\":[{}]}}", serde_json::to_string(&command.name).unwrap_or_default(), params.join(","), crate::rules::steps_text(&command.steps, &sound_names))
+        })
+        .collect();
     let numbers: Vec<String> = doc.variables.iter().map(|v| format!("{}:{}", serde_json::to_string(&v.name).unwrap_or_default(), v.start)).collect();
     Ok(PAGE
         .replace("{title}", &escape(title))
@@ -367,7 +374,8 @@ const PAGE: &str = r#"<!doctype html>
 // second number, second name]; and steps to take otherwise (o). A value or a number may be a sum, written
 // as text: "Score * 2", "Hero.x + 10", "random(1, 6)". A step that holds steps ("repeat", "if", "while")
 // carries them after its own five parts: its body, its conditions, and what to do otherwise.
-// commands: steps under a name, done by the step "call". numbers: the numbers by name, as they start.
+// commands: steps (s) under a name, with the names of the values they take (p), done by the step "call",
+// which carries the values after its five parts. numbers: the numbers by name, as they start.
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
@@ -391,6 +399,8 @@ var numbers = {}, frozen = false, ticks = 0, seen = {};
 var clones = [], made = 0, walls = [];
 // The steps that wait their turn: each with the frame it is to go on at.
 var waiting = [];
+// The values of the command whose steps are being taken, by name: a number, or the name of an object.
+var given = null;
 var sounds = movie.sounds.map(function (source) { return new Audio(source); });
 var images = movie.pictures.map(function (source) {
   var image = new Image();
@@ -569,6 +579,7 @@ function sum(text, who, players) {
   function skip() { while (at < text.length && /\s/.test(text[at])) at += 1; }
   function sign(c) { skip(); if (text[at] === c) { at += 1; return true; } return false; }
   function place(name, side) {
+    if (given && typeof given[name] === "string") name = given[name];
     var p = players.filter(function (p) { return p.name === name && (who[name] === undefined || who[name] === p.key); })[0];
     return p ? (side === "x" ? p.box[0] : p.box[1]) : 0;
   }
@@ -585,7 +596,7 @@ function sum(text, who, players) {
       return Math.floor(Math.min(from, to) + Math.random() * (Math.abs(to - from) + 1));
     }
     if (sign(".")) { skip(); var side = text[at]; at += 1; return place(name, side); }
-    return numbers[name] || 0;
+    return valueOf(name);
   }
   function term() {
     var v = part();
@@ -598,8 +609,12 @@ function sum(text, who, players) {
   return total();
 }
 function amount(value, who, players) { return typeof value === "string" ? sum(value, who, players) : value; }
+// A number by name: a value of the command being done, if it has one of that name, or a number of the film.
+function valueOf(name) { return given && typeof given[name] === "number" ? given[name] : (numbers[name] || 0); }
+// The name a step means: where a command was given the name of an object, the object it was given.
+function named(name) { return given && typeof given[name] === "string" ? given[name] : name; }
 function take(step, who, players) {
-  var k = step[0], name = step[1], x = amount(step[2], who, players), y = amount(step[3], who, players);
+  var k = step[0], name = named(step[1]), x = amount(step[2], who, players), y = amount(step[3], who, players);
   var meant = function (p, name) { return p.name === name && (who[name] === undefined || who[name] === p.key); };
   var them = players.filter(function (p) { return meant(p, name); });
   if (k === "show") {
@@ -611,7 +626,7 @@ function take(step, who, players) {
     var source = null;
     movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (!source && b && b.n === name && (op[0] === "m" || op[0] === "c")) source = op; });
     // One copy for each object of the second name that is meant: "a shot at Soldier" gives every soldier a shot.
-    var places = players.filter(function (p) { return meant(p, step[4]); });
+    var places = players.filter(function (p) { return meant(p, named(step[4])); });
     if (source) places.forEach(function (at) {
       if (clones.length >= 300) return;
       var sb = behaviorsOf(source);
@@ -641,8 +656,10 @@ function take(step, who, players) {
     }
   });
   if (k === "rnd") numbers[name] = Math.floor(Math.min(x, y) + Math.random() * (Math.abs(y - x) + 1));
-  if (k === "add") numbers[name] = (numbers[name] || 0) + x;
-  else if (k === "set") numbers[name] = x;
+  // A number that is a value of the command being done is changed there, and is forgotten when the command ends.
+  var own = given && typeof given[name] === "number";
+  if (k === "add") { if (own) given[name] += x; else numbers[name] = (numbers[name] || 0) + x; }
+  else if (k === "set") { if (own) given[name] = x; else numbers[name] = x; }
   else if (k === "stop") playing = false;
   else if (k === "play") playing = true;
   else if (k === "frame") go(scene, x - 1, true);
@@ -656,16 +673,23 @@ function take(step, who, players) {
 // Whether every one of some conditions holds.
 function all(conditions, who) {
   var players = cast();
-  return conditions.every(function (c) { return holds(numbers[c[0]] || 0, c[1], amount(c[2], who, players)); });
+  return conditions.every(function (c) { return holds(valueOf(c[0]), c[1], amount(c[2], who, players)); });
 }
 // Goes on with a run of steps. A run keeps its place in a pile: the steps it is in, and under them the
 // steps those are held by, each with how far it has got. A loop is its steps gone through again; a
 // command is its steps put on the pile. A step that waits puts the whole run by until its time has
 // come. A loop that would never end is cut short, so that it cannot hold the page up.
-function resume(job) {
+// The values that hold where a run has got to: those of the innermost command it is in.
+function valuesOf(job) {
+  for (var i = job.pile.length - 1; i >= 0; i -= 1) if (job.pile[i].given) return job.pile[i].given;
+  return null;
+}
+function resume(job) { try { advance(job); } finally { given = null; } }
+function advance(job) {
   var done = 0;
   while (job.pile.length) {
     if ((done += 1) > 20000) return;
+    given = valuesOf(job);
     var at = job.pile[job.pile.length - 1];
     if (at.i >= at.s.length) {
       if (at.times !== undefined && (at.times -= 1) > 0) { at.i = 0; continue; }
@@ -688,9 +712,20 @@ function resume(job) {
     } else if (k === "while") {
       if (step[5].length && all(step[6], job.who)) job.pile.push({ s: step[5], i: 0, only: step[6] });
     } else if (k === "call") {
-      // A command that does itself goes no deeper than a pile of sixty.
+      // A command that does itself goes no deeper than a pile of sixty. Each value it is given is worked out
+      // here, where it is done: a number or a sum gives a number, a bare name that is no number an object.
       var command = movie.commands[step[1]];
-      if (command && command.length && job.pile.length < 60) job.pile.push({ s: command, i: 0 });
+      if (command && job.pile.length < 60) {
+        var values = {}, players = cast();
+        command.p.forEach(function (param, index) {
+          var written = String(step[5][index] === undefined ? 0 : step[5][index]).trim();
+          var bare = /^("[^"]*"|[^\s+\-*\/().,"]+)$/.test(written), plain = written.replace(/^"|"$/g, "");
+          if (given && typeof given[plain] === "string") values[param] = given[plain];
+          else if (bare && isNaN(Number(written.replace(",", "."))) && numbers[plain] === undefined && !(given && typeof given[plain] === "number")) values[param] = plain;
+          else values[param] = bare && !isNaN(Number(written.replace(",", "."))) ? Number(written.replace(",", ".")) : sum(written, job.who, players);
+        });
+        if (command.s.length) job.pile.push({ s: command.s, i: 0, given: values });
+      }
     } else take(step, job.who, cast());
   }
 }
@@ -698,6 +733,7 @@ function run(steps, who) { resume({ who: who, pile: [{ s: steps, i: 0 }] }); }
 // Follows a rule: its steps if everything it asks is so, and otherwise the steps it has for that.
 function follow(rule, who) {
   who = who || {};
+  given = null;
   if (!rule.c || all(rule.c, who)) run(rule.s, who); else if (rule.o) run(rule.o, who);
 }
 // Follows every rule of a kind that `fits` says is meant.

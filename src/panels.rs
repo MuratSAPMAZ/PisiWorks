@@ -2355,10 +2355,9 @@ impl Workspace {
         match &script.outcome {
             Some(Ok(read)) => {
                 rows.push(div().text_color(rgb(0x1c7a30)).child(label(tf("The text reads: {} rules, {} numbers", &[&read.rules.len(), &read.variables.len()]))).into_any_element());
-                let sounds: Vec<String> = self.ed.doc.sounds.iter().map(|s| s.name.clone()).collect();
-                let strangers = crate::script::strangers(&read.rules, &read.commands, &self.ed.doc.object_names(), &sounds);
-                if !strangers.is_empty() {
-                    rows.push(div().text_color(rgb(0xa05a00)).child(label(tf("Nothing in the document is called: {}", &[&strangers.join(", ")]))).into_any_element());
+                // What reads but will not do what was hoped is told plainly, in the color of a warning.
+                for advice in self.script_advice(read).into_iter().take(4) {
+                    rows.push(div().px_1().bg(rgb(0xfff0c8)).text_color(rgb(0x8a4a00)).font_weight(FontWeight::BOLD).child(label(advice)).into_any_element());
                 }
             }
             Some(Err(mistakes)) => {
@@ -2388,7 +2387,7 @@ impl Workspace {
             }
             None => {}
         }
-        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
+        rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Tab takes what is offered or goes to the next ?, the arrows pick. Ctrl+Z takes a change back. Ctrl+S takes the text, Ctrl+Enter takes it and tests the movie, Esc closes"))).into_any_element());
         let buttons = div()
             .flex()
             .justify_end()

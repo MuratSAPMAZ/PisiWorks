@@ -3634,6 +3634,37 @@ impl Workspace {
         script.offers(&names)
     }
 
+    /// What in a text that reads will still not do what its writer hopes, each as a sentence to show: a name
+    /// that nothing answers to, with the name that was most likely meant; a jump asked of what cannot fall.
+    pub fn script_advice(&self, read: &crate::script::Read) -> Vec<String> {
+        use crate::behavior::BehaviorKind;
+        use crate::rules::StepKind;
+        let doc = &self.ed.doc;
+        let (objects, sounds) = (doc.object_names(), doc.sounds.iter().map(|s| s.name.clone()).collect::<Vec<_>>());
+        let known: Vec<String> = objects.iter().chain(&sounds).cloned().collect();
+        let mut advice: Vec<String> = crate::script::strangers(&read.rules, &read.commands, &objects, &sounds)
+            .into_iter()
+            .map(|name| match crate::script::meant(&name, &known) {
+                Some(near) => tf("Nothing in the document is called {}. Did you mean {}?", &[&name, near]),
+                None if objects.is_empty() => tf("Nothing in the document is called {}: give an object that name in Properties", &[&name]),
+                None => tf("Nothing in the document is called {}", &[&name]),
+            })
+            .collect();
+        // A jump needs something to pull the object down again.
+        let lists = read.rules.iter().flat_map(|rule| [&rule.steps, &rule.otherwise]).chain(read.commands.iter().map(|command| &command.steps));
+        let mut jumpers: Vec<&str> = lists.flat_map(|steps| crate::rules::every_step(steps)).filter(|step| step.kind == StepKind::Jump).map(|step| step.a.as_str()).collect();
+        jumpers.sort();
+        jumpers.dedup();
+        for name in jumpers {
+            let falls = |o: &crate::model::Object| o.behaviors.iter().any(|b| b.kind == BehaviorKind::Gravity);
+            let mut named = doc.pages.iter().flat_map(|page| page.objects()).filter(|o| o.name == name).peekable();
+            if named.peek().is_some() && !named.any(falls) {
+                advice.push(tf("{} cannot jump yet: give it the behavior Fall and Jump", &[&name]));
+            }
+        }
+        advice
+    }
+
     /// Takes one of the offers into the line.
     pub fn accept_offer(&mut self, index: usize) {
         let offers = self.script_offers();
@@ -3663,7 +3694,7 @@ impl Workspace {
     }
 
     /// A key pressed while Rules as Text is open.
-    fn script_key(&mut self, key: &str, control: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn script_key(&mut self, key: &str, control: bool, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
         // While sentences or names are offered, the arrows pick among them, Tab takes the one picked and
         // Esc waves them away; otherwise the keys are the editor's own.
         let offered = self.script_offers().len();
@@ -3706,6 +3737,13 @@ impl Workspace {
                 if let Some(text) = cx.read_from_clipboard().and_then(|item| item.text()) {
                     script.insert(&text);
                 }
+            }
+            // Ctrl+Z takes a change back; Ctrl+Y and Ctrl+Shift+Z put it in again.
+            ("z", true) if !shift => {
+                script.undo();
+            }
+            ("y" | "z", true) => {
+                script.redo();
             }
             (_, true) => {}
             ("enter", _) => script.newline(),
@@ -6979,7 +7017,7 @@ impl Workspace {
         }
         // Rules as Text takes every key while it is open and no field or list is.
         if self.script.is_some() && self.field.is_none() && self.open_combo.is_none() {
-            self.script_key(key, m.control, window, cx);
+            self.script_key(key, m.control, m.shift, window, cx);
             cx.notify();
             return;
         }

@@ -18,7 +18,23 @@ pub struct ScriptEdit {
     pub outcome: Option<Result<Read, Vec<Mistake>>>,
     /// Whether the text has been changed since it was last taken into the document.
     pub changed: bool,
+    /// The text as it was before each change, the latest last, for taking changes back; and the changes taken
+    /// back, for putting them in again. Letters typed one after another count as one change.
+    past: Vec<Kept>,
+    undone: Vec<Kept>,
+    typing: bool,
 }
+
+/// The text and the caret at one moment.
+#[derive(Clone, Debug, Default)]
+struct Kept {
+    lines: Vec<String>,
+    row: usize,
+    col: usize,
+}
+
+/// The most changes that can be taken back.
+const MOST_KEPT: usize = 400;
 
 /// The names there are to write: what a sentence can be about.
 #[derive(Clone, Debug, Default)]
@@ -72,6 +88,40 @@ impl ScriptEdit {
         text
     }
 
+    fn now(&self) -> Kept {
+        Kept { lines: self.lines.clone(), row: self.row, col: self.col }
+    }
+
+    /// Keeps the text as it is, before it is changed. A letter typed straight after another is part of the same change.
+    fn keep(&mut self, typing: bool) {
+        if !(typing && self.typing) {
+            self.past.push(self.now());
+            if self.past.len() > MOST_KEPT {
+                self.past.remove(0);
+            }
+        }
+        self.undone.clear();
+        self.typing = typing;
+    }
+
+    /// Takes the last change back. Says whether there was one.
+    pub fn undo(&mut self) -> bool {
+        let Some(kept) = self.past.pop() else { return false };
+        self.undone.push(self.now());
+        (self.lines, self.row, self.col, self.typing) = (kept.lines, kept.row, kept.col, false);
+        self.check();
+        true
+    }
+
+    /// Puts back in the change last taken back.
+    pub fn redo(&mut self) -> bool {
+        let Some(kept) = self.undone.pop() else { return false };
+        self.past.push(self.now());
+        (self.lines, self.row, self.col, self.typing) = (kept.lines, kept.row, kept.col, false);
+        self.check();
+        true
+    }
+
     /// Reads the text again.
     pub fn check(&mut self) {
         self.outcome = Some(crate::script::read(&self.text()));
@@ -91,6 +141,9 @@ impl ScriptEdit {
 
     /// Puts typed or pasted text in at the caret. A tab is a step's worth of spaces.
     pub fn insert(&mut self, text: &str) {
+        // A word typed letter by letter is one change; a space, or anything pasted, begins another.
+        let mut letters = text.chars();
+        self.keep(matches!((letters.next(), letters.next()), (Some(letter), None) if !letter.is_whitespace()));
         for (index, piece) in text.replace('\r', "").replace('\t', INDENT).split('\n').enumerate() {
             if index > 0 {
                 self.split();
@@ -112,6 +165,7 @@ impl ScriptEdit {
 
     /// Enter: a new line. Under an event it starts further in, where its steps go; under a step, as far in as the step.
     pub fn newline(&mut self) {
+        self.keep(false);
         let line = &self.lines[self.row];
         let before: String = line.chars().take(self.col).collect();
         // As far in as the line it comes from, and a step further under a line that opens steps.
@@ -126,6 +180,7 @@ impl ScriptEdit {
     }
 
     pub fn backspace(&mut self) {
+        self.keep(false);
         if self.col > 0 {
             // At the start of a step, the whole of its indent goes at once.
             let before: String = self.lines[self.row].chars().take(self.col).collect();
@@ -143,6 +198,7 @@ impl ScriptEdit {
     }
 
     pub fn delete(&mut self) {
+        self.keep(false);
         if self.col < self.length() {
             let (from, to) = (byte_at(&self.lines[self.row], self.col), byte_at(&self.lines[self.row], self.col + 1));
             self.lines[self.row].replace_range(from..to, "");
@@ -155,6 +211,7 @@ impl ScriptEdit {
 
     /// Moves the caret by lines and characters; over the end of a line it goes on to the next.
     pub fn step(&mut self, rows: isize, cols: isize) {
+        self.typing = false;
         if rows != 0 {
             self.row = (self.row as isize + rows).clamp(0, self.lines.len() as isize - 1) as usize;
             self.col = self.col.min(self.length());
@@ -186,6 +243,7 @@ impl ScriptEdit {
 
     /// Puts the caret on a line, as near the character asked for as the line has.
     pub fn place(&mut self, row: usize, col: usize) {
+        self.typing = false;
         self.row = row.min(self.lines.len() - 1);
         self.col = col.min(self.length());
     }
@@ -259,6 +317,7 @@ impl ScriptEdit {
 
     /// Takes an offer. A sentence becomes the line, and the caret goes to its first gap; a name takes the place of its beginning.
     pub fn accept(&mut self, offer: &Offer) {
+        self.keep(false);
         match offer {
             Offer::Sentence(sentence) => {
                 let lead: String = self.lines[self.row].chars().take_while(|c| *c == ' ').collect();
@@ -285,6 +344,8 @@ impl ScriptEdit {
         let line = &self.lines[self.row];
         let after = line.chars().enumerate().skip(self.col).find(|(_, c)| *c == '?').map(|(at, _)| at);
         let Some(at) = after.or_else(|| line.chars().position(|c| c == '?')) else { return false };
+        // Going to a gap is part of taking the sentence it is in: it is not kept as a change of its own.
+        self.typing = false;
         let (from, to) = (byte_at(line, at), byte_at(line, at + 1));
         self.lines[self.row].replace_range(from..to, "");
         self.col = at;
@@ -295,6 +356,7 @@ impl ScriptEdit {
     /// Adds a sentence as a line of its own under the caret's line: an event at the edge with a blank
     /// line before it, a step further in. The caret is left at its end.
     pub fn add_sentence(&mut self, sentence: &str, event: bool) {
+        self.keep(false);
         let line = if event { format!("{sentence}:") } else { format!("{INDENT}{sentence}") };
         // An empty line is written into; otherwise the sentence goes under the line the caret is on.
         if self.lines[self.row].trim().is_empty() {
@@ -386,7 +448,7 @@ mod tests {
             edit.insert(line);
             edit.offers(&names).iter().map(|offer| offer.shown().to_string()).collect::<Vec<_>>()
         };
-        assert_eq!(english("do"), vec!["do the command ?"]);
+        assert_eq!(english("do"), vec!["do the command ? with ?", "do the command ?"]);
         assert!(english("rep").contains(&"repeat ? times:".to_string()) && english("rep").contains(&"repeat while ?:".to_string()));
         // A gap is gone to and its mark taken away.
         let mut edit = ScriptEdit::new("    put Apple at ?, ?");
@@ -397,6 +459,46 @@ mod tests {
         edit.insert("20");
         assert_eq!(edit.lines[0], "    put Apple at 10, 20");
         assert!(!edit.next_gap(), "no gap is left");
+    }
+
+    #[test]
+    fn changes_are_taken_back_and_put_in_again() {
+        set_language(Language::English);
+        let mut edit = ScriptEdit::new("When the film starts:");
+        edit.end();
+        edit.newline();
+        for letter in ["h", "i", "d", "e"] {
+            edit.insert(letter);
+        }
+        edit.insert(" ");
+        for letter in ["A", "p", "p", "l", "e"] {
+            edit.insert(letter);
+        }
+        assert_eq!(edit.lines[1], "    hide Apple");
+        // A word comes back out whole, then the space, then the word before it, then the new line.
+        assert!(edit.undo());
+        assert_eq!(edit.lines[1], "    hide ");
+        edit.undo();
+        edit.undo();
+        assert_eq!((edit.lines[1].as_str(), edit.col), ("    ", 4));
+        edit.undo();
+        assert_eq!((edit.lines.len(), edit.row, edit.col), (1, 0, 21));
+        assert!(!edit.undo(), "nothing more to take back");
+        // And goes back in, change by change, until the text is as it was.
+        while edit.redo() {}
+        assert_eq!(edit.lines, vec!["When the film starts:", "    hide Apple"]);
+        // Something typed after taking back leaves nothing to put in again.
+        edit.undo();
+        edit.insert("x");
+        assert!(!edit.redo());
+        // A paste and a backspace are each one change.
+        let mut edit = ScriptEdit::new("");
+        edit.insert("one\ntwo");
+        edit.backspace();
+        edit.undo();
+        assert_eq!(edit.lines, vec!["one", "two"]);
+        edit.undo();
+        assert_eq!(edit.lines, vec![""]);
     }
 
     #[test]

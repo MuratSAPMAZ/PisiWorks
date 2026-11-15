@@ -379,6 +379,8 @@ Can sayısı 1 değerinin altına inince:
 - *Cümle ekle.* Cümleleri ezberlemek gerekmez: üstteki **Bir olay** ve **Bir eylem** listeleri cümleyi yazar, siz her `?` yerine bir ad ya da sayı koyarsınız.
 - *Almak.* **Metni Al** (Ctrl+S) yazılanı belgeye alır; **Al ve Filmi Test Et** (Ctrl+Enter) alıp oyunu tarayıcıda açar. Okunamayan satır varken metin alınmaz. Esc pencereyi kapatır.
 - *Yapıştırmak.* Ctrl+V başka bir yerden kopyalanmış kuralları yapıştırır: bir oyunun kuralları bir arkadaşa metin olarak gönderilebilir.
+- *Geri almak.* Ctrl+Z son değişikliği geri alır, Ctrl+Y (ya da Ctrl+Shift+Z) yeniden yapar. Art arda yazılan harfler tek değişiklik sayılır: bir sözcük bütün olarak geri gelir.
+- *Okunan ama işe yaramayan.* Metin okunsa bile umulanı yapmayacaksa pencere bunu sarı bir satırla söyler: "Belgede kTop adında bir şey yok. Top mu demek istediniz?", "Top henüz zıplayamaz: ona Düş ve Zıpla davranışını verin".
 
 - *Yazarken öneri.* Bir satıra yazmaya başlayınca imlecin altında öneriler çıkar: o satırın olabileceği cümleler ve belgedeki adlar. Ne yazdığınıza bakar: bir nesnenin adını yazarsanız nesne cümlelerini (`Elma nesnesini gizle`), bir sayının adını yazarsanız sayı cümlelerini (`Puan sayısını ? artır`), bir rakam yazarsanız rakamla başlayanları (`3 kez yinele:`) önerir; adı küçük harfle yazsanız da doğru yazımıyla koyar. Yukarı ve aşağı oklar seçer, **Tab** alır. Cümle alındığında imleç ilk boşluğa gider; boşlukları doldurdukça Tab bir sonrakine geçer. Esc önerileri kapatır.
 
@@ -392,6 +394,7 @@ Yazının listelere göre fazlası şunlardır:
 - *Eğer.* Bir kuralın içinde `eğer Puan sayısı 10 değerinden büyükse:` altındakiler yalnız koşul doğruysa yapılır; aynı hizaya yazılan `değilse:` öbür durumu söyler. Bloklar iç içe yazılabilir.
 - *Koşullu yinele.* `Puan sayısı 0 değerinden büyükse yinele:` altındakileri koşul doğru kaldıkça yapar. Hiç bitmeyecek bir döngü oyunu kilitlemez; program onu keser.
 - *Komut.* Sık yapılan bir işe ad verilir: kenara `Patlat komutu:` yazılır, altına eylemleri; sonra herhangi bir kuralda `Patlat komutunu yap` denir. Komut, kendisinden aşağıda yazılmış olsa da kullanılabilir; başka komutları, kendisini de çağırabilir.
+- *Komuta değer vermek.* Komut değer alabilir: `Ödül komutu, Kaç, Kim ile:` iki değer alan bir komut tanımlar; `Ödül komutunu 10, Altın ile yap` onu bu değerlerle yapar. Komutun içinde değerin adı bir sayı gibi kullanılır (`Puan sayısını Kaç * 2 artır`) ya da verilen nesnenin yerine geçer (`Kim nesnesini gizle`). Değer bir sayı, bir işlem ya da bir nesnenin adı olabilir; adında boşluk olan nesne tırnak içine yazılır. Komuta, aldığı kadar değer verilir; eksik ya da fazla verilirse satır kırmızı olur ve nedeni yazar. Komutun içinde bir değeri değiştirmek (`Kaç sayısını 1 azalt`) yalnızca o çalışmayı etkiler.
 
 ```
 Kahraman nesnesi Kapı nesnesine değince, Puan sayısı 2 değerinden büyükse ve Can sayısı 0 değerinden büyükse:
@@ -422,7 +425,16 @@ Boşluk tuşuna basılınca:
         vız sesini çal
 ```
 
-Blok açan satırlar: `… kez yinele:`, `… yinele:` (koşullu), `eğer …:`, `değilse:`. Komut tanımı: `… komutu:`. Komutu yapmak: `… komutunu yap`.
+```
+Ödül komutu, Kaç, Kim ile:
+    Puan sayısını Kaç * 2 artır
+    Kim nesnesini bir an yanıp söndür
+
+Altın nesnesine tıklanınca:
+    Ödül komutunu 10, Altın ile yap
+```
+
+Blok açan satırlar: `… kez yinele:`, `… yinele:` (koşullu), `eğer …:`, `değilse:`. Komut tanımı: `… komutu:` ya da `… komutu, …, … ile:`. Komutu yapmak: `… komutunu yap` ya da `… komutunu …, … ile yap`.
 
 Olay cümleleri: `Film başlayınca`, `Bir sahne başlayınca`, `… tuşuna basılınca`, `… nesnesine tıklanınca`, `… nesnesi sahnenin … değince`, `… nesnesi … nesnesine değince`, `Her … saniyede bir`, `… saniye sonra`, `… sayısı … değerini geçince`, `… sayısı … değerinin altına inince`, `… sayısı … olunca`.
 
@@ -432,7 +444,7 @@ Koşullar: `… sayısı … ise`, `… sayısı … değerinden büyükse`, `�
 
 Program İngilizce kullanılırken aynı kurallar İngilizce cümlelerle yazılır ve okunur (`When Apple touches Basket:`); belgedeki kurallar dilden bağımsız saklandığı için bir dilde yazılan oyun ötekinde o dilin cümleleriyle görünür. Nesnelerin ve sayıların adları çevrilmez.
 
-Listelerde (Kurallar ve Sayılar) bloklar ve komutlar görünür ama orada kurulmaz; onlar yazılır. Dilin henüz yapmadıkları: komutlara değer verilmez (`Patlat 3` denemez; komut, kuralı başlatan nesneleri bilir); sayılar dışında değer (sözcük, liste) saklanmaz; bir nesnenin yalnız yeri okunur, boyu ya da görünürlüğü okunmaz. Yazı alanı sade bir düzenleyicidir: seçme, geri alma ve bul-değiştir yoktur; uzun bir metni kendi düzenleyicinizde yazıp Ctrl+V ile yapıştırabilirsiniz.
+Listelerde (Kurallar ve Sayılar) bloklar ve komutlar görünür ama orada kurulmaz; onlar yazılır. Dilin henüz yapmadıkları: komut bir değer geri vermez (bir işlemin içinde kullanılamaz); sayılar dışında değer (sözcük, liste) saklanmaz; bir nesnenin yalnız yeri okunur, boyu ya da görünürlüğü okunmaz. Yazı alanı sade bir düzenleyicidir: seçme ve bul-değiştir yoktur; uzun bir metni kendi düzenleyicinizde yazıp Ctrl+V ile yapıştırabilirsiniz.
 
 **Eklem yerinden döndürmek.** Hareket ara doldurması, nesneyi Flash'taki gibi *dönüştürme noktasının* çevresinde döndürür. Bu nokta başlangıçta nesnenin ortasındadır. Taşımak için nesneyi seçin, **Ölçekle** aracını (Q) alın ve kutunun ortasındaki küçük kareyi nesnenin döneceği yere sürükleyin: bir kolun omuz ucuna, bir tekerleğin göbeğine, bir kapının menteşesine. Enter'a basın. Nokta bundan sonra nesneyle birlikte kalır; taşımada, döndürmede ve yeni anahtar karelerde de. Ara doldurma noktayı anahtar kareden anahtar kareye düz götürür, nesne onun çevresinde döner. Noktayı ilk anahtar karede, ötekileri eklemeden önce yerine koyun. Bir grup ya da resim için önce sembole dönüştürün (F8); Flash da her hareket ara doldurması için bunu ister.
 

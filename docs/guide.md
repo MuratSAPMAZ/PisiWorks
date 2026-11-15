@@ -377,6 +377,8 @@ When Lives goes below 1:
 - *Put in a sentence.* The sentences need not be known by heart: the lists **An event** and **A step** at the top write one, and you put a name or a number in place of each `?`.
 - *Taking it.* **Take the Text** (Ctrl+S) takes what is written into the document; **Take It and Test Movie** (Ctrl+Enter) takes it and opens the game in the browser. The text is not taken while a line cannot be read. Esc closes the window.
 - *Pasting.* Ctrl+V pastes rules copied from elsewhere: the rules of a game can be sent to a friend as text.
+- *Taking back.* Ctrl+Z takes the last change back, Ctrl+Y (or Ctrl+Shift+Z) puts it in again. Letters typed one after another are one change: a word comes back out whole.
+- *What reads but will not work.* Where a text reads and still will not do what is hoped, the window says so on a yellow line: "Nothing in the document is called kTop. Did you mean Top?", "Top cannot jump yet: give it the behavior Fall and Jump".
 
 - *Offered as you write.* When a line is begun, offers appear under the caret: the sentences the line can be, and the names of the document. They go by what is typed: the name of an object brings the sentences about objects (`hide Apple`), in Turkish the name of a number brings those about numbers, a figure those that open with one; a name typed in small letters is put in as it is kept. The up and down arrows pick, **Tab** takes. When a sentence is taken the caret goes to its first gap; as the gaps are filled, Tab goes on to the next. Esc waves the offers away.
 
@@ -390,6 +392,7 @@ What the writing has over the lists:
 - *If.* Inside a rule, what is under `if Score is more than 10:` is done only when that holds; `otherwise:`, written as far in as the `if`, says what to do when it does not. Blocks can be written inside blocks.
 - *Repeating while.* `repeat while Score is more than 0:` does what is under it for as long as that holds. A loop that would never end does not hold the game up: the program cuts it short.
 - *Commands.* A thing done often is given a name: `The command Burst:` at the edge, its steps under it; then any rule says `do the command Burst`. A command may be used above where it is written, and may do other commands, itself among them.
+- *Giving a command values.* A command can take values: `The command Award with Points, Who:` defines one that takes two; `do the command Award with 10, Coin` does it with those. Inside the command the name of a value is used as a number (`increase Score by Points * 2`) or stands for the object given (`hide Who`). A value may be a number, a sum, or the name of an object; an object with a space in its name is written between quotation marks. A command is given as many values as it takes; too few or too many, and the line turns red and says why. Changing a value inside the command (`decrease Points by 1`) holds for that run of it only.
 
 ```
 When Hero touches Door, if Score is more than 2 and Lives is more than 0:
@@ -420,7 +423,16 @@ When the Space key is pressed:
         play the sound zap
 ```
 
-The lines that open a block: `repeat … times:`, `repeat while …:`, `if …:`, `otherwise:`. Defining a command: `The command …:`. Doing it: `do the command …`.
+```
+The command Award with Points, Who:
+    increase Score by Points * 2
+    make Who blink for a moment
+
+When Coin is clicked:
+    do the command Award with 10, Coin
+```
+
+The lines that open a block: `repeat … times:`, `repeat while …:`, `if …:`, `otherwise:`. Defining a command: `The command …:` or `The command … with …, …:`. Doing it: `do the command …` or `do the command … with …, …`.
 
 The sentences for events: `When the film starts`, `When a scene starts`, `When the … key is pressed`, `When … is clicked`, `When … touches … of the stage`, `When … touches …`, `Every … seconds`, `After … seconds`, `When … goes above …`, `When … goes below …`, `When … becomes …`.
 
@@ -430,7 +442,7 @@ Conditions: `… is …`, `… is more than …`, `… is less than …`. The na
 
 With the program in Turkish the same rules are written and read in Turkish sentences (`Elma nesnesi Sepet nesnesine değince:`); the rules are kept in the document apart from any language, so a game written in one shows in the other in that language's sentences. The names of objects and numbers are not translated.
 
-In the lists (Rules and Numbers) blocks and commands are shown but not made; they are written. What the language does not do yet: a command takes no values (there is no `Burst 3`; a command knows the objects that set the rule off); nothing but numbers is kept (no words, no lists); only the place of an object is read, not its size or whether it shows. The writing area is a plain editor: there is no selecting, no undo and no find and replace; a long text can be written in an editor of your own and pasted with Ctrl+V.
+In the lists (Rules and Numbers) blocks and commands are shown but not made; they are written. What the language does not do yet: a command gives no value back (it cannot be used inside a sum); nothing but numbers is kept (no words, no lists); only the place of an object is read, not its size or whether it shows. The writing area is a plain editor: there is no selecting and no find and replace; a long text can be written in an editor of your own and pasted with Ctrl+V.
 
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 
