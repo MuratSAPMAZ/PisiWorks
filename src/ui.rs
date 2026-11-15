@@ -12,7 +12,7 @@ use gpui::{
 use crate::i18n::{t, tf};
 use crate::canvas_view::{paint_thumbnail_with, Scene, Textures};
 use crate::icons::{colored, layer_path};
-use crate::menus::{Cmd, Entry, Panel, SlotAction, Tool, ToolSlot, COLOR_TOOLS, DOCK_GROUPS, MENUS, SCREEN_MODES, TOOL_SECTIONS, TRANSFORM_TOOLS, VIEW_TOOLS};
+use crate::menus::{Cmd, Entry, Panel, SlotAction, ToolSlot, COLOR_TOOLS, DOCK_GROUPS, MENUS, SCREEN_MODES, TOOL_SECTIONS, VIEW_TOOLS};
 use crate::model::{Align, Arrange, Color, Object, Rect, Shape};
 use crate::optimize::settings_label;
 use crate::paths::PathOp;
@@ -371,13 +371,18 @@ impl Workspace {
     }
 
     fn sized_tool_slot(&self, slot: &'static ToolSlot, width: f32, cx: &mut Context<Self>) -> Stateful<Div> {
-        // The Scale button stands for Scale, Skew and Distort, and shows the one last used.
-        let shared = matches!(slot.action, SlotAction::Select(Tool::Scale));
-        let slot = if shared {
-            TRANSFORM_TOOLS.iter().find(|s| matches!(s.action, SlotAction::Select(tool) if tool == self.transform_tool)).unwrap_or(slot)
-        } else {
-            slot
+        // A button that stands for several tools shows the one of them used last.
+        let group = match slot.action {
+            SlotAction::Select(tool) => crate::menus::tool_group(tool),
+            SlotAction::Run(_) => None,
         };
+        let shared = group.is_some();
+        let slot = group
+            .and_then(|group| {
+                let shown = self.group_tools.get(group)?;
+                crate::menus::TOOL_GROUPS[group].iter().find(|s| matches!(s.action, SlotAction::Select(tool) if tool == *shown))
+            })
+            .unwrap_or(slot);
         let action = slot.action;
         let active = matches!(action, SlotAction::Select(tool) if tool == self.tool);
         div()
@@ -406,7 +411,7 @@ impl Workspace {
             .when(shared, |d| {
                 d.relative()
                     // Holding the button down lists the tools behind it.
-                    .on_mouse_down(MouseButton::Left, cx.listener(|this, ev: &MouseDownEvent, _, cx| this.begin_tool_hold(ev.position, cx)))
+                    .on_mouse_down(MouseButton::Left, cx.listener(move |this, ev: &MouseDownEvent, _, cx| this.begin_tool_hold(ev.position, group.unwrap_or(0), cx)))
                     .on_mouse_up(MouseButton::Left, cx.listener(|this, _, _, _| this.end_tool_hold()))
                     .on_mouse_up_out(MouseButton::Left, cx.listener(|this, _, _, _| this.end_tool_hold()))
                     .child(div().absolute().right(px(1.)).bottom(px(0.)).child(icon("triangle-open", 6., TEXT_DIM)))
@@ -895,7 +900,7 @@ impl Workspace {
         let selected = self.ed.selected();
         use crate::menus::Tool;
         let tool_size = match self.tool {
-            Tool::Brush | Tool::Eraser | Tool::Blur | Tool::Stamp => Some((t("Brush size:"), FieldId::BrushSize)),
+            Tool::Brush | Tool::Eraser | Tool::Blur | Tool::Stamp | Tool::Sharpen | Tool::Dodge | Tool::Burn | Tool::Smudge | Tool::ReplaceColor => Some((t("Brush size:"), FieldId::BrushSize)),
             Tool::Freeform => Some((t("Size:"), FieldId::FreeformSize)),
             _ => None,
         };

@@ -107,6 +107,55 @@ pub fn colored(name: &str) -> Option<&'static [Layer]> {
             (INK, r#"<path d="M2.500 12c2-7 4-7 5.500-4s3.500 3 5.500-4"/>"#),
             (BLUE, r#"<circle cx="8" cy="8" r="1.800" fill="black"/>"#),
         ],
+        "select-behind" => &[
+            (GRAY, r#"<rect x="7.500" y="2.500" width="7" height="6" fill="black" stroke="none"/>"#),
+            (INK, r#"<rect x="7.500" y="2.500" width="7" height="6" stroke-dasharray="1.500 1"/>"#),
+            (INK, r#"<path fill="black" d="M2 4.500l6.500 5.800H5.400l1.700 3.500-1.300.6-1.700-3.500L2 13z"/>"#),
+        ],
+        "oval-marquee" => &[(INK, r#"<ellipse cx="8" cy="8" rx="5.500" ry="4.500" stroke-dasharray="2 1.600"/>"#)],
+        "polygon-lasso" => &[
+            (INK, r#"<path stroke-dasharray="2 1.400" d="M3 4.500l5-2 5 3.500-2.500 5-6-1z"/>"#),
+            (TAN, r#"<path stroke-width="1.500" d="M4.500 10c-1 1.500 0 3.500 1.500 3.500"/>"#),
+        ],
+        "sharpen" => &[
+            (SKY, r#"<path fill="black" stroke="none" d="M8 2l4.500 10h-9z"/>"#),
+            (BLUE, r#"<path d="M8 2l4.500 10h-9z"/>"#),
+        ],
+        "dodge" => &[
+            (PAPER, r#"<circle cx="7" cy="6.500" r="4" fill="black" stroke="none"/>"#),
+            (INK, r#"<circle cx="7" cy="6.500" r="4"/><path stroke-width="1.700" d="M9.800 9.500L13.500 14"/>"#),
+        ],
+        "burn" => &[
+            (INK, r#"<path fill="black" d="M4 6.500c0-2 1.500-3.500 3.500-3.500S11 4 11 6l1.500 1v3H10l-1 3.500H6.500V10H5.500C4.500 9.500 4 8 4 6.500z"/>"#),
+        ],
+        "smudge" => &[
+            (PEACH, r#"<path fill="black" stroke="none" d="M6.500 2.500h2.500v6l3 1.500v4h-7V9z"/>"#),
+            (INK, r#"<path d="M6.500 2.500h2.500v6l3 1.500v4h-7V9zM6.500 5h2.500"/>"#),
+        ],
+        "replace-color" => &[
+            (RED, r#"<rect x="2" y="2.500" width="5.500" height="5.500" fill="black" stroke="none"/>"#),
+            (GREEN, r#"<rect x="8.500" y="8" width="5.500" height="5.500" fill="black" stroke="none"/>"#),
+            (INK, r#"<path d="M9.500 3.500h3v3M12.500 3.500L9 7M6.500 12.500h-3v-3M3.500 12.500L7 9"/>"#),
+        ],
+        "red-eye" => &[
+            (PAPER, r#"<path fill="black" stroke="none" d="M1.500 8c2-3.500 4-5 6.500-5s4.500 1.500 6.500 5c-2 3.500-4 5-6.500 5s-4.500-1.500-6.500-5z"/>"#),
+            (RED, r#"<circle cx="8" cy="8" r="2.600" fill="black" stroke="none"/>"#),
+            (INK, r#"<path d="M1.500 8c2-3.500 4-5 6.500-5s4.500 1.500 6.500 5c-2 3.500-4 5-6.500 5s-4.500-1.500-6.500-5z"/>"#),
+        ],
+        "vector-path" => &[
+            (INK, r#"<path d="M2 12c1.500-6 3.500-7 5-4s3 4 4.500 0"/>"#),
+            (ORANGE, r#"<path fill="black" stroke="none" d="M11 6l3.500-4 1 1-4 3.500z"/>"#),
+        ],
+        "polygon" => &[
+            (STEEL, r#"<path fill="black" stroke="none" d="M8 2l5.700 4.100-2.200 6.700h-7L2.300 6.100z"/>"#),
+            (INK, r#"<path d="M8 2l5.700 4.100-2.200 6.700h-7L2.300 6.100z"/>"#),
+        ],
+        "gradient" => &[
+            (INK, r#"<rect x="2.500" y="3.500" width="3" height="9" fill="black" stroke="none"/>"#),
+            (STEEL, r#"<rect x="5.500" y="3.500" width="3" height="9" fill="black" stroke="none"/>"#),
+            (GRAY, r#"<rect x="8.500" y="3.500" width="2.500" height="9" fill="black" stroke="none"/>"#),
+            (INK, r#"<rect x="2.500" y="3.500" width="11" height="9"/>"#),
+        ],
         "knife" => &[
             (GRAY, r#"<path fill="black" stroke="none" d="M2 14L10 3l3 2-6 6z"/>"#),
             (INK, r#"<path d="M2 14L10 3l3 2-6 6z"/>"#),

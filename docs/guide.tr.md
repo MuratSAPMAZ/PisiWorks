@@ -78,6 +78,18 @@ Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi 
 
 Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
 
+## Araç grupları
+
+Köşesinde küçük üçgen olan düğme birkaç aracı temsil eder. Listelemek için düğmeyi basılı tutun veya aralarında gezinmek için tuşuna yeniden basın; düğme en son kullanılanı gösterir.
+
+- İşaretçi (V): Arkasındakini Seç, her tıklamada farenin altındaki bir alttaki nesneyi seçer.
+- Seçim Çerçevesi (M): Oval Seçim Çerçevesi oval bir alan seçer. Kement (L): Çokgen Kement düz kenarlarla seçer; her köşeye tıklayın, kapatmak için çift tıklayın veya ilk köşeye tıklayın.
+- Bulanıklaştırma (R): Keskinleştir, Soldurma (açar), Yakma (koyulaştırır) ve Leke (boyayı fırça boyunca sürükler) Bulanıklaştırma gibi fırçanın altında çalışır.
+- Lastik Damgası (S): Renk Değiştir, fırçanın başladığı yerdeki rengi fırça rengine çevirir. Kırmızı Göz Kaldırma, üzerinden sürüklediğiniz alandaki gözlerin kırmızısını alır.
+- Kalem (P): Vektör Yol serbest elle yol çizer.
+- Dikdörtgen (U): Elips ve ortasından dışa doğru çizilen Çokgen; kenar sayısı Otomatik Şekil Özellikleri panelindedir.
+- Boya Kovası (G): Degrade, seçili nesneyi sürüklemeye başladığınız yerden bıraktığınız yere uzanan bir degradeyle doldurur.
+
 ## Degrade ve desen dolguları
 
 Bir vektör nesnesi seçiliyken Özellikler'de dolgunun yanındaki liste, nesnenin neyle doldurulacağını belirler: tek renk için Düz, on iki degradeden biri (Doğrusal, Radyal, Elips, Dikdörtgen, Koni, Kontur, Saten, Yıldız Patlaması, Kıvrımlar, Çubuklar, Dalgacıklar, Dalgalar) veya Desen. Yeni degrade, nesnenin dolgu renginden beyaza uzanır.

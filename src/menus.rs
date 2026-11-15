@@ -34,6 +34,18 @@ pub enum Tool {
     Bucket,
     Hand,
     Zoom,
+    SelectBehind,
+    OvalMarquee,
+    PolygonLasso,
+    Sharpen,
+    Dodge,
+    Burn,
+    Smudge,
+    ReplaceColor,
+    RedEye,
+    VectorPath,
+    Polygon,
+    Gradient,
 }
 
 pub struct ToolSlot {
@@ -85,8 +97,8 @@ pub const TOOL_SECTIONS: &[(&str, &[ToolSlot])] = &[
         &[
             on("Line (N)", "line", Tool::Line),
             on("Pen (P)", "pen", Tool::Pen),
-            on("Rectangle (R)", "rect", Tool::Rect),
-            on("Ellipse (U)", "ellipse", Tool::Ellipse),
+            // One button for Rectangle, Ellipse and Polygon, as in Fireworks.
+            on("Rectangle (U)", "rect", Tool::Rect),
             on("Text (T)", "text", Tool::Text),
             on("Freeform (O)", "freeform", Tool::Freeform),
             on("Knife (Y)", "knife", Tool::Knife),
@@ -107,6 +119,36 @@ pub const TOOL_SECTIONS: &[(&str, &[ToolSlot])] = &[
 /// the button shows whichever was used last.
 pub const TRANSFORM_TOOLS: &[ToolSlot] =
     &[on("Scale (Q)", "scale", Tool::Scale), on("Skew (Q)", "skew", Tool::Skew), on("Distort (Q)", "distort", Tool::Distort)];
+
+/// The buttons that stand for several tools. Holding one down lists its tools, its
+/// key walks through them, and the button shows whichever was used last. The first
+/// tool of each group is the one named in [`TOOL_SECTIONS`] or [`COLOR_TOOLS`].
+pub const TOOL_GROUPS: &[&[ToolSlot]] = &[
+    TRANSFORM_TOOLS,
+    &[on("Pointer (V)", "pointer", Tool::Pointer), on("Select Behind (V)", "select-behind", Tool::SelectBehind)],
+    &[on("Marquee (M)", "marquee", Tool::Marquee), on("Oval Marquee (M)", "oval-marquee", Tool::OvalMarquee)],
+    &[on("Lasso (L)", "lasso", Tool::Lasso), on("Polygon Lasso (L)", "polygon-lasso", Tool::PolygonLasso)],
+    &[
+        on("Blur (R)", "blur", Tool::Blur),
+        on("Sharpen (R)", "sharpen", Tool::Sharpen),
+        on("Dodge (R)", "dodge", Tool::Dodge),
+        on("Burn (R)", "burn", Tool::Burn),
+        on("Smudge (R)", "smudge", Tool::Smudge),
+    ],
+    &[
+        on("Rubber Stamp (S): Alt+click sets the source", "stamp", Tool::Stamp),
+        on("Replace Color (S)", "replace-color", Tool::ReplaceColor),
+        on("Red Eye Removal (S)", "red-eye", Tool::RedEye),
+    ],
+    &[on("Pen (P)", "pen", Tool::Pen), on("Vector Path (P)", "vector-path", Tool::VectorPath)],
+    &[on("Rectangle (U)", "rect", Tool::Rect), on("Ellipse (U)", "ellipse", Tool::Ellipse), on("Polygon (U)", "polygon", Tool::Polygon)],
+    &[on("Paint Bucket (G)", "bucket", Tool::Bucket), on("Gradient (G)", "gradient", Tool::Gradient)],
+];
+
+/// Which group a tool belongs to, if it shares its button.
+pub fn tool_group(tool: Tool) -> Option<usize> {
+    TOOL_GROUPS.iter().position(|group| group.iter().any(|slot| matches!(slot.action, SlotAction::Select(other) if other == tool)))
+}
 
 pub const COLOR_TOOLS: &[ToolSlot] = &[on("Eyedropper (I)", "eyedropper", Tool::Eyedropper), on("Paint Bucket (G)", "bucket", Tool::Bucket)];
 

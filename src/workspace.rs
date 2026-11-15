@@ -110,7 +110,8 @@ pub enum Combo {
     /// What the Numeric Transform dialog changes.
     NumericMode,
     /// The tools behind the Scale button.
-    TransformTools,
+    /// The tools behind a shared button, by the number of their group.
+    ToolGroup(usize),
 }
 
 /// How the document area shows the page.
@@ -460,6 +461,10 @@ pub struct Workspace {
     pub transform: Option<TransformSession>,
     /// Which of Scale, Skew and Distort the shared tool button shows.
     pub transform_tool: Tool,
+    /// The tool each shared button shows: the one of its group used last.
+    pub group_tools: Vec<Tool>,
+    /// The Polygon Lasso under way: the bitmap it selects on, its corners so far, and how it combines with the selection.
+    pub polygon_lasso: Option<(u64, Vec<Vec2>, MaskMode)>,
     /// Counts presses of that button, so a hold that ended is not mistaken for one still held.
     tool_hold: u64,
     pub cursor_doc: Vec2,
@@ -718,6 +723,8 @@ impl Workspace {
             panel_drag: None,
             transform: None,
             transform_tool: Tool::Scale,
+            group_tools: crate::menus::TOOL_GROUPS.iter().filter_map(|group| match group.first().map(|slot| slot.action) { Some(crate::menus::SlotAction::Select(tool)) => Some(tool), _ => None }).collect(),
+            polygon_lasso: None,
             tool_hold: 0,
             cursor_doc: Vec2::default(),
             cursor_screen: Point::default(),
@@ -828,7 +835,26 @@ impl Workspace {
 
     /// Stroke width of the active freehand tool, in document units.
     pub fn freehand_width(&self) -> f32 {
-        if self.tool == Tool::Pencil { 1.0 } else { self.brush_size }
+        match self.tool {
+            Tool::Pencil => 1.0,
+            // A path drawn freehand takes the stroke width, like any other vector.
+            Tool::VectorPath => self.stroke_width.max(1.0),
+            _ => self.brush_size,
+        }
+    }
+
+    /// The tool a key of a shared button goes to: the next of its group if one of
+    /// them is in hand, otherwise the one used last.
+    fn group_key(&self, first: Tool) -> Tool {
+        let Some(group) = crate::menus::tool_group(first) else { return first };
+        let tools: Vec<Tool> = crate::menus::TOOL_GROUPS[group].iter().filter_map(|slot| match slot.action {
+            crate::menus::SlotAction::Select(tool) => Some(tool),
+            _ => None,
+        }).collect();
+        match tools.iter().position(|tool| *tool == self.tool) {
+            Some(at) => tools[(at + 1) % tools.len()],
+            None => self.group_tools.get(group).copied().unwrap_or(first),
+        }
     }
 
     /// The pixel selection, if its bitmap still exists, is selected and has the same size.
@@ -1329,8 +1355,12 @@ impl Workspace {
         self.crop_area = None;
         self.tool = tool;
         self.point_selection.clear();
+        self.polygon_lasso = None;
         if is_transform_tool(tool) {
             self.transform_tool = tool;
+        }
+        if let Some(slot) = crate::menus::tool_group(tool).and_then(|group| self.group_tools.get_mut(group)) {
+            *slot = tool;
         }
         let hint = match tool {
             Tool::Scale => Some(t("Drag a handle to scale, or outside the box to rotate.")),
@@ -1352,7 +1382,7 @@ impl Workspace {
     }
 
     /// The shared tool button was pressed. If it is still down after a moment, its tools are listed.
-    pub fn begin_tool_hold(&mut self, position: Point<Pixels>, cx: &mut Context<Self>) {
+    pub fn begin_tool_hold(&mut self, position: Point<Pixels>, group: usize, cx: &mut Context<Self>) {
         self.tool_hold += 1;
         let token = self.tool_hold;
         cx.spawn(async move |this, cx| {
@@ -1361,7 +1391,7 @@ impl Workspace {
                 if this.tool_hold == token {
                     // Beside the button, so letting go over the button picks nothing.
                     let beside = point(position.x + px(TOOL_FLYOUT_OFFSET), position.y - px(10.));
-                    this.open_combo = Some((Combo::TransformTools, beside));
+                    this.open_combo = Some((Combo::ToolGroup(group), beside));
                     cx.notify();
                 }
             })
@@ -2929,13 +2959,32 @@ impl Workspace {
             }
         }
         match tool {
+            Tool::SelectBehind => self.select_behind(p),
+            Tool::PolygonLasso => self.polygon_lasso_down(ev, p),
+            Tool::RedEye => match self.pixel_target(p) {
+                Some(target) => self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: MaskMode::Replace }),
+                None => self.status = t("Red Eye Removal works on bitmaps.").into(),
+            },
+            Tool::Sharpen | Tool::Dodge | Tool::Burn | Tool::Smudge | Tool::ReplaceColor => match self.ed.doc.page().bitmap_at(p, &self.ed.selection) {
+                Some(id) => self.drag = Some(Drag::Freehand { points: vec![p], target: Some(id) }),
+                None => self.status = t("This tool works on bitmaps. Open or import an image first.").into(),
+            },
+            Tool::VectorPath => self.drag = Some(Drag::Freehand { points: vec![p], target: None }),
+            Tool::Polygon | Tool::Gradient => {
+                let start = self.guide_snapped(p);
+                // A gradient is dragged over the object under the mouse, if nothing is selected yet.
+                if tool == Tool::Gradient && self.ed.selection.is_empty() {
+                    self.ed.selection = self.ed.doc.page().hit_test(p, self.tolerance()).into_iter().collect();
+                }
+                self.drag = Some(Drag::Create { start, current: start });
+            }
             Tool::Pointer => self.pointer_down(ev, p),
             Tool::Scale | Tool::Skew | Tool::Distort => self.transform_down(ev, p),
             Tool::Subselect => self.subselect_down(p, ev.modifiers.alt, ev.modifiers.shift, window, cx),
             // A press inside the selection drags the marquee, and with Ctrl the pixels in it.
-            Tool::Marquee | Tool::Lasso
+            Tool::Marquee | Tool::OvalMarquee | Tool::Lasso
                 if !ev.modifiers.shift && !ev.modifiers.alt && self.pixel_drag_down(p, ev.modifiers.control, false) => {}
-            Tool::Marquee | Tool::Lasso => match self.pixel_target(p) {
+            Tool::Marquee | Tool::OvalMarquee | Tool::Lasso => match self.pixel_target(p) {
                 Some(target) => {
                     self.drag = Some(Drag::PixelArea { target, points: vec![p], mode: selection_mode(ev.modifiers) });
                 }
@@ -3238,12 +3287,61 @@ impl Workspace {
         let Some(object) = self.ed.object(target) else { return };
         let Some((w, h)) = object.bitmap().map(|b| (b.width(), b.height())) else { return };
         let pixels: Vec<Vec2> = points.iter().filter_map(|p| object.doc_to_pixel(*p)).collect();
+        if self.tool == Tool::RedEye {
+            let [a, b] = pixels.as_slice() else { return };
+            let (a, b) = (*a, *b);
+            let mut changed = 0;
+            if let Some(object) = self.ed.object_mut(target) {
+                object.edit_pixels(None, |bitmap| changed = bitmap.remove_red_eye(a, b));
+            }
+            if changed > 0 {
+                self.ed.commit(t("Red Eye Removal"));
+            } else {
+                self.status = t("No red eye was found in that area").into();
+            }
+            return;
+        }
         let mask = match (self.tool, pixels.as_slice()) {
             (Tool::Marquee, [a, b]) => Some(Mask::rect(w, h, *a, *b)),
+            (Tool::OvalMarquee, [a, b]) => Some(Mask::polygon(w, h, &oval_points(*a, *b))),
+            (Tool::PolygonLasso, [_, _, _, ..]) => Some(Mask::polygon(w, h, &pixels)),
             (Tool::Lasso, [_, _, _, ..]) => Some(Mask::polygon(w, h, &pixels)),
             _ => None,
         };
         self.set_pixel_selection(target, mask.filter(|m| !m.is_empty()), mode);
+    }
+
+    /// A click with the Polygon Lasso: the first starts it, each further one adds a
+    /// corner, and a double-click or a click back on the first corner closes it into a selection.
+    fn polygon_lasso_down(&mut self, ev: &MouseDownEvent, p: Vec2) {
+        let Some((target, mut points, mode)) = self.polygon_lasso.take() else {
+            match self.pixel_target(p) {
+                Some(target) => self.polygon_lasso = Some((target, vec![p], selection_mode(ev.modifiers))),
+                None => self.status = t("Selections work on bitmaps. Open or import an image first.").into(),
+            }
+            return;
+        };
+        let reach = 6.0 / self.zoom;
+        let at_start = points.first().is_some_and(|first| (first.x - p.x).abs() <= reach && (first.y - p.y).abs() <= reach);
+        if ev.click_count >= 2 || (at_start && points.len() >= 3) {
+            if !at_start && ev.click_count < 2 {
+                points.push(p);
+            }
+            self.finish_pixel_area(target, points, mode);
+            return;
+        }
+        points.push(p);
+        self.polygon_lasso = Some((target, points, mode));
+    }
+
+    /// Fireworks' Select Behind: each click picks the next object down under the mouse, and after the lowest the topmost again.
+    fn select_behind(&mut self, p: Vec2) {
+        let hits = self.ed.doc.page().hits_at(p, self.tolerance());
+        let current = hits.iter().position(|id| self.ed.is_selected(*id));
+        self.ed.selection = match current {
+            Some(at) => vec![hits[(at + 1) % hits.len()]],
+            None => hits.first().copied().into_iter().collect(),
+        };
     }
 
     fn wand_click(&mut self, ev: &MouseDownEvent, p: Vec2) {
@@ -3845,7 +3943,7 @@ impl Workspace {
             return;
         }
         let Some(drag) = self.drag.as_mut() else {
-            if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() {
+            if !self.pen.is_empty() || self.panel_showing(Panel::Info) || self.panel_drag.is_some() || self.polygon_lasso.is_some() {
                 cx.notify();
             }
             return;
@@ -3869,7 +3967,7 @@ impl Workspace {
             Drag::Marquee { current, .. } => *current = p,
             Drag::Crop { current, .. } => *current = on_guides,
             Drag::PixelArea { points, .. } => {
-                if self.tool == Tool::Marquee {
+                if matches!(self.tool, Tool::Marquee | Tool::OvalMarquee | Tool::RedEye) {
                     points.truncate(1);
                     points.push(p);
                 } else if points.last().is_none_or(|l| (l.x - p.x).abs() + (l.y - p.y).abs() >= 1.5 / self.zoom) {
@@ -4120,6 +4218,33 @@ impl Workspace {
         cx.notify();
     }
 
+    /// The Gradient tool: the selected vectors are filled with a gradient that
+    /// starts where the drag began and ends where it was let go.
+    fn drag_gradient_fill(&mut self, start: Vec2, end: Vec2) {
+        let fallback = self.fill.unwrap_or(Color::BLACK);
+        let mut any = false;
+        self.ed.for_selected(|o| {
+            if !o.takes_color() || matches!(o.shape, Shape::Text { .. } | Shape::Line) {
+                return;
+            }
+            let mut style = o.fill_style.as_deref().cloned().filter(|style| style.kind != FillKind::Pattern).unwrap_or_else(|| {
+                let from = o.fill.unwrap_or(fallback);
+                let light = from.r as u32 + from.g as u32 + from.b as u32 > 600;
+                FillStyle::new(FillKind::Linear, from, if light { Color::BLACK } else { Color::rgb(255, 255, 255) })
+            });
+            style.set_handle(false, start, o.bounds);
+            style.set_handle(true, end, o.bounds);
+            o.fill_style = Some(Arc::new(style));
+            o.fill = o.fill.or(Some(fallback));
+            any = true;
+        });
+        if any {
+            self.ed.commit(t("Fill"));
+        } else {
+            self.status = t("Select a vector object to fill with a gradient").into();
+        }
+    }
+
     fn finish_create(&mut self, start: Vec2, current: Vec2) {
         let bounds = Rect::from_corners(start, current);
         if bounds.w < 1.0 && bounds.h < 1.0 {
@@ -4133,7 +4258,18 @@ impl Workspace {
             }
             return;
         }
+        if self.tool == Tool::Gradient {
+            self.drag_gradient_fill(start, current);
+            return;
+        }
         let object = match self.tool {
+            // A polygon is drawn from its middle outward, as in Fireworks.
+            Tool::Polygon => {
+                let radius = (current.x - start.x).hypot(current.y - start.y);
+                let around = Rect { x: start.x - radius, y: start.y - radius, w: radius * 2.0, h: radius * 2.0 };
+                let d = AutoKind::Polygon.defaults();
+                self.new_object(t("Polygon"), Shape::Auto { kind: AutoKind::Polygon, a: d.a, b: d.b, count: d.count }, around, Vec::new())
+            }
             Tool::Hotspot => Object::new_web(self.ed.alloc_id(), WebKind::Hotspot, bounds),
             Tool::Slice => Object::new_web(self.ed.alloc_id(), WebKind::Slice, bounds),
             Tool::Rect =>self.new_object(t("Rectangle"), Shape::Rect { radius: 0.0 }, bounds, Vec::new()),
@@ -4170,13 +4306,24 @@ impl Workspace {
 
     fn finish_freehand(&mut self, points: Vec<Vec2>, target: Option<u64>) {
         let width = self.freehand_width();
-        let name = if self.tool == Tool::Pencil { t("Pencil") } else { t("Brush") };
+        let name = match self.tool {
+            Tool::Pencil => t("Pencil"),
+            Tool::VectorPath => t("Path"),
+            _ => t("Brush"),
+        };
         let color = self.stroke.unwrap_or(Color::BLACK);
         if let Some(id) = target {
             let offset = self.stamp.and_then(|s| s.offset).unwrap_or_default();
+            // Replace Color changes the color the stroke starts on into the brush color.
+            let under = points.first().and_then(|p| self.ed.object(id)?.pixel_at(*p)).and_then(|(x, y)| self.ed.object(id)?.bitmap()?.pixel(x, y)).unwrap_or([0; 4]);
             let (op, label) = match self.tool {
                 Tool::Eraser => (PixelStroke::Erase, t("Eraser")),
                 Tool::Blur => (PixelStroke::Blur, t("Blur")),
+                Tool::Sharpen => (PixelStroke::Sharpen, t("Sharpen")),
+                Tool::Dodge => (PixelStroke::Dodge, t("Dodge")),
+                Tool::Burn => (PixelStroke::Burn, t("Burn")),
+                Tool::Smudge => (PixelStroke::Smudge, t("Smudge")),
+                Tool::ReplaceColor => (PixelStroke::Replace(under, color), t("Replace Color")),
                 Tool::Stamp => (PixelStroke::Clone(offset), t("Rubber Stamp")),
                 _ => (PixelStroke::Paint(color), name),
             };
@@ -4364,12 +4511,12 @@ impl Workspace {
 
     fn plain_key(&mut self, key: &str, shift: bool, window: &mut Window, cx: &mut Context<Self>) {
         let tool = match key {
-            "v" | "0" => Some(Tool::Pointer),
+            "v" | "0" => Some(self.group_key(Tool::Pointer)),
             "a" => Some(Tool::Subselect),
             "b" => Some(Tool::Brush),
             // Y and R are shared, so pressing them again cycles between the two tools.
             "y" => Some(if self.tool == Tool::Pencil { Tool::Knife } else { Tool::Pencil }),
-            "r" => Some(if self.tool == Tool::Rect { Tool::Blur } else { Tool::Rect }),
+            "r" => Some(self.group_key(Tool::Blur)),
             "e" => Some(Tool::Eraser),
             "c" => Some(Tool::Crop),
             // Q walks through the three transform tools, as it does in Fireworks.
@@ -4378,18 +4525,18 @@ impl Workspace {
                 Tool::Skew => Tool::Distort,
                 _ => Tool::Scale,
             }),
-            "m" => Some(Tool::Marquee),
-            "l" => Some(Tool::Lasso),
+            "m" => Some(self.group_key(Tool::Marquee)),
+            "l" => Some(self.group_key(Tool::Lasso)),
             "w" => Some(Tool::Wand),
-            "s" => Some(Tool::Stamp),
+            "s" => Some(self.group_key(Tool::Stamp)),
             "o" => Some(Tool::Freeform),
             "j" => Some(Tool::Hotspot),
             "k" => Some(Tool::Slice),
             "i" => Some(Tool::Eyedropper),
-            "g" => Some(Tool::Bucket),
+            "g" => Some(self.group_key(Tool::Bucket)),
             "n" => Some(Tool::Line),
-            "p" => Some(Tool::Pen),
-            "u" => Some(Tool::Ellipse),
+            "p" => Some(self.group_key(Tool::Pen)),
+            "u" => Some(self.group_key(Tool::Rect)),
             "t" => Some(Tool::Text),
             "h" => Some(Tool::Hand),
             "z" => Some(Tool::Zoom),
@@ -4412,6 +4559,7 @@ impl Workspace {
             "enter" if self.transform.is_some() => self.apply_transform(),
             "enter" => self.finish_pen(false),
             "escape" => {
+                self.polygon_lasso = None;
                 self.pen.clear();
                 self.pen_handles.clear();
                 self.pen_resume = None;
@@ -4974,6 +5122,12 @@ pub fn app_quit_on_close(cx: &mut App) {
         }
     })
     .detach();
+}
+
+/// The outline of the oval inside the box between two corners, as the corners of a many-sided polygon.
+fn oval_points(a: Vec2, b: Vec2) -> Vec<Vec2> {
+    let (cx, cy, rx, ry) = ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0, (a.x - b.x).abs() / 2.0, (a.y - b.y).abs() / 2.0);
+    (0..96).map(|step| step as f32 / 96.0 * std::f32::consts::TAU).map(|turn| v2(cx + rx * turn.cos(), cy + ry * turn.sin())).collect()
 }
 
 /// Where a filter held at `held` in the list is once the mouse is at `at`: one place

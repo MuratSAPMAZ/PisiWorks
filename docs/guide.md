@@ -76,6 +76,18 @@ A masked object shows Mask in Properties: Path Outline or Grayscale Appearance f
 
 In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
 
+## Tool groups
+
+A button with a small triangle stands for several tools. Hold it down to list them, or press its key again to walk through them; the button shows the one used last.
+
+- Pointer (V): Select Behind picks the next object down under the mouse with each click.
+- Marquee (M): Oval Marquee selects an oval. Lasso (L): Polygon Lasso selects with straight sides; click each corner, and double-click or click the first corner to close it.
+- Blur (R): Sharpen, Dodge (lightens), Burn (darkens) and Smudge (drags paint along the stroke) work under the brush like Blur.
+- Rubber Stamp (S): Replace Color changes the color the stroke starts on into the brush color. Red Eye Removal takes the red out of eyes in the area you drag over.
+- Pen (P): Vector Path draws a path freehand.
+- Rectangle (U): Ellipse, and Polygon, which is drawn from its middle outward; its number of sides is in the Auto Shape Properties panel.
+- Paint Bucket (G): Gradient fills the selected object with a gradient from where you start dragging to where you let go.
+
 ## Gradient and pattern fills
 
 With a vector object selected, the list beside its fill in Properties chooses what it is filled with: Solid for one color, one of twelve gradients (Linear, Radial, Ellipse, Rectangle, Cone, Contour, Satin, Starburst, Folds, Bars, Ripples, Waves), or Pattern. A new gradient runs from the object's fill color to white.

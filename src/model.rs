@@ -616,6 +616,12 @@ pub enum PixelStroke {
     Blur,
     /// Copies pixels from this document-space offset.
     Clone(Vec2),
+    Sharpen,
+    Dodge,
+    Burn,
+    Smudge,
+    /// Replaces the first color, within a tolerance, with the second.
+    Replace([u8; 4], Color),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -1256,6 +1262,11 @@ impl Object {
             PixelStroke::Erase => bitmap.erase_stroke(&mapped, pixel_width),
             PixelStroke::Blur => bitmap.blur_stroke(&mapped, pixel_width),
             PixelStroke::Clone(offset) => bitmap.clone_stroke(&mapped, pixel_width, v2(offset.x * sx, offset.y * sy)),
+            PixelStroke::Sharpen => bitmap.sharpen_stroke(&mapped, pixel_width),
+            PixelStroke::Dodge => bitmap.tone_stroke(&mapped, pixel_width, true),
+            PixelStroke::Burn => bitmap.tone_stroke(&mapped, pixel_width, false),
+            PixelStroke::Smudge => bitmap.smudge_stroke(&mapped, pixel_width),
+            PixelStroke::Replace(from, to) => bitmap.replace_color_stroke(&mapped, pixel_width, from, to, crate::bitmap::FILL_TOLERANCE),
         });
     }
 
@@ -2008,6 +2019,11 @@ impl Page {
     }
 
     /// Finds the top-most editable object under `p`.
+    /// Every object under a point, topmost first.
+    pub fn hits_at(&self, p: Vec2, tolerance: f32) -> Vec<u64> {
+        self.layers.iter().rev().filter(|l| l.visible && !l.locked).flat_map(|l| l.objects.iter().rev()).filter(|o| o.hit(p, tolerance)).map(|o| o.id).collect()
+    }
+
     pub fn hit_test(&self, p: Vec2, tolerance: f32) -> Option<u64> {
         self.layers
             .iter()

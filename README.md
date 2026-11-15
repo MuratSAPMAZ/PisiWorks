@@ -35,7 +35,7 @@ Bilerek bir benzeridir: aynı yerleşik düzen, araç grupları, paneller ve aç
 
 | Alan | Neler var |
 |---|---|
-| **Araçlar** | İşaretçi, Alt Seçim, Ölçek, Eğriltme, Deformasyon, Kırpma, Seçim Çerçevesi, Kement, Sihirli Değnek, Fırça, Kurşun Kalem, Silgi, Bulanıklaştırma, Lastik Damgası, Damlalık, Boya Kovası, Çizgi, Kalem, Dikdörtgen, Elips, Metin, Serbest Biçim, Bıçak, Sıcak Nokta, Dilim, El, Yakınlaştırma |
+| **Araçlar** | İşaretçi, Arkasındakini Seç, Alt Seçim, Ölçek, Eğriltme, Deformasyon, Kırpma, Seçim Çerçevesi, Oval Seçim Çerçevesi, Kement, Çokgen Kement, Sihirli Değnek, Fırça, Kurşun Kalem, Silgi, Bulanıklaştırma, Keskinleştir, Soldurma, Yakma, Leke, Lastik Damgası, Renk Değiştir, Kırmızı Göz Kaldırma, Damlalık, Boya Kovası, Degrade, Çizgi, Kalem, Vektör Yol, Dikdörtgen, Elips, Çokgen, Metin, Serbest Biçim, Bıçak, Sıcak Nokta, Dilim, El, Yakınlaştırma |
 | **Paneller** | En İyileştir, Geçmiş, Hizala, Sayfalar, Durumlar, Katmanlar, Stiller, Renk Paleti, Renk Örnekleri, Yol, Otomatik Şekiller, Belge Kitaplığı, Ortak Kitaplık, Renk Karıştırıcısı, Bilgi, URL, Bul, Özel Karakterler, Görüntü Düzenleme, Özellikler, Sembol Özellikleri |
 | **Vektör** | Bezier eğrileri ve nokta düzenleme, Otomatik Şekiller, yolları birleştirme (Birleştir, Böl, Topla, Kesiştir, Zımbala, Kırp), Basitleştir, Konturu Genişlet, Yolu Daralt ve Yolu Genişlet |
 | **Dönüştürme** | Ölçek, Eğriltme, Deformasyon, taşınabilir merkez noktası, Sayısal Dönüştürme, döndürme ve çevirme |
@@ -144,8 +144,8 @@ Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 ## Bu sürümde olmayanlar
 
 - Menülerde gri görünen komutlar: Şablondan Yeni, Görüntü Önizleme, Toplu İşlem, Yeni Düğme, Yeni Sembol (boş sembol düzenleyicisi), Tercihler, Klavye Kısayolları, Animasyon, metinde Yaslanmış ve Uzatılmış hizalama, Yola Ekle, Yazım Denetimi ve Komutlar menüsü.
-- Dolguda kenar yumuşatma (Geçiş Yumuşatma), doku ve Web Renk Taklidi; metinde degrade dolgu; araç kutusunda ayrı bir Degrade aracı.
-- Çokgen, Oval Seçim Çerçevesi, Çokgen Kement, Leke, Soldur, Yak ve Renk Değiştir araçları.
+- Dolguda kenar yumuşatma (Geçiş Yumuşatma), doku ve Web Renk Taklidi; metinde degrade dolgu.
+- Şu araçlar: Yolu Yeniden Çiz, Alanı Yeniden Şekillendir, Yol Temizleyici, Dışa Aktarma Alanı, 9 dilimli ölçekleme, daire ve çokgen sıcak nokta, çokgen dilim.
 - Fireworks PNG dosyalarının içindeki katmanlar. Yalnızca düz görüntü okunur.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
 - İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.

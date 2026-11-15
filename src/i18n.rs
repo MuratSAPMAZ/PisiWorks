@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn every_menu_and_tool_has_a_turkish_entry() {
-        use crate::menus::{Entry, Panel, COLOR_TOOLS, MENUS, SCREEN_MODES, TOOL_SECTIONS, TRANSFORM_TOOLS, VIEW_TOOLS};
+        use crate::menus::{Entry, Panel, COLOR_TOOLS, MENUS, SCREEN_MODES, TOOL_GROUPS, TOOL_SECTIONS, VIEW_TOOLS};
 
         fn collect(entries: &'static [Entry], out: &mut Vec<&'static str>) {
             for entry in entries {
@@ -228,7 +228,7 @@ mod tests {
             labels.push(*title);
             labels.extend(slots.iter().map(|slot| slot.label));
         }
-        for slots in [COLOR_TOOLS, SCREEN_MODES, TRANSFORM_TOOLS, VIEW_TOOLS] {
+        for slots in [COLOR_TOOLS, SCREEN_MODES, VIEW_TOOLS].into_iter().chain(TOOL_GROUPS.iter().copied()) {
             labels.extend(slots.iter().map(|slot| slot.label));
         }
         labels.extend(Panel::ALL.iter().map(|panel| panel.title()));

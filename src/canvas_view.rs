@@ -198,13 +198,28 @@ impl Scene {
         let mut draft_color = None;
         let mut crop = w.crop_area;
         match &w.drag {
+            // The Polygon Lasso under way: its corners so far, and a line on to the mouse.
+            None if w.polygon_lasso.is_some() => {
+                if let Some((_, points, _)) = &w.polygon_lasso {
+                    draft = points.iter().copied().chain([w.cursor_doc]).collect();
+                    draft_color = Some(LASSO_PREVIEW);
+                }
+            }
             Some(Drag::Marquee { start, current }) => marquee = Some(Rect::from_corners(*start, *current)),
             Some(Drag::Crop { start, current }) => {
                 crop = w.ed.doc.page().rect().intersect(Rect::from_corners(*start, *current));
             }
             Some(Drag::PixelArea { points, .. }) => {
-                if w.tool == Tool::Marquee {
+                if matches!(w.tool, Tool::Marquee | Tool::RedEye) {
                     marquee = points.get(1).map(|end| Rect::from_corners(points[0], *end));
+                } else if w.tool == Tool::OvalMarquee {
+                    // The oval the drag spans, closed back on itself.
+                    if let Some(end) = points.get(1) {
+                        let (a, b) = (points[0], *end);
+                        let (cx, cy, rx, ry) = ((a.x + b.x) / 2.0, (a.y + b.y) / 2.0, (a.x - b.x).abs() / 2.0, (a.y - b.y).abs() / 2.0);
+                        draft = (0..=64).map(|step| step as f32 / 64.0 * std::f32::consts::TAU).map(|turn| Vec2 { x: cx + rx * turn.cos(), y: cy + ry * turn.sin() }).collect();
+                        draft_color = Some(LASSO_PREVIEW);
+                    }
                 } else {
                     draft = points.clone();
                     draft_color = Some(LASSO_PREVIEW);
@@ -228,7 +243,7 @@ impl Scene {
             Some(Drag::Freehand { points, .. }) => {
                 draft = points.clone();
                 draft_width = Some(w.freehand_width());
-                draft_color = matches!(w.tool, Tool::Eraser | Tool::Blur | Tool::Stamp).then_some(ERASER_PREVIEW);
+                draft_color = matches!(w.tool, Tool::Eraser | Tool::Blur | Tool::Stamp | Tool::Sharpen | Tool::Dodge | Tool::Burn | Tool::Smudge | Tool::ReplaceColor).then_some(ERASER_PREVIEW);
             }
             Some(Drag::PenHandle) => draft = flatten_curve(&w.pen, &w.pen_handles, false),
             _ => {

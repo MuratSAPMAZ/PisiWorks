@@ -9,7 +9,7 @@ use crate::i18n::{t, tf};
 use crate::autoshape::AutoKind;
 use crate::canvas_view::paint_thumbnail;
 use crate::library::common_items;
-use crate::menus::{Cmd, Panel, SlotAction, COLOR_TOOLS, DOCK_GROUPS, TOOL_SECTIONS, TRANSFORM_TOOLS, ZOOM_LEVELS};
+use crate::menus::{Cmd, Panel, SlotAction, COLOR_TOOLS, DOCK_GROUPS, TOOL_SECTIONS, ZOOM_LEVELS};
 use crate::model::SymbolKind;
 use crate::model::{Align, Color, Object, Rect, Shape, Stroke};
 use crate::bitmap::Filter;
@@ -494,7 +494,7 @@ impl Workspace {
                     }))
                 })
                 .collect(),
-            Combo::TransformTools => TRANSFORM_TOOLS
+            Combo::ToolGroup(group) => crate::menus::TOOL_GROUPS[group.min(crate::menus::TOOL_GROUPS.len() - 1)]
                 .iter()
                 .map(|slot| {
                     let SlotAction::Select(tool) = slot.action else { return div().into_any_element() };

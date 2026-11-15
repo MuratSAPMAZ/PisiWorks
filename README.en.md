@@ -35,7 +35,7 @@ It is deliberately a look-alike: the same docked layout, tool groups, panels and
 
 | Area | What you get |
 |---|---|
-| **Tools** | Pointer, Subselection, Scale, Skew, Distort, Crop, Marquee, Lasso, Magic Wand, Brush, Pencil, Eraser, Blur, Rubber Stamp, Eyedropper, Paint Bucket, Line, Pen, Rectangle, Ellipse, Text, Freeform, Knife, Hotspot, Slice, Hand, Zoom |
+| **Tools** | Pointer, Select Behind, Subselection, Scale, Skew, Distort, Crop, Marquee, Oval Marquee, Lasso, Polygon Lasso, Magic Wand, Brush, Pencil, Eraser, Blur, Sharpen, Dodge, Burn, Smudge, Rubber Stamp, Replace Color, Red Eye Removal, Eyedropper, Paint Bucket, Gradient, Line, Pen, Vector Path, Rectangle, Ellipse, Polygon, Text, Freeform, Knife, Hotspot, Slice, Hand, Zoom |
 | **Panels** | Optimize, History, Align, Pages, States, Layers, Styles, Color Palette, Swatches, Path, Auto Shapes, Document Library, Common Library, Color Mixer, Info, URL, Find, Special Characters, Image Editing, Properties, Symbol Properties |
 | **Vector** | Bezier curves and point editing, Auto Shapes, Union, Intersect, Punch, Crop, Join, Split, Simplify, Expand Stroke, Inset and Outset |
 | **Transforming** | Scale, Skew, Distort, a movable center point, Numeric Transform, rotating and flipping |
@@ -144,8 +144,8 @@ The figures are from November 2026 and will drift as work goes on.
 ## Not in this version
 
 - The commands that appear greyed out in the menus: New from Template, Image Preview, Batch Process, New Button, New Symbol (an editor for an empty symbol), Preferences, Keyboard Shortcuts, Animation, Justified and Stretched text alignment, Attach to Path, Check Spelling and the Commands menu.
-- Feathered fill edges, textures and Web Dither; gradient fills for text; a separate Gradient tool in the toolbox.
-- The Polygon, Oval Marquee, Polygon Lasso, Smudge, Dodge, Burn and Replace Color tools.
+- Feathered fill edges, textures and Web Dither; gradient fills for text.
+- These tools: Redraw Path, Reshape Area, Path Scrubber, Export Area, 9-slice scaling, circle and polygon hotspots, polygon slices.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
 - A ready-made package to download. For now the `.deb` is built from source.

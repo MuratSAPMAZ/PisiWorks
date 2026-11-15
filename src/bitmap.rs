@@ -530,6 +530,120 @@ impl Bitmap {
         });
     }
 
+    /// Sharpens under a round stroke, by pushing each pixel away from a blurred copy of itself.
+    pub fn sharpen_stroke(&mut self, points: &[Vec2], width: f32) {
+        let Some((left, top, layer)) = self.coverage(points, width) else { return };
+        let pad = (BLUR_SIGMA * 3.0).ceil() as u32;
+        let (x0, y0) = (left.saturating_sub(pad), top.saturating_sub(pad));
+        let x1 = (left + layer.width() + pad).min(self.width);
+        let y1 = (top + layer.height() + pad).min(self.height);
+        let source = self.to_image();
+        let region = image::imageops::crop_imm(&source, x0, y0, x1 - x0, y1 - y0).to_image();
+        let blurred = image::imageops::blur(&region, BLUR_SIGMA);
+        self.apply_layer(left, top, &layer, |x, y, dst, coverage| {
+            let soft = blurred.get_pixel(x - x0, y - y0).0;
+            for channel in 0..3 {
+                let sharp = dst[channel] as f32 + (dst[channel] as f32 - soft[channel] as f32) * coverage;
+                dst[channel] = sharp.round().clamp(0.0, 255.0) as u8;
+            }
+        });
+    }
+
+    /// Lightens (Dodge) or darkens (Burn) under a round stroke, by a quarter of the way to white or black.
+    pub fn tone_stroke(&mut self, points: &[Vec2], width: f32, lighten: bool) {
+        let Some((left, top, layer)) = self.coverage(points, width) else { return };
+        self.apply_layer(left, top, &layer, |_, _, dst, coverage| {
+            let amount = 0.25 * coverage;
+            for value in dst.iter_mut().take(3) {
+                let to = if lighten { 255.0 } else { 0.0 };
+                *value = (*value as f32 + (to - *value as f32) * amount).round() as u8;
+            }
+        });
+    }
+
+    /// Smudges along a stroke: the paint under the brush where it starts is carried
+    /// along and rubbed into what the brush passes over, picking that up in turn.
+    pub fn smudge_stroke(&mut self, points: &[Vec2], width: f32) {
+        let radius = (width / 2.0).max(1.0);
+        let reach = radius.ceil() as i64;
+        // The stroke in steps of a quarter of the brush, so the smear has no gaps.
+        let mut steps: Vec<Vec2> = Vec::new();
+        for pair in points.windows(2) {
+            let (dx, dy) = (pair[1].x - pair[0].x, pair[1].y - pair[0].y);
+            let count = ((dx.hypot(dy) / (radius / 2.0).max(0.5)).ceil() as usize).max(1);
+            steps.extend((0..count).map(|i| Vec2 { x: pair[0].x + dx * i as f32 / count as f32, y: pair[0].y + dy * i as f32 / count as f32 }));
+        }
+        steps.extend(points.last().copied());
+        let Some(first) = steps.first().copied() else { return };
+        let side = (reach * 2 + 1) as usize;
+        let cell = |ox: i64, oy: i64| ((oy + reach) as usize) * side + (ox + reach) as usize;
+        let inside = |x: i64, y: i64, w: u32, h: u32| x >= 0 && y >= 0 && x < w as i64 && y < h as i64;
+        // What the brush carries: the pixels under it, by their place in the brush.
+        let mut carried: Vec<Option<[u8; 4]>> = vec![None; side * side];
+        let (w, h) = (self.width, self.height);
+        for oy in -reach..=reach {
+            for ox in -reach..=reach {
+                let (x, y) = (first.x.floor() as i64 + ox, first.y.floor() as i64 + oy);
+                if inside(x, y, w, h) {
+                    let i = self.index(x as u32, y as u32);
+                    carried[cell(ox, oy)] = Some([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]);
+                }
+            }
+        }
+        for step in steps.iter().skip(1) {
+            for oy in -reach..=reach {
+                for ox in -reach..=reach {
+                    let far = ((ox * ox + oy * oy) as f32).sqrt();
+                    let (x, y) = (step.x.floor() as i64 + ox, step.y.floor() as i64 + oy);
+                    if far > radius || !inside(x, y, w, h) {
+                        continue;
+                    }
+                    let i = self.index(x as u32, y as u32);
+                    let Some(paint) = carried[cell(ox, oy)] else {
+                        carried[cell(ox, oy)] = Some([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]);
+                        continue;
+                    };
+                    // Strongest in the middle of the brush, fading to nothing at its rim.
+                    let strength = 0.5 * (1.0 - far / radius).clamp(0.0, 1.0).sqrt();
+                    mix(&mut self.rgba[i..i + 4], &paint, strength);
+                    carried[cell(ox, oy)] = Some([self.rgba[i], self.rgba[i + 1], self.rgba[i + 2], self.rgba[i + 3]]);
+                }
+            }
+        }
+    }
+
+    /// Replaces one color with another under a round stroke: pixels within
+    /// `tolerance` of `from` take the color `to`, and keep how opaque they were.
+    pub fn replace_color_stroke(&mut self, points: &[Vec2], width: f32, from: [u8; 4], to: Color, tolerance: u8) {
+        let Some((left, top, layer)) = self.coverage(points, width) else { return };
+        self.apply_layer(left, top, &layer, |_, _, dst, coverage| {
+            if dst[3] > 0 && (0..3).all(|c| dst[c].abs_diff(from[c]) <= tolerance) {
+                let alpha = dst[3];
+                mix(dst, &[to.r, to.g, to.b, alpha], coverage);
+                dst[3] = alpha;
+            }
+        });
+    }
+
+    /// Takes the red out of eyes between two corners: where red far outweighs
+    /// green and blue, it is brought down to their level. Returns how many pixels changed.
+    pub fn remove_red_eye(&mut self, a: Vec2, b: Vec2) -> usize {
+        let (x0, x1) = (a.x.min(b.x).floor().max(0.0) as u32, (a.x.max(b.x).ceil().max(0.0) as u32).min(self.width));
+        let (y0, y1) = (a.y.min(b.y).floor().max(0.0) as u32, (a.y.max(b.y).ceil().max(0.0) as u32).min(self.height));
+        let mut changed = 0;
+        for y in y0..y1 {
+            for x in x0..x1 {
+                let i = self.index(x, y);
+                let (r, g, bl) = (self.rgba[i] as f32, self.rgba[i + 1] as f32, self.rgba[i + 2] as f32);
+                if self.rgba[i + 3] > 0 && r > 80.0 && r > g * 1.5 && r > bl * 1.5 {
+                    self.rgba[i] = ((g + bl) / 2.0).round() as u8;
+                    changed += 1;
+                }
+            }
+        }
+        changed
+    }
+
     /// Copies pixels found at `offset` from each pixel under a round stroke.
     pub fn clone_stroke(&mut self, points: &[Vec2], width: f32, offset: Vec2) {
         let source = self.clone();
@@ -927,6 +1041,41 @@ mod tests {
         let mut plain = soft.clone();
         plain.combine(&square, MaskMode::Add);
         assert!(!plain.is_feathered());
+    }
+
+    #[test]
+    fn the_retouching_brushes_change_only_what_is_under_them() {
+        // Black on the left half, white on the right.
+        let halves = || Bitmap::from_rgba(40, 20, (0..800).flat_map(|i| if i % 40 < 20 { [0, 0, 0, 255] } else { [255, 255, 255, 255] }).collect()).unwrap();
+        let stroke = [Vec2 { x: 5.0, y: 10.0 }, Vec2 { x: 35.0, y: 10.0 }];
+        let red = |b: &Bitmap, x: u32, y: u32| b.pixel(x, y).unwrap()[0];
+        // Dodge lightens the black, Burn darkens the white, and neither reaches the top row.
+        let mut dodged = halves();
+        dodged.tone_stroke(&stroke, 6.0, true);
+        assert!(red(&dodged, 8, 10) > 40 && red(&dodged, 8, 1) == 0 && red(&dodged, 30, 10) == 255);
+        let mut burned = halves();
+        burned.tone_stroke(&stroke, 6.0, false);
+        assert!(red(&burned, 30, 10) < 215 && red(&burned, 30, 1) == 255 && red(&burned, 8, 10) == 0);
+        // Smudge drags black across the border into the white, and leaves the far end alone.
+        let mut smudged = halves();
+        smudged.smudge_stroke(&[Vec2 { x: 14.0, y: 10.0 }, Vec2 { x: 26.0, y: 10.0 }], 8.0);
+        assert!(red(&smudged, 21, 10) < 200 && red(&smudged, 38, 10) == 255 && red(&smudged, 21, 1) == 255, "{}", red(&smudged, 21, 10));
+        assert_eq!(red(&smudged, 5, 10), 0);
+        // Sharpen makes the two sides of a soft edge differ more.
+        let soft: Vec<u8> = (0..800).flat_map(|i| { let v = ((i % 40) * 255 / 39) as u8; [v, v, v, 255] }).collect();
+        let mut sharpened = Bitmap::from_rgba(40, 20, soft.clone()).unwrap();
+        let before = Bitmap::from_rgba(40, 20, soft).unwrap();
+        sharpened.sharpen_stroke(&stroke, 6.0);
+        assert_eq!(red(&sharpened, 20, 1), red(&before, 20, 1));
+        assert!(sharpened != before);
+        // Replace Color changes only the color asked for.
+        let mut replaced = halves();
+        replaced.replace_color_stroke(&stroke, 6.0, [255, 255, 255, 255], Color::rgb(0, 200, 0), 10);
+        assert_eq!((replaced.pixel(30, 10).unwrap(), replaced.pixel(8, 10).unwrap(), replaced.pixel(30, 1).unwrap()), ([0, 200, 0, 255], [0, 0, 0, 255], [255, 255, 255, 255]));
+        // Red eye: strong red inside the box loses its red, other colors and the outside stay.
+        let mut eyes = Bitmap::from_rgba(4, 1, vec![220, 30, 40, 255, 200, 180, 170, 255, 220, 30, 40, 255, 0, 0, 0, 0]).unwrap();
+        assert_eq!(eyes.remove_red_eye(Vec2 { x: 0.0, y: 0.0 }, Vec2 { x: 2.0, y: 1.0 }), 1);
+        assert_eq!((eyes.pixel(0, 0).unwrap(), eyes.pixel(1, 0).unwrap(), eyes.pixel(2, 0).unwrap()), ([35, 30, 40, 255], [200, 180, 170, 255], [220, 30, 40, 255]));
     }
 
     #[test]
