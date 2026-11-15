@@ -84,7 +84,6 @@ cargo test
 Emberframe is at version 0.1, so some things are still missing:
 
 - Photoshop's own pattern and gradient libraries in Photoshop Live Effects.
-- Printing, which appears greyed out.
 - Layers inside Fireworks PNG files. Only the flat image is read.
 - macOS and Linux builds.
 

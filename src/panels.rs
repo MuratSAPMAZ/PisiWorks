@@ -387,6 +387,29 @@ impl Workspace {
                     std::iter::once(heading).chain(entries).collect::<Vec<_>>()
                 })
                 .collect(),
+            Combo::Paper => crate::print::PaperSize::ALL
+                .into_iter()
+                .map(|paper| item(paper.name().into(), self.print_setup.paper == paper, cx, Box::new(move |this, _, _| this.print_setup.paper = paper)))
+                .collect(),
+            Combo::Orientation => [(t("Portrait"), false), (t("Landscape"), true)]
+                .into_iter()
+                .map(|(name, landscape)| item(name.into(), self.print_setup.landscape == landscape, cx, Box::new(move |this, _, _| this.print_setup.landscape = landscape)))
+                .collect(),
+            Combo::Printer => {
+                let (printers, chosen) = self.print_dialog.as_ref().map_or((Vec::new(), 0), |dialog| (dialog.printers.clone(), dialog.chosen));
+                printers
+                    .into_iter()
+                    .chain([t("Save as PDF...").to_string()])
+                    .enumerate()
+                    .map(|(index, name)| {
+                        item(name.into(), index == chosen, cx, Box::new(move |this, _, _| {
+                            if let Some(dialog) = this.print_dialog.as_mut() {
+                                dialog.chosen = index;
+                            }
+                        }))
+                    })
+                    .collect()
+            }
             Combo::TextFont => {
                 let shown = self.shown_text_style().font;
                 crate::fonts::families()
@@ -1316,6 +1339,90 @@ impl Workspace {
             .with_priority(1)
             .into_any_element(),
         )
+    }
+
+    /// A dialog in the middle of the window, over everything else.
+    fn dialog_frame(&self, width: f32, title: &'static str, rows: Vec<AnyElement>, buttons: Div) -> AnyElement {
+        deferred(
+            div().absolute().top_0().left_0().size_full().flex().items_center().justify_center().occlude().child(
+                div()
+                    .w(px(width))
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .bg(rgb(PANEL))
+                    .border_1()
+                    .border_color(rgb(BORDER))
+                    .shadow_lg()
+                    .child(div().font_weight(FontWeight::BOLD).child(title))
+                    .children(rows)
+                    .child(buttons),
+            ),
+        )
+        .with_priority(1)
+        .into_any_element()
+    }
+
+    /// File > Page Setup: the paper, which way it is turned, the margins, and whether the page is scaled to fit.
+    pub(crate) fn page_setup_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        self.page_setup_dialog?;
+        let setup = self.print_setup;
+        let names = [t("Paper:"), t("Orientation:"), t("Left:"), t("Right:"), t("Top:"), t("Bottom:")];
+        let name_width = label_width(&names, 60.);
+        let margin = |this: &Self, side: usize, cx: &mut Context<Self>| labelled_row(names[2 + side], name_width, div().flex().items_center().gap_1().child(this.field(FieldId::PrintMargin(side), 50., cx)).child(label("mm")));
+        let rows = vec![
+            labelled_row(names[0], name_width, self.combo(Combo::Paper, setup.paper.name(), 110., cx).bg(rgb(PANEL_RAISED))).into_any_element(),
+            labelled_row(names[1], name_width, self.combo(Combo::Orientation, if setup.landscape { t("Landscape") } else { t("Portrait") }, 110., cx).bg(rgb(PANEL_RAISED))).into_any_element(),
+            div().pt_1().font_weight(FontWeight::BOLD).child(t("Margins")).into_any_element(),
+            margin(self, 0, cx).into_any_element(),
+            margin(self, 1, cx).into_any_element(),
+            margin(self, 2, cx).into_any_element(),
+            margin(self, 3, cx).into_any_element(),
+            self.check_box(t("Fit to page"), setup.fit, cx, |this| this.print_setup.fit = !this.print_setup.fit).into_any_element(),
+        ];
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_page_setup(true)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_page_setup(false)));
+        Some(self.dialog_frame(260., t("Page Setup"), rows, buttons))
+    }
+
+    /// File > Print: the printer, or a PDF file, and the number of copies.
+    pub(crate) fn print_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let dialog = self.print_dialog.as_ref()?;
+        let names = [t("Printer:"), t("Copies:")];
+        let name_width = label_width(&names, 60.);
+        let chosen: SharedString = dialog.printers.get(dialog.chosen).cloned().unwrap_or_else(|| t("Save as PDF...").to_string()).into();
+        let to_printer = dialog.chosen < dialog.printers.len();
+        let page = self.ed.doc.page();
+        let mut rows = vec![labelled_row(names[0], name_width, self.combo(Combo::Printer, chosen, 190., cx).bg(rgb(PANEL_RAISED))).into_any_element()];
+        if to_printer {
+            rows.push(labelled_row(names[1], name_width, self.field(FieldId::PrintCopies, 50., cx)).into_any_element());
+        }
+        if dialog.printers.is_empty() {
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(t("No printer is set up on this computer.")).into_any_element());
+        }
+        if self.print_setup.overflows(page.width, page.height) {
+            rows.push(div().text_color(rgb(TEXT_DIM)).child(t("The page is larger than the paper. Turn on Fit to page in Page Setup to print all of it.")).into_any_element());
+        }
+        let buttons = div()
+            .flex()
+            .justify_end()
+            .gap_1()
+            .child(self.text_button(t("Page Setup..."), true, cx, |this, _, _| {
+                this.commit_field();
+                this.page_setup_dialog = Some(this.print_setup);
+            }))
+            .child(div().flex_1())
+            .child(self.text_button(if to_printer { t("Print") } else { t("Save") }, true, cx, |this, window, cx| this.apply_print_dialog(window, cx)))
+            .child(self.text_button(t("Cancel"), true, cx, |this, _, _| {
+                this.field = None;
+                this.print_dialog = None;
+            }));
+        Some(self.dialog_frame(330., t("Print"), rows, buttons))
     }
 
     /// The dialog of Expand, Contract, Border and Smooth Marquee: one number of pixels.

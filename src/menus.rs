@@ -217,6 +217,8 @@ pub enum Cmd {
     TextAlign(crate::model::TextAlign),
     Superselect,
     Subselect,
+    PageSetup,
+    Print,
 }
 
 /// The commands of the Text > Style menu.
@@ -445,8 +447,8 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             na("Batch Process..."),
             Sep,
-            na("Page Setup..."),
-            na("Print..."),
+            cmd("Page Setup...", "", Cmd::PageSetup),
+            cmd("Print...", "Ctrl+P", Cmd::Print),
             Sep,
             cmd("Exit", "Alt+F4", Cmd::Exit),
         ],

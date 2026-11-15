@@ -78,6 +78,10 @@ Maskeli nesnenin Özellikler panelinde Maske alanı görünür: vektör maskesi 
 
 Katmanlar panelinde nesne ile maskesi arasındaki zincir, ikisinin bağlı olduğunu ve birlikte taşındığını gösterir. Maskeyi serbest bırakıp nesneyi altında taşımak için zincire tıklayın, yeniden bağlamak için bir daha tıklayın. Maske Olarak Yapıştır, vektörün bitmap maskesine mi dönüşeceğini yoksa vektör mü kalacağını ve var olan maskenin değiştirilip değiştirilmeyeceğini ya da ona eklenip eklenmeyeceğini sorar.
 
+## Yazdırma
+
+Dosya > Sayfa Yapısı kâğıdı, yönünü, kenar boşluklarını ve sayfanın kâğıda sığacak şekilde ölçeklenip ölçeklenmeyeceğini belirler. Dosya > Yazdır (Ctrl+P) sayfayı bilgisayarda kurulu bir yazıcıya gönderir veya PDF dosyası olarak kaydeder. Sayfa, dışa aktarıldığı gibi, dilimler ve sıcak noktalar olmadan, inç başına 72 pikselle yazdırılır; kâğıttan büyük sayfa, Sayfaya sığdır açık değilse kenar boşluklarında kesilir. Yazdırma için sistemin yazdırma hizmeti (CUPS) gerekir.
+
 ## Gruplar
 
 Değiştir > Grupla (Ctrl+G) seçili nesnelerin tek nesne gibi taşınıp ölçeklenmesini sağlar. Grubu çözmeden bir üyeyi değiştirmek için Alt Seçim aracıyla üzerine tıklayın veya seçili grubun bütün üyelerini seçmek için Seç > Alt Seç'i kullanın. Üye artık tek başına taşınabilir, renklendirilebilir, yeniden biçimlendirilebilir veya silinebilir. Üyelerinden hiçbiri seçili kalmadığında grup yeniden bütün olur; Seç > Üst Seç ise bir üyeden bütün gruba geçer.

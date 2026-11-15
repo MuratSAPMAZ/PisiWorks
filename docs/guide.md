@@ -76,6 +76,10 @@ A masked object shows Mask in Properties: Path Outline or Grayscale Appearance f
 
 In the Layers panel a chain between an object and its mask shows that the two are linked and move together. Click it to let the mask go, so the object can be moved under it, and again to link them. Paste as Mask asks whether a vector is to become a bitmap mask or stay a vector, and whether to replace a mask that is already there or add to it.
 
+## Printing
+
+File > Page Setup sets the paper, which way it is turned, the margins, and whether the page is scaled to fit the paper. File > Print (Ctrl+P) sends the page to a printer set up on the computer, or saves it as a PDF file. The page prints as it exports, without slices and hotspots, at 72 pixels to the inch; a page larger than the paper is cut off at the margins unless Fit to page is on. Printing needs the system's print service (CUPS).
+
 ## Groups
 
 Modify > Group (Ctrl+G) makes the selected objects move and scale as one. To change one member without ungrouping, click it with the Subselection tool, or choose Select > Subselect to select all the members of the selected group. A member can then be moved, recolored, reshaped or deleted on its own. The group is whole again as soon as none of its members is selected, and Select > Superselect selects the whole group from a member.

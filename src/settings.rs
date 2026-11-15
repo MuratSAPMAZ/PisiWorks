@@ -13,6 +13,9 @@ pub struct Settings {
     /// interface follows the desktop's language.
     #[serde(default)]
     language: Option<String>,
+    /// What File > Page Setup was last set to.
+    #[serde(default)]
+    pub print: crate::print::PrintSetup,
 }
 
 impl Settings {

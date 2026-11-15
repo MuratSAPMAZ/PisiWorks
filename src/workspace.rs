@@ -93,6 +93,9 @@ pub enum Combo {
     FilterChoice(usize),
     /// The fonts installed on this system, for text.
     TextFont,
+    Paper,
+    Orientation,
+    Printer,
     /// The gradients to start from, in Photoshop Live Effects.
     GradientPreset,
     /// How the mask of the selection works.
@@ -160,6 +163,15 @@ impl NumericMode {
 }
 
 /// The Numeric Transform dialog while it is open.
+/// The Print dialog: where the page is to go, and how many times.
+#[derive(Clone, Debug)]
+pub struct PrintDialog {
+    pub printers: Vec<String>,
+    /// The printer picked; one past the last of them is a PDF file.
+    pub chosen: usize,
+    pub copies: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct NumericDialog {
     pub mode: NumericMode,
@@ -229,6 +241,9 @@ pub enum FieldId {
     FilterValue(usize),
     /// The number of pixels in the dialog of a marquee command.
     MarqueeAmount,
+    /// A margin in Page Setup: left, right, top, bottom.
+    PrintMargin(usize),
+    PrintCopies,
     /// Where the picked gradient stop is, in percent, and how opaque it is.
     GradientPlace,
     GradientOpacity,
@@ -481,6 +496,11 @@ pub struct Workspace {
     pub curve_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The effect whose settings show in the Photoshop Live Effects dialog.
     pub ps_effect: usize,
+    /// What File > Page Setup is set to.
+    pub print_setup: crate::print::PrintSetup,
+    /// Page Setup while it is open, holding what to go back to on Cancel.
+    pub page_setup_dialog: Option<crate::print::PrintSetup>,
+    pub print_dialog: Option<PrintDialog>,
     /// The bitmap filter last used from the Filters menu, for Repeat Filter.
     pub last_filter: Option<crate::bitmap::Filter>,
     /// The dialog of a marquee command that is open, and the number of pixels in it.
@@ -727,6 +747,9 @@ impl Workspace {
             curve_point: None,
             curve_bounds: Rc::new(Cell::new(Bounds::default())),
             ps_effect: 0,
+            print_setup: Settings::load().print,
+            page_setup_dialog: None,
+            print_dialog: None,
             last_filter: None,
             marquee_dialog: None,
             gradient_stop: None,
@@ -2199,6 +2222,13 @@ impl Workspace {
                     self.ed.commit(t("Group"));
                 }
             }
+            Cmd::PageSetup => self.page_setup_dialog = Some(self.print_setup),
+            Cmd::Print => {
+                let (printers, default) = crate::print::printers();
+                // The default printer if there is one, else the first; with none set up, a PDF file.
+                let chosen = default.and_then(|name| printers.iter().position(|p| *p == name)).unwrap_or(0);
+                self.print_dialog = Some(PrintDialog { printers, chosen, copies: 1 });
+            }
             Cmd::Subselect => {
                 if self.ed.subselect() {
                     self.ed.commit(t("Subselect"));
@@ -2360,6 +2390,71 @@ impl Workspace {
         if any {
             self.ed.commit(t("Text Size"));
         }
+    }
+
+    /// Closes Page Setup. Kept, the setup is remembered for the next run; otherwise it goes back to what it was.
+    pub fn close_page_setup(&mut self, keep: bool) {
+        self.commit_field();
+        let Some(before) = self.page_setup_dialog.take() else { return };
+        if !keep {
+            self.print_setup = before;
+            return;
+        }
+        let mut settings = Settings::load();
+        settings.print = self.print_setup;
+        if let Err(error) = settings.save() {
+            self.status = error.to_string();
+        }
+    }
+
+    /// The page as it prints: laid out on the paper as a PDF. A see-through canvas prints as white paper.
+    fn printed_page(&mut self) -> anyhow::Result<Vec<u8>> {
+        self.ed.end_mask_edit();
+        self.ed.close_groups();
+        let pixmap = crate::export::render_page(&self.ed.export_page())?;
+        let rgb: Vec<u8> = pixmap.pixels().iter().flat_map(|px| [px.red(), px.green(), px.blue()].map(|c| c.saturating_add(255 - px.alpha()))).collect();
+        crate::print::pdf(&rgb, pixmap.width(), pixmap.height(), &self.print_setup)
+    }
+
+    /// OK in the Print dialog: the page goes to the printer picked, or into a PDF file.
+    pub fn apply_print_dialog(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.commit_field();
+        let Some(dialog) = self.print_dialog.take() else { return };
+        let pdf = match self.printed_page() {
+            Ok(pdf) => pdf,
+            Err(error) => {
+                self.status = error.to_string();
+                return;
+            }
+        };
+        let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").into(), |p| file_stem(p));
+        let page = self.ed.doc.page();
+        let too_big = self.print_setup.overflows(page.width, page.height);
+        if let Some(printer) = dialog.printers.get(dialog.chosen) {
+            self.status = match crate::print::send(&pdf, printer, dialog.copies, &self.print_setup, &stem) {
+                Ok(_) if too_big => tf("Sent to {}. The page is larger than the paper, so its edges are cut off.", &[printer]),
+                Ok(_) => tf("Sent to {}", &[printer]),
+                Err(error) => tf("Could not print: {}", &[&error]),
+            };
+            return;
+        }
+        let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.pdf")));
+        cx.spawn_in(window, async move |this, cx| {
+            if let Ok(Ok(Some(mut path))) = picked.await {
+                if path.extension().is_none() {
+                    path.set_extension("pdf");
+                }
+                this.update(cx, |this, cx| {
+                    this.status = match std::fs::write(&path, &pdf) {
+                        Ok(()) => tf("Saved {}", &[&path.file_name().unwrap_or_default().to_string_lossy()]),
+                        Err(error) => tf("could not write {}", &[&format!("{}: {error}", path.display())]),
+                    };
+                    cx.notify();
+                })
+                .ok();
+            }
+        })
+        .detach();
     }
 
     /// Fireworks' Revert: asks, then opens the file again as it was last saved.
@@ -4028,6 +4123,18 @@ impl Workspace {
                 "escape" => self.close_jpeg_dialog(false),
                 _ => {}
             }
+        } else if self.page_setup_dialog.is_some() {
+            match key {
+                "enter" => self.close_page_setup(true),
+                "escape" => self.close_page_setup(false),
+                _ => {}
+            }
+        } else if self.print_dialog.is_some() {
+            match key {
+                "enter" => self.apply_print_dialog(window, cx),
+                "escape" => self.print_dialog = None,
+                _ => {}
+            }
         } else if self.marquee_dialog.is_some() {
             match key {
                 "enter" => self.apply_marquee_dialog(),
@@ -4077,6 +4184,7 @@ impl Workspace {
             ("v", false, false) => Cmd::Paste,
             ("d", false, true) => Cmd::Duplicate,
             ("d", true, false) => Cmd::Clone,
+            ("p", false, false) => Cmd::Print,
             (";", false, false) => Cmd::Guides(GuideCmd::Show),
             (";", false, true) => Cmd::Guides(GuideCmd::Lock),
             (";" | ":", true, false) => Cmd::Guides(GuideCmd::Snap),
@@ -4265,6 +4373,8 @@ impl Workspace {
             FieldId::OptimizeSelective => page.export.selective_quality.to_string(),
             FieldId::FilterValue(setting) => self.edited_filter().map_or_else(String::new, |(_, filter)| number(filter.value(setting))),
             FieldId::MarqueeAmount => self.marquee_dialog.map_or_else(String::new, |(_, amount)| number(amount)),
+            FieldId::PrintMargin(side) => number(self.print_setup.margins[side.min(3)]),
+            FieldId::PrintCopies => self.print_dialog.as_ref().map_or_else(String::new, |dialog| dialog.copies.to_string()),
             FieldId::GradientPlace => self.picked_stop().map_or_else(String::new, |stop| number((stop.0 * 100.0).round())),
             FieldId::GradientOpacity => self.picked_stop().map_or_else(String::new, |stop| number((stop.1.a as f32 / 2.55).round())),
             FieldId::OptimizeSmoothing => page.export.smoothing.to_string(),
@@ -4487,6 +4597,14 @@ impl Workspace {
             FieldId::FilterValue(setting) => {
                 let Some(v) = number else { return };
                 self.set_filter_value(setting, v);
+            }
+            FieldId::PrintMargin(side) => {
+                let Some(v) = number.filter(|v| *v >= 0.0) else { return };
+                self.print_setup.margins[side.min(3)] = v.min(100.0);
+            }
+            FieldId::PrintCopies => {
+                let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.print_dialog.as_mut()) else { return };
+                dialog.copies = v.round().min(999.0) as u32;
             }
             FieldId::MarqueeAmount => {
                 let (Some(v), Some(dialog)) = (number.filter(|v| *v >= 1.0), self.marquee_dialog.as_mut()) else { return };

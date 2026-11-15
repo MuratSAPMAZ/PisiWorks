@@ -16,6 +16,7 @@ mod menus;
 mod model;
 mod optimize;
 mod panels;
+mod print;
 mod pseffects;
 mod paths;
 mod settings;
