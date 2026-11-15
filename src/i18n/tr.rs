@@ -1528,4 +1528,5 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Contents", "İçindekiler"),
     ("How These Are Made: the Lessons", "Bunlar Nasıl Yapıldı: Dersler"),
     ("The guide is open in the browser", "Kılavuz tarayıcıda açıldı"),
+    ("Inside the group: pick a part to change it. A click beside the group closes it", "Grubun içindesiniz: değiştirmek için bir parça seçin. Grubun yanına tıklamak onu kapatır"),
 ];

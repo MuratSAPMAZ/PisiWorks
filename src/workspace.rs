@@ -2641,6 +2641,8 @@ impl Workspace {
     }
 
     fn test_movie(&mut self) {
+        // What is being transformed is taken as it looks: the film is of what is on the stage.
+        self.apply_transform();
         let movie = self.movie();
         let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
         let path = folder.join("test.html");
@@ -5239,6 +5241,17 @@ impl Workspace {
             Some(id) if ev.click_count >= 2 && self.ed.object(id).is_some_and(|o| matches!(o.shape, Shape::Instance { .. })) => {
                 self.ed.selection = vec![id];
                 self.toggle_symbol_edit();
+            }
+            // In PisiSahne a double-click on a group goes inside it, as in Flash: its parts can then be picked and
+            // changed one by one, and a click beside them puts the group together again.
+            Some(id) if ev.click_count >= 2 && crate::theme::is_sahne() && self.ed.object(id).is_some_and(|o| matches!(o.shape, Shape::Group { .. })) => {
+                self.ed.selection = vec![id];
+                if self.ed.subselect() {
+                    if let Some(part) = self.ed.doc.page().hit_test(p, self.tolerance()) {
+                        self.ed.selection = vec![part];
+                    }
+                    self.status = t("Inside the group: pick a part to change it. A click beside the group closes it").into();
+                }
             }
             // And one beside the symbol being edited ends the edit.
             None if ev.click_count >= 2 && self.ed.editing_symbol().is_some() => self.toggle_symbol_edit(),

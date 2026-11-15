@@ -193,6 +193,70 @@ fn giant(e: &mut Editor, name: &str, x: f32, y: f32) -> u64 {
     grouped(e, name, parts)
 }
 
+/// The symbols the characters of the game are copies of. They are in the library, one of each for the whole
+/// game: a rat changed there is changed in every scene.
+struct Cast {
+    pisi: u64,
+    rat: u64,
+    drone: u64,
+    shot: u64,
+    bomb: u64,
+    heart: u64,
+    bullet: u64,
+    blast: u64,
+    turret: u64,
+    giant: u64,
+}
+
+/// Makes a symbol of what has just been drawn and takes the drawing off the stage: the scenes place their own copies.
+fn symbol_of(e: &mut Editor, id: u64, name: &str) -> Option<u64> {
+    e.selection = vec![id];
+    let symbol = e.make_symbol()?;
+    if let Some(entry) = e.doc.symbols.iter_mut().find(|s| s.id == symbol) {
+        entry.name = name.to_string();
+    }
+    e.delete_selected();
+    Some(symbol)
+}
+
+fn cast(e: &mut Editor) -> Option<Cast> {
+    let pisi = pisi_clip(e)?;
+    let id = rat(e, "", 100.0, 100.0);
+    let rat = symbol_of(e, id, t("Rat"))?;
+    let id = drone(e, "", 100.0, 100.0);
+    let drone = symbol_of(e, id, t("Drone"))?;
+    let id = oval(e, 100.0, 100.0, 14.0, 9.0, Color::rgb(0xff, 0x70, 0x50));
+    glowing(e, id, RED);
+    let shot = symbol_of(e, id, t("Shot"))?;
+    let parts = vec![oval(e, 100.0, 108.0, 16.0, 18.0, INK), star(e, 104.0, 100.0, 10.0, 6, 0.5, ORANGE)];
+    let id = grouped(e, "", parts);
+    let bomb = symbol_of(e, id, t("Bomb"))?;
+    let id = heart(e, "", 100.0, 100.0);
+    let heart = symbol_of(e, id, t("Heart"))?;
+    let id = block(e, 100.0, 100.0, 16.0, 5.0, 2.0, Color::rgb(0xc8, 0xff, 0xff));
+    glowing(e, id, CYAN);
+    let bullet = symbol_of(e, id, t("Bullet"))?;
+    let id = burst(e, "", 100.0, 100.0, 50.0, ORANGE, YELLOW);
+    let blast = symbol_of(e, id, t("Explosion"))?;
+    let id = turret(e, "", 100.0, 100.0);
+    let turret = symbol_of(e, id, t("Turret"))?;
+    let id = giant(e, "", 100.0, 100.0);
+    let giant = symbol_of(e, id, t("Giant Rat"))?;
+    Some(Cast { pisi, rat, drone, shot, bomb, heart, bullet, blast, turret, giant })
+}
+
+/// A copy of a symbol with its top left corner at `x`, `y`, and a name for the rules to know it by.
+fn put(e: &mut Editor, symbol: u64, name: &str, x: f32, y: f32) -> u64 {
+    if !e.place_symbol_at(symbol, Vec2 { x, y }) {
+        return 0;
+    }
+    e.for_selected(|o| {
+        o.name = name.to_string();
+        o.translate(x - o.bounds.x, y - o.bounds.y);
+    });
+    e.selection.first().copied().unwrap_or_default()
+}
+
 /// A strip of scenery as wide as the stage that keeps going left, and a second one after it, so that
 /// there is never a gap: when one has left by the left edge it comes in again from the right.
 fn strip(e: &mut Editor, speed: f32, draw: impl Fn(&mut Editor, f32) -> Vec<u64>) {
@@ -241,8 +305,8 @@ enum Place {
 }
 
 /// The sky, the scenery that goes by and the ground of a place; and, on a second layer, everything the
-/// rules are about. `symbol` is Pisi's clip.
-fn scene(e: &mut Editor, symbol: u64, place: Place, title: &str) {
+/// rules are about. `cast` has the symbols the characters are copies of.
+fn scene(e: &mut Editor, cast: &Cast, place: Place, title: &str) {
     let (score, lives) = (t("Score"), t("Lives"));
     match place {
         Place::City => {
@@ -343,41 +407,38 @@ fn scene(e: &mut Editor, symbol: u64, place: Place, title: &str) {
         gate(e, t("Sky gate"), WIDTH + 40.0, 150.0);
     }
     gate(e, t("Heart gate"), 430.0, -30.0);
-    // What copies are made from waits off the left edge, and is hidden when the scene starts.
-    let id = rat(e, t("Rat"), -150.0, 60.0);
+    // What copies are made from waits off the left edge, and is hidden when the scene starts. Each is a copy of
+    // a symbol, the same one in every scene: change the symbol, and the character is changed everywhere.
+    let id = put(e, cast.rat, t("Rat"), -150.0, 60.0);
     give(e, id, &[(Kind::Drift, PACE + 20.0, 180.0)]);
-    let id = drone(e, t("Drone"), -150.0, 110.0);
+    let id = put(e, cast.drone, t("Drone"), -150.0, 110.0);
     give(e, id, &[(Kind::Drift, 120.0, 180.0), (Kind::UpAndDown, 36.0, 1.8)]);
-    let shot = oval(e, -150.0, 160.0, 14.0, 9.0, Color::rgb(0xff, 0x70, 0x50));
-    e.for_selected(|o| o.name = t("Shot").to_string());
-    glowing(e, shot, RED);
-    give(e, shot, &[(Kind::Drift, 240.0, 180.0)]);
-    let parts = vec![oval(e, -150.0, 186.0, 16.0, 18.0, INK), star(e, -146.0, 178.0, 10.0, 6, 0.5, ORANGE)];
-    let id = grouped(e, t("Bomb"), parts);
+    let id = put(e, cast.shot, t("Shot"), -150.0, 160.0);
+    give(e, id, &[(Kind::Drift, 240.0, 180.0)]);
+    let id = put(e, cast.bomb, t("Bomb"), -150.0, 180.0);
     give(e, id, &[(Kind::Gravity, 320.0, 0.0)]);
-    let id = heart(e, t("Heart"), -150.0, 220.0);
+    let id = put(e, cast.heart, t("Heart"), -150.0, 220.0);
     give(e, id, &[(Kind::Gravity, 70.0, 0.0)]);
-    let bullet = block(e, -150.0, 260.0, 16.0, 5.0, 2.0, Color::rgb(0xc8, 0xff, 0xff));
-    e.for_selected(|o| o.name = t("Bullet").to_string());
-    glowing(e, bullet, CYAN);
-    give(e, bullet, &[(Kind::Drift, 620.0, 0.0)]);
-    burst(e, t("Explosion"), -160.0, 280.0, 50.0, ORANGE, YELLOW);
+    let id = put(e, cast.bullet, t("Bullet"), -150.0, 260.0);
+    give(e, id, &[(Kind::Drift, 620.0, 0.0)]);
+    let id = put(e, cast.blast, t("Explosion"), -160.0, 280.0);
+    give(e, id, &[(Kind::Pulse, 90.0, 0.7), (Kind::Spin, 1.4, 0.0), (Kind::Expire, 0.35, 0.0)]);
     match place {
         Place::Roof => {
             // A gun turret on a crate. The crate is solid: Pisi can jump onto it.
             let crate_box = block(e, 520.0, GROUND - 40.0, 70.0, 40.0, 4.0, Color::rgb(0x70, 0x50, 0x30));
             shaded(e, crate_box, Color::rgb(0x98, 0x70, 0x40), Color::rgb(0x48, 0x30, 0x18));
             give(e, crate_box, &[(Kind::Solid, 0.0, 0.0)]);
-            turret(e, t("Turret"), 526.0, GROUND - 92.0);
+            put(e, cast.turret, t("Turret"), 504.0, GROUND - 92.0);
         }
         Place::Lair => {
-            let id = giant(e, t("Giant Rat"), 440.0, GROUND - 186.0);
+            let id = put(e, cast.giant, t("Giant Rat"), 386.0, GROUND - 190.0);
             give(e, id, &[(Kind::BackAndForth, -110.0, 4.6), (Kind::UpAndDown, 14.0, 1.4)]);
         }
         Place::City | Place::Factory => {}
     }
     // Pisi stands on the ground, a little in from the left edge.
-    if e.place_symbol_at(symbol, Vec2 { x: 110.0, y: GROUND - 40.0 }) {
+    if e.place_symbol_at(cast.pisi, Vec2 { x: 110.0, y: GROUND - 40.0 }) {
         e.for_selected(|o| {
             o.name = "Pisi".to_string();
             o.translate(0.0, GROUND - o.bounds.bottom());
@@ -397,7 +458,7 @@ fn every(seconds: f32, steps: &[(StepKind, &str, f32, f32)]) -> Rule {
 pub fn iron_claw() -> Document {
     let mut e = start(640, 400, t("Background"), 30.0);
     let sfx = sounds(&mut e);
-    let Some(symbol) = pisi_clip(&mut e) else { return crate::examples::finish(e) };
+    let Some(cast) = cast(&mut e) else { return crate::examples::finish(e) };
     let places = [(Place::City, t("City")), (Place::Factory, t("Factory")), (Place::Roof, t("Rooftop"))];
     for (index, (place, name)) in places.iter().enumerate() {
         if index > 0 {
@@ -405,12 +466,12 @@ pub fn iron_claw() -> Document {
             e.doc.page_mut().layers[0].name = t("Background").to_string();
         }
         e.doc.page_mut().name = name.to_string();
-        scene(&mut e, symbol, *place, &tf("Stage {}: {}", &[&(index + 1), name]));
+        scene(&mut e, &cast, *place, &tf("Stage {}: {}", &[&(index + 1), name]));
     }
     e.add_page();
     e.doc.page_mut().layers[0].name = t("Background").to_string();
     e.doc.page_mut().name = t("Giant Rat").to_string();
-    scene(&mut e, symbol, Place::Lair, t("The Giant Rat"));
+    scene(&mut e, &cast, Place::Lair, t("The Giant Rat"));
     let score = t("Score");
     last_scene(&mut e, WIDTH, HEIGHT, t("Pisi wins!"), &format!("{score}: {{{score}}}"));
     last_scene(&mut e, WIDTH, HEIGHT, t("Game over"), &format!("{score}: {{{score}}}"));
