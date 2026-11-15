@@ -2456,8 +2456,12 @@ impl Workspace {
         self.ed.leave_symbol_for_good();
         self.ed.end_mask_edit();
         self.ed.close_groups();
-        // The scene itself, with its timeline: publishing goes through its frames one by one.
-        let page = self.ed.doc.page().clone();
+        // The whole animation, every scene and clip with the work on its frame on show written into its timeline.
+        self.ed.sync_clip();
+        let mut movie = self.ed.doc.clone();
+        for page in &mut movie.pages {
+            page.store_frame();
+        }
         let stem = self.path.as_ref().map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
         let picked = cx.prompt_for_new_path(&Self::default_dir(), Some(&format!("{stem}.html")));
         cx.spawn_in(window, async move |this, cx| {
@@ -2466,7 +2470,7 @@ impl Workspace {
                 path.set_extension("html");
             }
             this.update(cx, |this, cx| {
-                let written = crate::publish::html(&page, &stem).and_then(|html| std::fs::write(&path, html).map_err(anyhow::Error::from));
+                let written = crate::publish::html(&movie, &stem).and_then(|html| std::fs::write(&path, html).map_err(anyhow::Error::from));
                 this.status = match written {
                     Ok(()) => tf("Exported {}", &[&path.display()]),
                     Err(error) => tf("Export failed: {}", &[&format!("{error:#}")]),
