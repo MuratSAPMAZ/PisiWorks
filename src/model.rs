@@ -602,6 +602,10 @@ pub enum TextAlign {
     Left,
     Center,
     Right,
+    /// Every line but the last is spread from edge to edge, by widening the spaces between its words.
+    Justify,
+    /// Every line is stretched from edge to edge, letters and all.
+    Stretch,
 }
 
 /// How a text is set: its font and what is done to it. The default is plain text in the program's own font.
@@ -1191,6 +1195,7 @@ impl Object {
         let Shape::Text { content, size, style } = &self.shape else { return false };
         let frame = self.placement.map_or(self.bounds, |p| p.frame);
         let glyphs = crate::export::glyph_outlines(content, *size, v2(frame.x, frame.y), style);
+        let heavy = crate::export::made_up_bold(style);
         let parts: Vec<Object> = glyphs
             .into_iter()
             .filter_map(|mut rings| {
@@ -1215,7 +1220,8 @@ impl Object {
                     fill_look: Default::default(),
                     filters: Vec::new(),
                     fill: self.fill,
-                    stroke: None,
+                    // A bold the font does not have is made by thickening each letter.
+                    stroke: self.fill.filter(|_| heavy).map(|color| Stroke { color, width: (*size / 14.0).max(0.6) }),
                     opacity: 1.0,
                     visible: true,
                     locked: false,
@@ -1234,7 +1240,9 @@ impl Object {
 
     /// Transformed text as the paths that draw it, or `None` for text that is still upright.
     pub fn placed_text_paths(&self) -> Option<Object> {
-        if self.placement.is_none() || !matches!(self.shape, Shape::Text { .. }) {
+        let Shape::Text { style, .. } = &self.shape else { return None };
+        // Text that is turned, or set in a way a plain line of type cannot show, is drawn from its outlines.
+        if self.placement.is_none() && !crate::export::needs_outlines(style) {
             return None;
         }
         let mut paths = self.clone();

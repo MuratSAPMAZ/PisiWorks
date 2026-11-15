@@ -118,7 +118,7 @@ Modify > Group (Ctrl+G) makes the selected objects move and scale as one. To cha
 
 ## Text
 
-With a text object selected, Properties shows its font and size, buttons for bold, italic and underline, and buttons that align its lines left, centered or right. The same is in the Text menu: Font lists the fonts installed on the computer, Size has Smaller (Ctrl+Shift+,) and Larger (Ctrl+Shift+.) and a list of sizes, Style has Plain, Bold (Ctrl+B), Italic (Ctrl+I) and Underline (Ctrl+U), and Align has Left, Centered Horizontally and Right. Set with nothing selected, they apply to the next text you type. A font with no bold or italic face of its own is shown in the nearest face it has.
+With a text object selected, Properties shows its font and size, buttons for bold, italic and underline, and buttons that align its lines left, centered or right. The same is in the Text menu: Font lists the fonts installed on the computer, Size has Smaller (Ctrl+Shift+,) and Larger (Ctrl+Shift+.) and a list of sizes, Style has Plain, Bold (Ctrl+B), Italic (Ctrl+I) and Underline (Ctrl+U), and Align has Left, Centered Horizontally, Right, Justified (every line but the last is spread from edge to edge by its spaces) and Stretched (every line is widened to fill the box). Set with nothing selected, they apply to the next text you type. For a font with no bold or italic face of its own, bold is made by thickening the letters and italic by leaning them.
 
 ## Guides
 

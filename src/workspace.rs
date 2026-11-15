@@ -5055,6 +5055,8 @@ impl Workspace {
             ("l", true, true) => Cmd::TextAlign(crate::model::TextAlign::Left),
             ("c", true, true) => Cmd::TextAlign(crate::model::TextAlign::Center),
             ("r", true, true) => Cmd::TextAlign(crate::model::TextAlign::Right),
+            ("j", true, true) => Cmd::TextAlign(crate::model::TextAlign::Justify),
+            ("s", true, true) => Cmd::TextAlign(crate::model::TextAlign::Stretch),
             ("g", false, false) => Cmd::Group,
             ("t", false, false) => Cmd::FreeTransform,
             ("t", true, false) => Cmd::NumericTransform,

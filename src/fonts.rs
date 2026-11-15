@@ -66,15 +66,13 @@ pub fn families() -> &'static [String] {
     })
 }
 
-/// A face of a family as outlines: bold, italic, both or neither, or the nearest
-/// the family has. An empty family is the program's own font.
-pub fn face(family: &str, bold: bool, italic: bool) -> Option<&'static FontVec> {
+/// A face that was asked for, and what it lacks: whether it had to stand in for a bold or an italic face the family does not have.
+type Found = Option<(&'static FontVec, bool, bool)>;
+
+fn found(family: &str, bold: bool, italic: bool) -> Found {
     use std::collections::HashMap;
     use std::sync::Mutex;
-    if family.is_empty() && !bold && !italic {
-        return outlines();
-    }
-    static FACES: OnceLock<Mutex<HashMap<(String, bool, bool), Option<&'static FontVec>>>> = OnceLock::new();
+    static FACES: OnceLock<Mutex<HashMap<(String, bool, bool), Found>>> = OnceLock::new();
     let mut faces = FACES.get_or_init(Default::default).lock().ok()?;
     *faces.entry((family.to_string(), bold, italic)).or_insert_with(|| {
         let name = if family.is_empty() { self::family() } else { family };
@@ -86,10 +84,28 @@ pub fn face(family: &str, bold: bool, italic: bool) -> Option<&'static FontVec> 
         };
         let db = database();
         let id = db.query(&query)?;
+        let (heavy, slanted) = db.face(id).map_or((false, false), |face| (face.weight.0 >= 600, face.style != fontdb::Style::Normal));
         let font = db.with_face_data(id, |data, index| FontVec::try_from_vec_and_index(data.to_vec(), index).ok())??;
         // Kept for as long as the program runs: there are only so many fonts.
-        Some(&*Box::leak(Box::new(font)))
+        Some((&*Box::leak(Box::new(font)), bold && !heavy, italic && !slanted))
     })
+}
+
+/// A face of a family as outlines: bold, italic, both or neither, or the nearest
+/// the family has. An empty family is the program's own font.
+pub fn face(family: &str, bold: bool, italic: bool) -> Option<&'static FontVec> {
+    if family.is_empty() && !bold && !italic {
+        return outlines();
+    }
+    found(family, bold, italic).map(|(font, _, _)| font)
+}
+
+/// Whether bold and italic have to be made up for a family, because it has no such face of its own.
+pub fn made_up(family: &str, bold: bool, italic: bool) -> (bool, bool) {
+    if !bold && !italic {
+        return (false, false);
+    }
+    found(family, bold, italic).map_or((false, false), |(_, heavy, slanted)| (heavy, slanted))
 }
 
 /// The same face as outlines, for measuring and exporting text.

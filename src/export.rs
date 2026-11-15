@@ -38,9 +38,32 @@ pub fn line_width(line: &str, size: f32, style: &TextStyle) -> f32 {
 /// How far from the left of its box a line of text starts, for an alignment.
 pub fn line_start(box_width: f32, line_width: f32, align: TextAlign) -> f32 {
     match align {
-        TextAlign::Left => 0.0,
+        // A spread or stretched line starts at the left and reaches the right by other means.
+        TextAlign::Left | TextAlign::Justify | TextAlign::Stretch => 0.0,
         TextAlign::Center => ((box_width - line_width) / 2.0).max(0.0),
         TextAlign::Right => (box_width - line_width).max(0.0),
+    }
+}
+
+/// Whether text in this style has to be drawn from the outlines of its letters:
+/// spread or stretched lines, and bold or italic made up for a font that has none.
+pub fn needs_outlines(style: &TextStyle) -> bool {
+    let (heavy, slanted) = crate::fonts::made_up(&style.font, style.bold, style.italic);
+    matches!(style.align, TextAlign::Justify | TextAlign::Stretch) || heavy || slanted
+}
+
+/// Whether bold has to be made up for this style, by thickening the letters.
+pub fn made_up_bold(style: &TextStyle) -> bool {
+    crate::fonts::made_up(&style.font, style.bold, style.italic).0
+}
+
+/// How a line is fitted to its box: how much wider each space is made, and how much every letter is stretched across.
+fn line_fit(line: &str, width: f32, box_width: f32, last: bool, align: TextAlign) -> (f32, f32) {
+    let spaces = line.chars().filter(|c| *c == ' ').count();
+    match align {
+        TextAlign::Justify if !last && spaces > 0 && width < box_width => ((box_width - width) / spaces as f32, 1.0),
+        TextAlign::Stretch if width > 0.0 => (0.0, box_width / width),
+        _ => (0.0, 1.0),
     }
 }
 
@@ -100,19 +123,29 @@ pub fn glyph_outlines(content: &str, size: f32, origin: Vec2, style: &TextStyle)
     let lead = (line_height - (scaled.ascent() - scaled.descent())) / 2.0;
     let far = |a: Vec2, b: Vec2| (a.x - b.x).abs() + (a.y - b.y).abs() > 0.01;
     let mut glyphs = Vec::new();
+    // An italic the font does not have is made by leaning the letters over.
+    let lean = if crate::fonts::made_up(&style.font, style.bold, style.italic).1 { 0.2 } else { 0.0 };
+    let rows = content.split('\n').count();
     for (row, line) in content.split('\n').enumerate() {
         let width = line_width(line, size, style);
-        let mut caret = origin.x + line_start(box_width, width, style.align);
+        let (wider, stretch) = line_fit(line, width, box_width, row + 1 == rows, style.align);
+        let start = origin.x + line_start(box_width, width, style.align);
+        // The caret counts in the letters' own widths; a stretched line is widened when its letters are placed.
+        let mut caret = 0.0;
         let baseline = origin.y + row as f32 * line_height + lead + scaled.ascent();
         if style.underline && !line.is_empty() {
-            let (x, y, w, h) = underline_box(caret, baseline, width, size);
+            let reach = if stretch != 1.0 || wider > 0.0 { box_width } else { width };
+            let (x, y, w, h) = underline_box(start, baseline, reach, size);
             glyphs.push(vec![vec![Vec2 { x, y }, Vec2 { x: x + w, y }, Vec2 { x: x + w, y: y + h }, Vec2 { x, y: y + h }]]);
         }
         for ch in line.chars() {
             let id = scaled.glyph_id(ch);
             if let Some(outline) = font.outline(id) {
                 // Font outlines have y pointing up.
-                let place = |p: &ab_glyph::Point| Vec2 { x: caret + p.x * scaled.h_scale_factor(), y: baseline - p.y * scaled.v_scale_factor() };
+                let place = |p: &ab_glyph::Point| {
+                    let up = p.y * scaled.v_scale_factor();
+                    Vec2 { x: start + (caret + p.x * scaled.h_scale_factor() + up * lean) * stretch, y: baseline - up }
+                };
                 let mut rings: Vec<Vec<Vec2>> = Vec::new();
                 for curve in &outline.curves {
                     let controls: Vec<Vec2> = match curve {
@@ -149,7 +182,7 @@ pub fn glyph_outlines(content: &str, size: f32, origin: Vec2, style: &TextStyle)
                     glyphs.push(rings);
                 }
             }
-            caret += scaled.h_advance(id);
+            caret += scaled.h_advance(id) + if ch == ' ' { wider } else { 0.0 };
         }
     }
     glyphs
@@ -978,6 +1011,21 @@ mod tests {
             render_page(&p).unwrap().pixels().iter().filter(|px| px.red() > 200 && px.green() < 60).count()
         };
         assert!(inked(&underlined) > inked(&plain));
+        // Justified: the first of two lines is spread to the width of the box by its spaces; the last line is left as it is.
+        let widest = |text: &str, style: &TextStyle, row_top: f32| {
+            let glyphs = glyph_outlines(text, 20.0, Vec2 { x: 0.0, y: 0.0 }, style);
+            glyphs.iter().flatten().flatten().filter(|p| p.y >= row_top && p.y < row_top + 20.0 * LINE_HEIGHT).map(|p| p.x).fold(0.0, f32::max)
+        };
+        let two_lines = "H H\nHHHHHH\nH H";
+        let justified = TextStyle { align: TextAlign::Justify, ..TextStyle::default() };
+        let full = measure_styled(two_lines, 20.0, &plain).0;
+        assert!(widest(two_lines, &plain, 0.0) < full * 0.6);
+        assert!(widest(two_lines, &justified, 0.0) > full * 0.9, "the first line reaches the right edge");
+        assert!(widest(two_lines, &justified, 2.0 * 20.0 * LINE_HEIGHT) < full * 0.6, "the last line does not");
+        // Stretched: every line reaches it, by widening the letters themselves.
+        let stretched = TextStyle { align: TextAlign::Stretch, ..TextStyle::default() };
+        assert!(widest(two_lines, &stretched, 2.0 * 20.0 * LINE_HEIGHT) > full * 0.9);
+        assert!(needs_outlines(&justified) && needs_outlines(&stretched) && !needs_outlines(&plain));
         // A style that is not plain is kept in the file; plain text is written as before.
         let styled = Shape::Text { content: "a".into(), size: 12.0, style: TextStyle { font: "Some Font".into(), bold: true, ..TextStyle::default() } };
         let back: Shape = serde_json::from_str(&serde_json::to_string(&styled).unwrap()).unwrap();

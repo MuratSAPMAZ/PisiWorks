@@ -1048,7 +1048,9 @@ impl Workspace {
                             .child(div().w(px(4.)))
                             .child(toggle(self, icon("align-left", 13., TEXT).into_any_element(), style.align == TextAlign::Left, Cmd::TextAlign(TextAlign::Left), cx))
                             .child(toggle(self, icon("align-center-x", 13., TEXT).into_any_element(), style.align == TextAlign::Center, Cmd::TextAlign(TextAlign::Center), cx))
-                            .child(toggle(self, icon("align-right", 13., TEXT).into_any_element(), style.align == TextAlign::Right, Cmd::TextAlign(TextAlign::Right), cx)),
+                            .child(toggle(self, icon("align-right", 13., TEXT).into_any_element(), style.align == TextAlign::Right, Cmd::TextAlign(TextAlign::Right), cx))
+                            .child(toggle(self, icon("align-justify", 13., TEXT).into_any_element(), style.align == TextAlign::Justify, Cmd::TextAlign(TextAlign::Justify), cx))
+                            .child(toggle(self, icon("align-stretch", 13., TEXT).into_any_element(), style.align == TextAlign::Stretch, Cmd::TextAlign(TextAlign::Stretch), cx)),
                     );
             }
             crate::model::Shape::Web { kind: crate::model::WebKind::Hotspot, .. } => {

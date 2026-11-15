@@ -120,7 +120,7 @@ Değiştir > Grupla (Ctrl+G) seçili nesnelerin tek nesne gibi taşınıp ölçe
 
 ## Metin
 
-Bir metin nesnesi seçiliyken Özellikler'de fontu ve boyutu, kalın, italik ve altı çizili düğmeleri ile satırları sola, ortaya veya sağa hizalayan düğmeler görünür. Aynıları Metin menüsünde de vardır: Font bilgisayarda kurulu fontları listeler; Boyut'ta Daha Küçük (Ctrl+Shift+,), Daha Büyük (Ctrl+Shift+.) ve bir boyut listesi; Stil'de Düz, Kalın (Ctrl+B), İtalik (Ctrl+I) ve Altı Çizili (Ctrl+U); Hizala'da Sol, Yatay Ortalanmış ve Sağ bulunur. Hiçbir şey seçili değilken ayarlanırsa bir sonraki yazacağınız metne uygulanır. Kendi kalın veya italik yüzü olmayan font, sahip olduğu en yakın yüzle gösterilir.
+Bir metin nesnesi seçiliyken Özellikler'de fontu ve boyutu, kalın, italik ve altı çizili düğmeleri ile satırları sola, ortaya veya sağa hizalayan düğmeler görünür. Aynıları Metin menüsünde de vardır: Font bilgisayarda kurulu fontları listeler; Boyut'ta Daha Küçük (Ctrl+Shift+,), Daha Büyük (Ctrl+Shift+.) ve bir boyut listesi; Stil'de Düz, Kalın (Ctrl+B), İtalik (Ctrl+I) ve Altı Çizili (Ctrl+U); Hizala'da Sol, Yatay Ortalanmış, Sağ, Yaslanmış (son satır dışındaki her satır boşluklarıyla kenardan kenara yayılır) ve Uzatılmış (her satır kutuyu dolduracak kadar genişletilir) bulunur. Hiçbir şey seçili değilken ayarlanırsa bir sonraki yazacağınız metne uygulanır. Kendi kalın veya italik yüzü olmayan fontta kalın, harfler kalınlaştırılarak; italik, harfler yatırılarak yapılır.
 
 ## Kılavuzlar
 

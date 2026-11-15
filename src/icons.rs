@@ -382,6 +382,8 @@ fn plain(name: &str) -> Option<&'static str> {
     Some(match name {
         "align-left" => r#"<path d="M2 1.500v13"/><rect x="4" y="3.500" width="9" height="3"/><rect x="4" y="9.500" width="5.500" height="3"/>"#,
         "align-center-x" => r#"<path d="M8 1.500v13"/><rect x="3" y="3.500" width="10" height="3"/><rect x="5" y="9.500" width="6" height="3"/>"#,
+        "align-justify" => r#"<rect x="2.500" y="3.500" width="11" height="3"/><rect x="2.500" y="9.500" width="11" height="3"/>"#,
+        "align-stretch" => r#"<path d="M2 1.500v13M14 1.500v13"/><path d="M4 8h8M6 5.500L4 8l2 2.500M10 5.500L12 8l-2 2.500"/>"#,
         "align-right" => r#"<path d="M14 1.500v13"/><rect x="3" y="3.500" width="9" height="3"/><rect x="6.500" y="9.500" width="5.500" height="3"/>"#,
         "align-top" => r#"<path d="M1.500 2h13"/><rect x="3.500" y="4" width="3" height="9"/><rect x="9.500" y="4" width="3" height="5.500"/>"#,
         "align-center-y" => r#"<path d="M1.500 8h13"/><rect x="3.500" y="3" width="3" height="10"/><rect x="9.500" y="5" width="3" height="6"/>"#,
