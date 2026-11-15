@@ -174,6 +174,8 @@ Working at this stage:
 - Sound: an MP3, OGG or WAV file is imported and started on a keyframe.
 - Test Movie (Ctrl+Enter) publishes the film and opens it in the browser.
 - Playing, stepping frame by frame, the frame rate and onion skinning.
+- Six ready animations in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, and two scenes with buttons.
+- Exchange with PisiWorks: **PisiSahne > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **PisiWorks > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
 - `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 

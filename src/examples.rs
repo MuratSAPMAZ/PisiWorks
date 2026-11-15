@@ -31,20 +31,20 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "Web page mockup", about: "A grid of guides, layers, slices and hotspots", build: web_page },
 ];
 
-const WHITE: Color = Color::WHITE;
-const INK: Color = Color::rgb(0x1c, 0x24, 0x38);
-const BLUE: Color = Color::rgb(0x1e, 0x78, 0xd2);
-const TEAL: Color = Color::rgb(0x14, 0xa0, 0x9a);
-const ORANGE: Color = Color::rgb(0xf2, 0x8c, 0x1e);
-const YELLOW: Color = Color::rgb(0xff, 0xd2, 0x3c);
-const PALE: Color = Color::rgb(0xee, 0xf2, 0xf7);
+pub(crate) const WHITE: Color = Color::WHITE;
+pub(crate) const INK: Color = Color::rgb(0x1c, 0x24, 0x38);
+pub(crate) const BLUE: Color = Color::rgb(0x1e, 0x78, 0xd2);
+pub(crate) const TEAL: Color = Color::rgb(0x14, 0xa0, 0x9a);
+pub(crate) const ORANGE: Color = Color::rgb(0xf2, 0x8c, 0x1e);
+pub(crate) const YELLOW: Color = Color::rgb(0xff, 0xd2, 0x3c);
+pub(crate) const PALE: Color = Color::rgb(0xee, 0xf2, 0xf7);
 
-fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
+pub(crate) fn rect(x: f32, y: f32, w: f32, h: f32) -> Rect {
     Rect { x, y, w, h }
 }
 
 /// Adds a shape to the active layer and selects it. Returns its number.
-fn add(e: &mut Editor, name: &str, shape: Shape, bounds: Rect, fill: Option<Color>, stroke: Option<Stroke>) -> u64 {
+pub(crate) fn add(e: &mut Editor, name: &str, shape: Shape, bounds: Rect, fill: Option<Color>, stroke: Option<Stroke>) -> u64 {
     let mut object = Object::new_web(e.alloc_id(), WebKind::Slice, bounds);
     (object.name, object.shape, object.fill, object.stroke) = (name.to_string(), shape, fill, stroke);
     let id = object.id;
@@ -53,12 +53,12 @@ fn add(e: &mut Editor, name: &str, shape: Shape, bounds: Rect, fill: Option<Colo
     id
 }
 
-fn boxed(e: &mut Editor, name: &str, bounds: Rect, radius: f32, fill: Color) -> u64 {
+pub(crate) fn boxed(e: &mut Editor, name: &str, bounds: Rect, radius: f32, fill: Color) -> u64 {
     add(e, name, Shape::Rect { radius }, bounds, Some(fill), None)
 }
 
 /// Adds a text whose top left corner is at `x`, `y`.
-fn text(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Color, style: TextStyle) -> u64 {
+pub(crate) fn text(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Color, style: TextStyle) -> u64 {
     let id = add(e, content, Shape::Text { content: content.to_string(), size, style }, rect(x, y, 10.0, size), Some(color), None);
     if let Some(object) = e.object_mut(id) {
         object.refit_text();
@@ -67,7 +67,7 @@ fn text(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Color, 
 }
 
 /// A text with its middle at `x`.
-fn centered(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Color, style: TextStyle) -> u64 {
+pub(crate) fn centered(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Color, style: TextStyle) -> u64 {
     let id = text(e, content, x, y, size, color, TextStyle { align: TextAlign::Center, ..style });
     if let Some(object) = e.object_mut(id) {
         let width = object.bounds.w;
@@ -76,7 +76,7 @@ fn centered(e: &mut Editor, content: &str, x: f32, y: f32, size: f32, color: Col
     id
 }
 
-fn gradient(e: &mut Editor, id: u64, kind: FillKind, from: Color, to: Color, start: (f32, f32), end: (f32, f32)) {
+pub(crate) fn gradient(e: &mut Editor, id: u64, kind: FillKind, from: Color, to: Color, start: (f32, f32), end: (f32, f32)) {
     if let Some(object) = e.object_mut(id) {
         let mut style = FillStyle::new(kind, from, to);
         (style.start, style.end) = (Vec2 { x: start.0, y: start.1 }, Vec2 { x: end.0, y: end.1 });
@@ -84,7 +84,7 @@ fn gradient(e: &mut Editor, id: u64, kind: FillKind, from: Color, to: Color, sta
     }
 }
 
-fn filter(e: &mut Editor, id: u64, kind: FilterKind, values: &[(usize, f32)]) {
+pub(crate) fn filter(e: &mut Editor, id: u64, kind: FilterKind, values: &[(usize, f32)]) {
     if let Some(object) = e.object_mut(id) {
         let mut made = LiveFilter::new(kind);
         for (index, value) in values {
@@ -96,12 +96,12 @@ fn filter(e: &mut Editor, id: u64, kind: FilterKind, values: &[(usize, f32)]) {
     }
 }
 
-fn bold() -> TextStyle {
+pub(crate) fn bold() -> TextStyle {
     TextStyle { bold: true, ..TextStyle::default() }
 }
 
 /// A new layer above the others, with a name, made the active one.
-fn layer(e: &mut Editor, name: &str) {
+pub(crate) fn layer(e: &mut Editor, name: &str) {
     let top = e.doc.page().layers.len() - 1;
     e.doc.page_mut().active_layer = top;
     e.add_layer();
@@ -115,7 +115,7 @@ fn start(width: u32, height: u32, first_layer: &str) -> Editor {
     e
 }
 
-fn finish(mut e: Editor) -> Document {
+pub(crate) fn finish(mut e: Editor) -> Document {
     e.leave_symbol();
     e.close_groups();
     e.selection.clear();

@@ -175,6 +175,8 @@ Bu aşamada çalışanlar:
 - Ses: MP3, OGG ya da WAV dosyası içe aktarılır ve bir anahtar karede başlatılır.
 - Filmi Test Et (Ctrl+Enter): filmi yayımlayıp tarayıcıda açar.
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
+- Örnekler menüsünde altı hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, düğmeli iki sahne.
+- PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 

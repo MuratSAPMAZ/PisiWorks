@@ -5845,6 +5845,88 @@ impl Editor {
         true
     }
 
+    /// Brings what another document shows into this one: the objects of its page on show go
+    /// onto the active layer, selected, and the symbols they use into the library, movie
+    /// clips with their timelines. Everything gets numbers of this document's own.
+    /// Returns how many objects came in.
+    pub fn import_document(&mut self, other: &Document) -> usize {
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        let mut symbols: HashMap<u64, u64> = HashMap::new();
+        for symbol in &other.symbols {
+            symbols.insert(symbol.id, self.alloc_id());
+        }
+        // An object with a number of this document's, its copies of symbols pointed at the symbols brought in.
+        fn renumbered(object: &Object, symbols: &HashMap<u64, u64>, next: &mut u64) -> Object {
+            let mut object = object.clone();
+            object.id = *next;
+            *next += 1;
+            match &mut object.shape {
+                Shape::Instance { symbol, .. } => *symbol = symbols.get(symbol).copied().unwrap_or(*symbol),
+                Shape::Group { objects } => *objects = Arc::new(objects.iter().map(|part| renumbered(part, symbols, next)).collect()),
+                _ => {}
+            }
+            object
+        }
+        let mut next = self.doc.next_id;
+        for symbol in &other.symbols {
+            let mut copy = symbol.clone();
+            copy.id = symbols[&symbol.id];
+            copy.objects = symbol.objects.iter().map(|o| renumbered(o, &symbols, &mut next)).collect();
+            copy.looks = symbol.looks.iter().map(|look| look.iter().map(|o| renumbered(o, &symbols, &mut next)).collect()).collect();
+            self.doc.symbols.push(copy);
+        }
+        // The pages that hold the timelines of movie clips come along with their clips.
+        for page in other.pages.iter().filter(|page| page.clip_of.is_some()) {
+            let mut copy = page.clone();
+            copy.clip_of = page.clip_of.and_then(|id| symbols.get(&id).copied());
+            for layer in &mut copy.layers {
+                layer.objects = layer.objects.iter().map(|o| renumbered(o, &symbols, &mut next)).collect();
+            }
+            if let Some(timeline) = &mut copy.timeline {
+                for span in timeline.layers.iter_mut().flatten() {
+                    span.objects = span.objects.iter().map(|o| renumbered(o, &symbols, &mut next)).collect();
+                }
+            }
+            for slot in copy.states.iter_mut().flat_map(|s| s.objects.iter_mut()) {
+                *slot = slot.iter().map(|o| renumbered(o, &symbols, &mut next)).collect();
+            }
+            self.doc.pages.push(copy);
+        }
+        let shown: Vec<Object> = other.page().layers.iter().filter(|l| l.visible).flat_map(|l| l.objects.iter()).filter(|o| o.visible && !o.is_web()).map(|o| renumbered(o, &symbols, &mut next)).collect();
+        self.doc.next_id = next;
+        self.doc.relink_symbols();
+        let ids: Vec<u64> = shown.iter().map(|o| o.id).collect();
+        let mut added = 0;
+        for object in shown {
+            if self.add_object(object) {
+                added += 1;
+            }
+        }
+        self.doc.relink_symbols();
+        self.selection = ids;
+        added
+    }
+
+    /// The document as the other program takes it. From the animation program the scenes go as plain
+    /// pages showing the frame they are on; movie clips keep their pages, which PisiWorks carries along untouched.
+    pub fn for_other_program(&self, plain_pages: bool) -> Document {
+        let mut doc = self.doc.clone();
+        doc.clip_return = None;
+        for page in &mut doc.pages {
+            page.store_frame();
+            page.symbol_edit = None;
+            if plain_pages && page.clip_of.is_none() {
+                page.timeline = None;
+            }
+        }
+        if doc.page().clip_of.is_some() {
+            doc.active_page = doc.scenes().first().copied().unwrap_or(0);
+        }
+        doc
+    }
+
     /// Adds a sound to the document. Returns its number.
     pub fn add_sound(&mut self, name: &str, mime: &str, bytes: &[u8]) -> u64 {
         use base64::Engine;
@@ -6699,6 +6781,41 @@ mod tests {
         let timeline = e.doc.page().timeline.as_ref().unwrap();
         assert_eq!((timeline.kind(0), timeline.kind(1), timeline.kind(2), timeline.kind(3)), (LayerKind::Normal, LayerKind::Normal, LayerKind::Normal, LayerKind::Mask));
         assert!(timeline.is_bound(2) && !timeline.is_bound(1), "the layer under the mask is still the tied one");
+    }
+
+    #[test]
+    fn another_document_is_brought_in_with_its_symbols() {
+        // The other document: a box and a copy of a symbol, on a page with a timeline.
+        let mut other = editor();
+        other.doc.next_id = 500;
+        other.selection = vec![100];
+        let symbol = other.make_symbol().unwrap();
+        other.doc.page_mut().start_timeline(12.0);
+        // This document already has objects numbered 100 to 102 and a symbol of its own.
+        let mut e = editor();
+        e.doc.next_id = 500;
+        e.selection = vec![102];
+        let own = e.make_symbol().unwrap();
+        assert_eq!(e.import_document(&other.doc), 3);
+        assert_eq!(e.doc.page().objects().count(), 6);
+        assert_eq!(e.selection.len(), 3);
+        // Nothing that came in shares a number with what was there, and the copy points at the symbol that came with it.
+        let mut ids: Vec<u64> = e.doc.page().objects().map(|o| o.id).collect();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), 6);
+        assert_eq!(e.doc.symbols.len(), 2);
+        let brought = e.doc.symbols[1].id;
+        assert!(brought != own && brought != symbol);
+        let copy = e.selected().into_iter().find(|o| matches!(o.shape, Shape::Instance { .. })).unwrap().clone();
+        assert!(matches!(copy.shape, Shape::Instance { symbol: of, .. } if of == brought));
+        assert_eq!(copy.instance_parts().len(), 1);
+        // Handed to PisiWorks, an animation's scenes are plain pages showing the frame they were on.
+        other.goto_frame(3);
+        other.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, true));
+        let plain = other.for_other_program(true);
+        assert!(plain.pages[0].timeline.is_none() && plain.pages[0].objects().count() == 0);
+        assert!(other.for_other_program(false).pages[0].timeline.is_some());
     }
 
     #[test]

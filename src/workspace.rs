@@ -2579,6 +2579,29 @@ impl Workspace {
         self.ed.doc.page().timeline.as_ref().map_or_else(Vec::new, |timeline| timeline.layers.iter().filter_map(|spans| spans.iter().find(|span| span.start == frame)?.sound).collect())
     }
 
+    /// Hands the document to the other of the two programs: it is written to a file of the
+    /// program's own and the other program is started on it. Nothing here changes.
+    fn open_in_other(&mut self) {
+        self.ed.sync_clip();
+        let (other, extension) = if is_sahne() { ("pisiworks", FILE_EXTENSION) } else { ("pisisahne", SAHNE_EXTENSION) };
+        let document = self.ed.for_other_program(is_sahne());
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisiworks").join("aktarim");
+        let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
+        let path = folder.join(format!("{}.{extension}", crate::templates::file_name(&stem)));
+        // The other program is looked for beside this one first, then wherever the system finds it.
+        let beside = std::env::current_exe().ok().map(|exe| exe.with_file_name(other)).filter(|exe| exe.exists());
+        let program = beside.unwrap_or_else(|| PathBuf::from(other));
+        let started = std::fs::create_dir_all(&folder)
+            .map_err(anyhow::Error::from)
+            .and_then(|()| document_to_json(&document))
+            .and_then(|json| std::fs::write(&path, json).map_err(anyhow::Error::from))
+            .and_then(|()| std::process::Command::new(&program).arg(&path).spawn().map(|_| ()).map_err(anyhow::Error::from));
+        self.status = match started {
+            Ok(()) => tf("Opened in {} as a copy: {}", &[&if is_sahne() { "PisiWorks" } else { "PisiSahne" }, &path.display()]),
+            Err(error) => tf("Could not open the other program: {}", &[&format!("{error:#}")]),
+        };
+    }
+
     /// Control > Publish as HTML5: asks for a file and writes the scene as a page that plays in a browser.
     fn publish_html(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.ed.leave_symbol_for_good();
@@ -3460,7 +3483,8 @@ impl Workspace {
         }
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));
         match cmd {
-            Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate | Cmd::Example(_) => self.confirm_discard(cmd, window, cx),
+            Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate | Cmd::Example(_) | Cmd::SahneExample(_) => self.confirm_discard(cmd, window, cx),
+            Cmd::OpenInOther => self.open_in_other(),
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
                 self.commands_dialog = Some(None);
@@ -4270,6 +4294,13 @@ impl Workspace {
             }
             Cmd::Open => self.pick_file(window, cx, |this, path| this.open_file(path)),
             Cmd::NewFromTemplate => self.template_dialog = Some((crate::templates::saved(), 0)),
+            Cmd::SahneExample(which) => {
+                if let Some(example) = crate::sahne_examples::EXAMPLES.get(which as usize) {
+                    self.load_document((example.build)(), None);
+                    self.fit_if_larger_than_view();
+                    self.status = format!("{}: {}", t(example.name), t(example.about));
+                }
+            }
             Cmd::Example(which) => {
                 if let Some(example) = crate::examples::EXAMPLES.get(which as usize) {
                     // An example opens as a new document of the user's own, with no file behind it.
@@ -4387,6 +4418,13 @@ impl Workspace {
 
     /// Adds an image to the current document, centered on the canvas.
     fn import_file(&mut self, path: &Path) {
+        // A document of either program is brought in with its objects and the symbols they use.
+        if let Ok(Opened::Document(other)) = std::fs::read(path).map_err(anyhow::Error::from).and_then(|bytes| parse_file(&bytes)) {
+            let count = self.ed.import_document(&other);
+            self.ed.commit(t("Import"));
+            self.status = tf("Imported {} object(s) from {}", &[&count, &path.file_name().unwrap_or_default().to_string_lossy()]);
+            return;
+        }
         let decoded = std::fs::read(path).map_err(anyhow::Error::from).and_then(|bytes| Bitmap::decode(&bytes));
         match decoded {
             Ok(bitmap) => {

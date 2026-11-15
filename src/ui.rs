@@ -150,13 +150,13 @@ impl Workspace {
         // The animation program has its timeline menus where Flash has them, after Modify.
         if crate::theme::is_sahne() {
             let after = MENUS.iter().position(|(title, _)| *title == "Modify").map_or(titles.len(), |at| at + 1);
-            let first = MENUS.len() + crate::menus::EXTRA_MENUS.len();
+            let first = MENUS.len() + crate::menus::extra_menus().len();
             for (i, menu) in crate::menus::SAHNE_MENUS.iter().enumerate() {
                 titles.insert(after + i, title_of(first + i, menu, false));
             }
         }
         // PisiWorks' own menus are numbered after the others and stand at the right.
-        let extras: Vec<_> = crate::menus::EXTRA_MENUS.iter().enumerate().map(|(i, menu)| title_of(MENUS.len() + i, menu, true)).collect();
+        let extras: Vec<_> = crate::menus::extra_menus().iter().enumerate().map(|(i, menu)| title_of(MENUS.len() + i, menu, true)).collect();
         let window_button = |id: &'static str, name: &'static str, area: WindowControlArea, close: bool| {
             div()
                 .id(id)

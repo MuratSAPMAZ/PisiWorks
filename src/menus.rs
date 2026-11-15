@@ -225,6 +225,10 @@ pub enum Cmd {
     GifWizard,
     /// Opens the example with this place in the list.
     Example(u8),
+    /// Opens the animation example with this place in the list.
+    SahneExample(u8),
+    /// Hands the document to the other of the two programs and opens it there.
+    OpenInOther,
     ManageCommands,
     RunScript,
     /// Plays the saved command with this place in the list.
@@ -355,7 +359,29 @@ pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[
         cmd("Web page mockup", "", Cmd::Example(6)),
     ],
     ),
+    ("PisiSahne", &[cmd("Open in PisiSahne", "", Cmd::OpenInOther)]),
 ];
+
+/// The menus at the right end of the animation program's menu bar: its own examples, and the way back to PisiWorks.
+pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
+    (
+        "Examples",
+        &[
+            cmd("Bouncing ball", "", Cmd::SahneExample(0)),
+            cmd("Changing shapes", "", Cmd::SahneExample(1)),
+            cmd("Along a path", "", Cmd::SahneExample(2)),
+            cmd("Spotlight", "", Cmd::SahneExample(3)),
+            cmd("Turning gears", "", Cmd::SahneExample(4)),
+            cmd("Two scenes with buttons", "", Cmd::SahneExample(5)),
+        ],
+    ),
+    ("PisiWorks", &[cmd("Open Frame in PisiWorks", "", Cmd::OpenInOther)]),
+];
+
+/// The menus at the right end of the menu bar, for the program that is running.
+pub fn extra_menus() -> &'static [(&'static str, &'static [Entry])] {
+    if crate::theme::is_sahne() { SAHNE_EXTRA_MENUS } else { EXTRA_MENUS }
+}
 
 /// What the animation program does with its timeline.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
