@@ -14,6 +14,7 @@ pub mod export;
 pub mod fit;
 pub mod fonts;
 pub mod fwpng;
+pub mod guide;
 pub mod i18n;
 pub mod icons;
 pub mod jpeg;

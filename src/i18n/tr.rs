@@ -1524,4 +1524,8 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Rooftop", "Çatı"),
     ("Stage {}: {}", "Bölüm {}: {}"),
     ("Pisi wins!", "Pisi kazandı!"),
+    ("User Guide", "Kullanım Kılavuzu"),
+    ("Contents", "İçindekiler"),
+    ("How These Are Made: the Lessons", "Bunlar Nasıl Yapıldı: Dersler"),
+    ("The guide is open in the browser", "Kılavuz tarayıcıda açıldı"),
 ];

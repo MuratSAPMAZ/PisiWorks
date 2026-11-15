@@ -229,6 +229,8 @@ pub enum Cmd {
     SahneExample(u8),
     /// Hands the document to the other of the two programs and opens it there.
     OpenInOther,
+    /// Opens the user guide in the browser; in PisiSahne, at the part about animation and games.
+    Guide,
     /// Opens Rules and Numbers.
     Rules,
     /// Gives the selection a ready-made motion, takes it away, or opens the motions' settings.
@@ -387,6 +389,8 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
             cmd("Game: space shooter", "", Cmd::SahneExample(12)),
             cmd("Game: quiz", "", Cmd::SahneExample(13)),
             cmd("Two scenes with buttons", "", Cmd::SahneExample(14)),
+            Sep,
+            cmd("How These Are Made: the Lessons", "F1", Cmd::Guide),
         ],
     ),
     ("Behaviors", BEHAVIOR_MENU),
@@ -1230,5 +1234,5 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Image Editing", "", Cmd::Panel(Panel::ImageEditing)),
         ],
     ),
-    ("Help", &[cmd("About PisiWorks", "", Cmd::About)]),
+    ("Help", &[cmd("User Guide", "F1", Cmd::Guide), Sep, cmd("About PisiWorks", "", Cmd::About)]),
 ];

@@ -2626,6 +2626,20 @@ impl Workspace {
     }
 
     /// Control > Test Movie: publishes the animation to a file of the program's own and opens it in the browser, as Flash's Test Movie opens the finished film.
+    /// Help > User Guide: writes the guide out as a page and opens it in the browser. PisiSahne opens it at the
+    /// part about animation, where the lessons are.
+    fn open_guide(&mut self) {
+        let (html, animation) = crate::guide::page(crate::i18n::language(), t("User Guide"), t("Contents"));
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisiworks");
+        let path = folder.join(if crate::i18n::language() == crate::i18n::Language::Turkish { "kilavuz.html" } else { "guide.html" });
+        let written = std::fs::create_dir_all(&folder).and_then(|()| std::fs::write(&path, html));
+        let place = if crate::theme::is_sahne() && !animation.is_empty() { format!("file://{}#{animation}", path.display()) } else { format!("file://{}", path.display()) };
+        self.status = match written.and_then(|()| std::process::Command::new("xdg-open").arg(&place).spawn().map(|_| ())) {
+            Ok(()) => t("The guide is open in the browser").to_string(),
+            Err(error) => tf("Export failed: {}", &[&error]),
+        };
+    }
+
     fn test_movie(&mut self) {
         let movie = self.movie();
         let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
@@ -3810,6 +3824,7 @@ impl Workspace {
             Cmd::OpenInOther => self.open_in_other(),
             Cmd::Behavior(behavior) => self.run_behavior(behavior),
             Cmd::Rules => self.rules_dialog = true,
+            Cmd::Guide => self.open_guide(),
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
                 self.commands_dialog = Some(None);
@@ -7107,6 +7122,7 @@ impl Workspace {
             "enter" if self.crop_area.is_some() => self.apply_crop(window, cx),
             "enter" if self.transform.is_some() => self.apply_transform(),
             // With nothing waiting to be applied, Enter plays the timeline, as in Flash.
+            "f1" => self.run(Cmd::Guide, window, cx),
             "enter" if is_sahne() && self.pen.is_empty() => self.run(Cmd::Frame(crate::menus::FrameCmd::Play), window, cx),
             "enter" => self.finish_pen(false),
             "escape" => {
