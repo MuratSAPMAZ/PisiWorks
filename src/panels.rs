@@ -391,6 +391,7 @@ impl Workspace {
                 let current = self.edited_filter().map_or(0, |(_, filter)| filter.value(setting).round() as usize);
                 let names: Vec<&'static str> = match self.edited_filter().map(|(_, filter)| filter.kind) {
                     Some(crate::effects::FilterKind::ColorFill) => crate::blend::BlendMode::ALL.iter().map(|mode| mode.label()).collect(),
+                    Some(crate::effects::FilterKind::PhotoshopEffects) => crate::pseffects::choices(setting).unwrap_or_default(),
                     Some(crate::effects::FilterKind::Levels | crate::effects::FilterKind::Curves) => crate::effects::CHANNELS.iter().map(|name| channel_label(name)).collect(),
                     _ => crate::effects::BEVEL_SHAPES.iter().map(|name| t(name)).collect(),
                 };
@@ -787,9 +788,36 @@ impl Workspace {
         let (width, rows) = match filter.kind {
             FilterKind::Levels => (284., self.levels_rows(&filter, cx)),
             FilterKind::Curves => (284., self.curves_rows(&filter, cx)),
-            FilterKind::PhotoshopEffects => (400., self.photoshop_rows(&filter, cx)),
+            FilterKind::PhotoshopEffects => (470., self.photoshop_rows(&filter, cx)),
             _ => (280., self.plain_filter_rows(&filter, cx)),
         };
+        let tonal = matches!(filter.kind, FilterKind::Levels | FilterKind::Curves);
+        // The three eyedroppers: the color clicked on the object becomes black, gray or white.
+        let droppers: Vec<Div> = [(0x000000, PANEL_RAISED), (0x808080, PANEL_RAISED), (0xffffff, PANEL_RAISED)]
+            .into_iter()
+            .enumerate()
+            .map(|(dropper, (color, back))| {
+                div()
+                    .size(px(22.))
+                    .flex()
+                    .flex_none()
+                    .items_center()
+                    .justify_center()
+                    .bg(rgb(back))
+                    .border_1()
+                    .border_color(rgb(if self.filter_dropper == Some(dropper) { SELECTION } else { INPUT_BORDER }))
+                    .when(self.filter_dropper == Some(dropper), |d| d.border_2())
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(move |this, _, _, cx| {
+                            this.pick_filter_dropper(dropper);
+                            cx.notify();
+                        }),
+                    )
+                    // The outline of the eyedropper, with its glass in the shade it sets.
+                    .child(div().relative().size(px(16.)).child(crate::ui::icon_layer("eyedropper", 0, 16., color).absolute().top_0().left_0()).child(crate::ui::icon_layer("eyedropper", 1, 16., TEXT).absolute().top_0().left_0()))
+            })
+            .collect();
         Some(
             deferred(
                 div()
@@ -803,10 +831,19 @@ impl Workspace {
                     .occlude()
                     // A point of the curve follows the mouse anywhere over the window, not only inside its box.
                     .on_mouse_move(cx.listener(|this, ev: &gpui::MouseMoveEvent, _, cx| {
-                        if this.drag_curve(ev.position) {
+                        if this.drag_curve(ev.position) || this.drag_level(ev.position) {
                             cx.notify();
                         }
                     }))
+                    // With an eyedropper in hand, a click beside the dialog picks a color from the object.
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                            if this.use_filter_dropper(ev.position) {
+                                cx.notify();
+                            }
+                        }),
+                    )
                     .on_mouse_up(
                         MouseButton::Left,
                         cx.listener(|this, _, _, cx| {
@@ -825,16 +862,31 @@ impl Workspace {
                             .border_1()
                             .border_color(rgb(BORDER))
                             .shadow_lg()
+                            // A click on the dialog itself is not one on the object behind it.
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                             .child(div().pb_1().font_weight(FontWeight::BOLD).child(filter.kind.label()))
                             .children(rows)
+                            .when(tonal, |d| {
+                                d.child(
+                                    div()
+                                        .pt_1()
+                                        .flex()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(self.text_button(t("Auto"), self.filter_histogram.is_some(), cx, |this, _, _| this.auto_filter()))
+                                        .child(div().flex_1())
+                                        .children(droppers),
+                                )
+                            })
                             .child(
                                 div()
                                     .pt_1()
                                     .flex()
+                                    .items_center()
                                     .justify_end()
                                     .gap_1()
-                                    .when(matches!(filter.kind, FilterKind::Levels | FilterKind::Curves), |d| {
-                                        d.child(self.text_button(t("Auto"), self.filter_histogram.is_some(), cx, |this, _, _| this.auto_filter())).child(div().flex_1())
+                                    .when(filter.kind != FilterKind::PhotoshopEffects, |d| {
+                                        d.child(self.check_box(t("Preview"), self.filter_preview(), cx, |this| this.toggle_filter_preview())).child(div().flex_1())
                                     })
                                     .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_filter_dialog(true)))
                                     .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_filter_dialog(false))),
@@ -898,7 +950,7 @@ impl Workspace {
 
     /// Levels: the channel, how many pixels have each of its levels, and the levels
     /// taken as black, mid gray and white on the way in and as black and white on the way out.
-    fn levels_rows(&self, _: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
+    fn levels_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
         let channel = self.filter_channel();
         let at = crate::effects::levels_start(channel);
         let histogram = self.filter_histogram.clone();
@@ -927,10 +979,63 @@ impl Workspace {
         let mut fields = fields.into_iter();
         let input = div().flex().gap_1().children(fields.by_ref().take(3));
         let output = div().flex().gap_1().children(fields);
+        // The sliders under the histogram and under the ramp: small triangles at their levels.
+        let values = [0, 1, 2, 3, 4].map(|offset| filter.value(at + offset));
+        let middle = values[0] + (values[2] - values[0]) * crate::effects::gamma_place(values[1]);
+        let strip = |row: usize, sliders: Vec<(f32, u32)>, cx: &mut Context<Self>| {
+            let cell = self.level_bounds[row].clone();
+            div()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                        this.press_level(row, ev.position);
+                        cx.notify();
+                    }),
+                )
+                .child(
+                    canvas(move |bounds, _, _| cell.set(bounds), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+                        for (level, color) in &sliders {
+                            let x = bounds.origin.x + px(level / 255.0 * f32::from(bounds.size.width));
+                            let (top, bottom) = (bounds.origin.y + px(1.), bounds.origin.y + bounds.size.height - px(1.));
+                            // A dark triangle with the slider's own shade inside it.
+                            for (inset, shade) in [(0., TEXT), (2., *color)] {
+                                let mut path = gpui::PathBuilder::fill();
+                                path.move_to(point(x, top + px(inset)));
+                                path.line_to(point(x + px(5. - inset), bottom - px(inset / 2.)));
+                                path.line_to(point(x - px(5. - inset), bottom - px(inset / 2.)));
+                                path.close();
+                                if let Ok(path) = path.build() {
+                                    window.paint_path(path, rgb(shade));
+                                }
+                            }
+                        }
+                    })
+                    .w(px(256.))
+                    .h(px(11.)),
+                )
+        };
+        let tone = [0xffffff, 0xff0000, 0x00ff00, 0x0000ff][channel.min(3)];
+        let ramp = canvas(|_, _, _| (), move |bounds: Bounds<gpui::Pixels>, _, window: &mut Window, _| {
+            // From black to the full color of the channel, in steps too small to see.
+            let step = f32::from(bounds.size.width) / 64.0;
+            for i in 0..64u32 {
+                let part = i * 255 / 63;
+                let shade = (((tone >> 16) & 0xff) * part / 255) << 16 | (((tone >> 8) & 0xff) * part / 255) << 8 | ((tone & 0xff) * part / 255);
+                let origin = point(bounds.origin.x + px(i as f32 * step), bounds.origin.y);
+                window.paint_quad(fill(Bounds { origin, size: size(px(step + 0.5), bounds.size.height) }, rgb(shade)));
+            }
+        })
+        .w(px(256.))
+        .h(px(10.));
+        let into = strip(0, vec![(values[0], 0x000000), (middle, 0x808080), (values[2], 0xffffff)], cx);
+        let out_of = strip(1, vec![(values[3], 0x000000), (values[4], 0xffffff)], cx);
         vec![
             self.channel_row(5, cx),
             div().border_1().border_color(rgb(INPUT_BORDER)).child(bars).into_any_element(),
+            into.into_any_element(),
             labelled_row(t("Input levels:"), 100., input).into_any_element(),
+            div().mt_1().border_1().border_color(rgb(INPUT_BORDER)).child(ramp).into_any_element(),
+            out_of.into_any_element(),
             labelled_row(t("Output levels:"), 100., output).into_any_element(),
         ]
     }
@@ -994,13 +1099,13 @@ impl Workspace {
     /// Photoshop Live Effects: the effects in a list, each with a box that switches it
     /// on, and beside it the settings of the one picked.
     fn photoshop_rows(&self, filter: &crate::effects::LiveFilter, cx: &mut Context<Self>) -> Vec<AnyElement> {
-        use crate::effects::{PS_BLOCK, PS_EFFECTS};
-        let shown = self.ps_effect.min(PS_EFFECTS.len() - 1);
-        let list: Vec<AnyElement> = PS_EFFECTS
+        use crate::pseffects::{index, label, row_shows, rows, Row, NAMES, ORDER};
+        let shown = if self.ps_effect < NAMES.len() { self.ps_effect } else { 0 };
+        let list: Vec<AnyElement> = ORDER
             .iter()
-            .enumerate()
-            .map(|(effect, name)| {
-                let on = filter.value(effect * PS_BLOCK) >= 0.5;
+            .map(|effect| {
+                let effect = *effect;
+                let on = filter.value(index(effect, 0)) >= 0.5;
                 div()
                     .h(px(20.))
                     .px_1()
@@ -1023,7 +1128,7 @@ impl Workspace {
                                 cx.listener(move |this, _, _, cx| {
                                     this.commit_field();
                                     this.ps_effect = effect;
-                                    this.set_filter_value(effect * PS_BLOCK, if on { 0.0 } else { 1.0 });
+                                    this.set_filter_value(index(effect, 0), if on { 0.0 } else { 1.0 });
                                     cx.notify();
                                 }),
                             )
@@ -1040,34 +1145,44 @@ impl Workspace {
                                     cx.notify();
                                 }),
                             )
-                            .child(t(name)),
+                            .child(label(NAMES[effect])),
                     )
                     .into_any_element()
             })
             .collect();
-        // Which of an effect's numbers it uses, by their place in its block, and what each is called there.
-        let numbers: &[(usize, &str)] = match shown {
-            0 | 1 | 5 => &[(1, "Opacity:"), (2, "Angle:"), (3, "Distance:"), (4, "Size:")],
-            2 | 3 => &[(1, "Opacity:"), (4, "Size:")],
-            4 => &[(3, "Depth:"), (4, "Size:"), (2, "Angle:"), (1, "Opacity:")],
-            6 => &[(1, "Opacity:")],
-            _ => &[(4, "Size:"), (1, "Opacity:")],
-        };
-        let name_width = label_width(&numbers.iter().map(|(_, name)| t(name)).chain([t("Color:")]).collect::<Vec<_>>(), 60.);
-        let mut settings: Vec<AnyElement> = vec![div().pb_1().font_weight(FontWeight::BOLD).child(t(PS_EFFECTS[shown])).into_any_element()];
-        for (place, name) in numbers {
-            settings.push(labelled_row(t(name), name_width, self.field(FieldId::FilterValue(shown * PS_BLOCK + place), 60., cx)).into_any_element());
-        }
-        // A bevel is made of light and shade, not of a color of its own.
-        if shown != 4 {
-            settings.push(labelled_row(t("Color:"), name_width, self.swatch(ColorTarget::PsEffect(shown), 18., cx)).into_any_element());
+        let lines: Vec<&Row> = rows(shown).iter().filter(|row| row_shows(filter, shown, row)).collect();
+        let names: Vec<&'static str> = lines
+            .iter()
+            .filter_map(|row| match **row {
+                Row::Number { name, .. } | Row::List { name, .. } | Row::Blend { name, .. } | Row::Color { name, .. } => Some(label(name)),
+                Row::Heading(_) | Row::Toggle { .. } => None,
+            })
+            .collect();
+        let name_width = label_width(&names, 60.);
+        let mut settings: Vec<AnyElement> = vec![div().pb_1().font_weight(FontWeight::BOLD).child(label(NAMES[shown])).into_any_element()];
+        for row in lines {
+            settings.push(match *row {
+                Row::Heading(name) => div().pt_1().font_weight(FontWeight::BOLD).child(label(name)).into_any_element(),
+                Row::Number { name, slot, .. } => labelled_row(label(name), name_width, self.field(FieldId::FilterValue(index(shown, slot)), 60., cx)).into_any_element(),
+                Row::Toggle { name, slot, .. } => self.filter_toggle(index(shown, slot), label(name), filter.value(index(shown, slot)) >= 0.5, cx).into_any_element(),
+                Row::List { name, slot, items, .. } => {
+                    let current = (filter.value(index(shown, slot)).round() as usize).min(items.len() - 1);
+                    labelled_row(label(name), name_width, self.combo(Combo::FilterChoice(index(shown, slot)), label(items[current]), 150., cx).bg(rgb(PANEL_RAISED))).into_any_element()
+                }
+                Row::Blend { name, slot, .. } => {
+                    let modes = crate::blend::BlendMode::ALL;
+                    let current = (filter.value(index(shown, slot)).round() as usize).min(modes.len() - 1);
+                    labelled_row(label(name), name_width, self.combo(Combo::FilterChoice(index(shown, slot)), modes[current].label(), 150., cx).bg(rgb(PANEL_RAISED))).into_any_element()
+                }
+                Row::Color { name, color } => labelled_row(label(name), name_width, self.swatch(ColorTarget::PsEffect(color), 18., cx)).into_any_element(),
+            });
         }
         vec![
             div()
                 .flex()
                 .gap_3()
-                .child(div().w(px(170.)).flex().flex_col().flex_none().bg(rgb(PANEL_RAISED)).border_1().border_color(rgb(INPUT_BORDER)).children(list))
-                .child(div().flex_1().flex().flex_col().gap_1().children(settings))
+                .child(div().w(px(160.)).flex().flex_col().flex_none().bg(rgb(PANEL_RAISED)).border_1().border_color(rgb(INPUT_BORDER)).children(list))
+                .child(div().flex_1().min_h(px(345.)).flex().flex_col().gap_1().children(settings))
                 .into_any_element(),
         ]
     }

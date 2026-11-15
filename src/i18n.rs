@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::OnceLock;
 
-mod tr;
+pub(crate) mod tr;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Language {

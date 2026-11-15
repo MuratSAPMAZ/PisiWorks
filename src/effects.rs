@@ -80,12 +80,6 @@ const fn toggle(name: &'static str, start: bool) -> Setting {
 /// The channels Levels and Curves can work on, by the number stored for "Channel".
 pub const CHANNELS: [&str; 4] = ["RGB", "Red", "Green", "Blue"];
 
-/// The effects inside Photoshop Live Effects, in the order of its dialog. Each has
-/// [`PS_BLOCK`] settings in a row: whether it is on, then its own numbers.
-pub const PS_EFFECTS: [&str; 8] =
-    ["Drop Shadow", "Inner Shadow", "Outer Glow", "Inner Glow", "Bevel and Emboss", "Satin", "Color Overlay", "Stroke"];
-pub const PS_BLOCK: usize = 5;
-
 /// Where the five Levels numbers of a channel start among the settings: all channels
 /// together first, as before channels could be told apart, then red, green and blue.
 pub fn levels_start(channel: usize) -> usize {
@@ -179,29 +173,6 @@ impl FilterKind {
             all
         };
         const CURVES: [Setting; 1] = [number("Channel", 0.0, 3.0, 0.0)];
-        // For each effect: on or off, opacity, angle, distance or depth, size.
-        const fn ps(on: bool, opacity: f32, angle: f32, distance: f32, size: f32) -> [Setting; PS_BLOCK] {
-            [toggle("On", on), number("Opacity", 0.0, 100.0, opacity), number("Angle", 0.0, 360.0, angle), number("Distance", 0.0, 100.0, distance), number("Size", 0.0, 100.0, size)]
-        }
-        const PS: [[Setting; PS_BLOCK]; 8] = [
-            ps(true, 75.0, 120.0, 5.0, 5.0),
-            ps(false, 75.0, 120.0, 5.0, 5.0),
-            ps(false, 75.0, 0.0, 0.0, 5.0),
-            ps(false, 75.0, 0.0, 0.0, 5.0),
-            ps(false, 75.0, 120.0, 100.0, 5.0),
-            ps(false, 50.0, 19.0, 11.0, 14.0),
-            ps(false, 100.0, 0.0, 0.0, 0.0),
-            ps(false, 100.0, 0.0, 0.0, 3.0),
-        ];
-        const PS_FLAT: [Setting; 8 * PS_BLOCK] = {
-            let mut flat = [PS[0][0]; 8 * PS_BLOCK];
-            let mut i = 0;
-            while i < 8 * PS_BLOCK {
-                flat[i] = PS[i / PS_BLOCK][i % PS_BLOCK];
-                i += 1;
-            }
-            flat
-        };
         const GAUSSIAN: [Setting; 1] = [number("Radius", 0.1, 250.0, 4.0)];
         const MOTION: [Setting; 2] = [number("Angle", 0.0, 360.0, 0.0), number("Distance", 1.0, 100.0, 10.0)];
         const SPIN: [Setting; 2] = [number("Amount", 1.0, 100.0, 10.0), number("Quality", 1.0, 100.0, 20.0)];
@@ -215,7 +186,7 @@ impl FilterKind {
             HueSaturation => &HUE,
             Levels => &LEVELS,
             Curves => &CURVES,
-            PhotoshopEffects => &PS_FLAT,
+            PhotoshopEffects => crate::pseffects::settings(),
             InnerBevel | OuterBevel => &BEVEL,
             InsetEmboss | RaisedEmboss => &EMBOSS,
             GaussianBlur => &GAUSSIAN,
@@ -263,6 +234,42 @@ pub struct LiveFilter {
 /// The curve that changes nothing, which every channel starts with.
 pub const STRAIGHT: [(f32, f32); 2] = [(0.0, 0.0), (255.0, 255.0)];
 
+/// Where the middle slider of Levels stands between the black and the white one,
+/// from 0 to 1, for a gamma: the level that comes out as mid gray.
+pub fn gamma_place(gamma: f32) -> f32 {
+    0.5f32.powf(gamma.clamp(0.1, 10.0))
+}
+
+/// The five numbers of a Levels channel after one of its sliders is dragged to
+/// `level`: 0 to 2 are black, gamma and white on the way in, 3 and 4 black and
+/// white on the way out. Black and white on the way in cannot meet or cross.
+pub fn levels_dragged(mut values: [f32; 5], slider: usize, level: f32) -> [f32; 5] {
+    let exact = level.clamp(0.0, 255.0);
+    let level = exact.round();
+    match slider {
+        0 => values[0] = level.min(values[2] - 2.0).max(0.0),
+        1 => {
+            let place = ((exact - values[0]) / (values[2] - values[0]).max(1.0)).clamp(0.001, 0.999);
+            values[1] = ((place.ln() / 0.5f32.ln()).clamp(0.1, 10.0) * 100.0).round() / 100.0;
+        }
+        2 => values[2] = level.max(values[0] + 2.0).min(255.0),
+        3 | 4 => values[slider] = level,
+        _ => {}
+    }
+    values
+}
+
+/// The filters as they will be with the edited one put at its place among those
+/// from before the dialog opened: in place of the one there, or at the end if it is new.
+pub fn placed(before: &[LiveFilter], index: usize, edited: LiveFilter) -> Vec<LiveFilter> {
+    let mut filters = before.to_vec();
+    match filters.get_mut(index) {
+        Some(slot) => *slot = edited,
+        None => filters.push(edited),
+    }
+    filters
+}
+
 /// A press on a curve at `level`: the point within `reach` levels of it is taken
 /// hold of, or a new one is put there. Gives the points and the one held.
 pub fn curve_pressed(mut points: Vec<(f32, f32)>, level: (f32, f32), reach: f32) -> (Vec<(f32, f32)>, usize) {
@@ -301,12 +308,6 @@ pub fn curve_dragged(mut points: Vec<(f32, f32)>, index: usize, level: (f32, f32
     (points, true)
 }
 
-/// The colors the Photoshop effects start with, in the order of [`PS_EFFECTS`].
-fn ps_start_colors() -> Vec<Color> {
-    let (black, glow, red) = (Color::BLACK, Color::rgb(255, 255, 190), Color::rgb(255, 0, 0));
-    vec![black, black, glow, glow, black, black, red, red]
-}
-
 fn on() -> bool {
     true
 }
@@ -319,7 +320,7 @@ impl LiveFilter {
             color: kind.start_color(),
             enabled: true,
             curves: if kind == Curves { vec![STRAIGHT.to_vec(); 4] } else { Vec::new() },
-            colors: if kind == PhotoshopEffects { ps_start_colors() } else { Vec::new() },
+            colors: if kind == PhotoshopEffects { crate::pseffects::start_colors() } else { Vec::new() },
         }
     }
 
@@ -336,17 +337,18 @@ impl LiveFilter {
         self.values[index] = if value.is_finite() { value.clamp(setting.min, setting.max) } else { setting.start };
     }
 
-    /// The color of one of the Photoshop effects.
-    pub fn ps_color(&self, effect: usize) -> Color {
-        self.colors.get(effect).copied().or_else(|| ps_start_colors().get(effect).copied()).unwrap_or(Color::BLACK)
+    /// One of the colors of Photoshop Live Effects, by its number there.
+    pub fn ps_color(&self, color: usize) -> Color {
+        self.colors.get(color).copied().or_else(|| crate::pseffects::start_colors().get(color).copied()).unwrap_or(Color::BLACK)
     }
 
-    pub fn set_ps_color(&mut self, effect: usize, color: Color) {
-        if self.colors.len() < PS_EFFECTS.len() {
-            self.colors = (0..PS_EFFECTS.len()).map(|i| self.ps_color(i)).collect();
+    pub fn set_ps_color(&mut self, color: usize, to: Color) {
+        let count = crate::pseffects::start_colors().len();
+        if self.colors.len() < count {
+            self.colors = (0..count).map(|i| self.ps_color(i)).collect();
         }
-        if let Some(slot) = self.colors.get_mut(effect) {
-            *slot = color;
+        if let Some(slot) = self.colors.get_mut(color) {
+            *slot = to;
         }
     }
 
@@ -361,6 +363,57 @@ impl LiveFilter {
         self.curves.resize(4, STRAIGHT.to_vec());
         if let Some(curve) = self.curves.get_mut(channel) {
             *curve = points;
+        }
+    }
+
+    /// What the eyedroppers of Levels and Curves do with the color picked: 0 makes it
+    /// black, 2 makes it white, and 1 makes it a gray, taking any tint out of it.
+    /// `sample` is the red, green and blue picked, from 0 to 255.
+    pub fn pick_point(&mut self, dropper: usize, sample: [f32; 3]) {
+        let mean = (sample[0] + sample[1] + sample[2]) / 3.0;
+        for (channel, level) in sample.into_iter().enumerate() {
+            let level = level.clamp(0.0, 255.0).round();
+            match self.kind {
+                Levels => {
+                    let at = levels_start(channel + 1);
+                    let (black, white) = (self.value(at), self.value(at + 2));
+                    match dropper {
+                        0 => self.set_value(at, level.min(white - 2.0).max(0.0)),
+                        2 => self.set_value(at + 2, level.max(black + 2.0)),
+                        _ => {
+                            // Each color's gamma is set so that all three come out at the level they share on average.
+                            let place = |v: f32| ((v - black) / (white - black).max(1.0)).clamp(0.001, 0.999);
+                            let shared = ((mean - black) / (white - black).max(1.0)).clamp(0.001, 0.999);
+                            self.set_value(at + 1, place(level).ln() / shared.ln());
+                        }
+                    }
+                }
+                Curves => {
+                    let mut points = self.curve(channel + 1);
+                    match dropper {
+                        0 => {
+                            points.retain(|p| p.0 > level);
+                            points.insert(0, (level.min(253.0), 0.0));
+                        }
+                        2 => {
+                            points.retain(|p| p.0 < level);
+                            points.push((level.max(2.0), 255.0));
+                        }
+                        _ => {
+                            points.retain(|p| (p.0 - level).abs() >= 1.0 || p.0 <= 0.0 || p.0 >= 255.0);
+                            if level > 0.0 && level < 255.0 {
+                                points.push((level, mean.round()));
+                            }
+                        }
+                    }
+                    points.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    if points.len() < 2 {
+                        points = STRAIGHT.to_vec();
+                    }
+                    self.set_curve(channel + 1, points);
+                }
+                _ => {}
+            }
         }
     }
 
@@ -486,13 +539,13 @@ impl Layer {
         out
     }
 
-    fn alpha(&self) -> Vec<f32> {
+    pub(crate) fn alpha(&self) -> Vec<f32> {
         self.pixels.iter().map(|p| p[3]).collect()
     }
 }
 
 /// Blurs one channel with three passes of a box, which is close to a Gaussian of that radius.
-fn blur_channel(values: &[f32], width: usize, height: usize, radius: f32) -> Vec<f32> {
+pub(crate) fn blur_channel(values: &[f32], width: usize, height: usize, radius: f32) -> Vec<f32> {
     if radius <= 0.05 || width == 0 || height == 0 {
         return values.to_vec();
     }
@@ -544,7 +597,7 @@ fn blur_layer(layer: &Layer, radius: f32) -> Layer {
 }
 
 /// Puts `top` over `bottom`.
-fn over(top: [f32; 4], bottom: [f32; 4]) -> [f32; 4] {
+pub(crate) fn over(top: [f32; 4], bottom: [f32; 4]) -> [f32; 4] {
     let alpha = top[3] + bottom[3] * (1.0 - top[3]);
     if alpha <= 0.0 {
         return [0.0; 4];
@@ -561,14 +614,14 @@ fn luminance(p: [f32; 4]) -> f32 {
 }
 
 /// A number from -1 to 1 that is always the same for the same pixel and channel.
-fn noise(x: usize, y: usize, channel: usize) -> f32 {
+pub(crate) fn noise(x: usize, y: usize, channel: usize) -> f32 {
     let mut n = (x as u32).wrapping_mul(374_761_393).wrapping_add((y as u32).wrapping_mul(668_265_263)).wrapping_add((channel as u32).wrapping_mul(2_246_822_519));
     n = (n ^ (n >> 13)).wrapping_mul(1_274_126_177);
     ((n ^ (n >> 16)) & 0xffff) as f32 / 32767.5 - 1.0
 }
 
 /// The unit vector a light or a shadow goes along, for an angle in degrees, counterclockwise from the right.
-fn direction(degrees: f32) -> (f32, f32) {
+pub(crate) fn direction(degrees: f32) -> (f32, f32) {
     let radians = degrees.to_radians();
     (radians.cos(), -radians.sin())
 }
@@ -704,48 +757,7 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
                 [one(0), one(1), one(2), p[3]]
             })
         }
-        PhotoshopEffects => {
-            let block = |effect: usize, index: usize| v(effect * PS_BLOCK + index);
-            let on = |effect: usize| block(effect, 0) >= 0.5;
-            // One of this module's own filters, set from an effect's numbers and color.
-            let part = |kind: FilterKind, effect: usize, values: &[f32]| {
-                let mut filter_part = LiveFilter::new(kind);
-                for (index, value) in values.iter().enumerate() {
-                    filter_part.set_value(index, *value);
-                }
-                filter_part.color = Some(filter.ps_color(effect));
-                filter_part
-            };
-            // Photoshop measures its angles toward the light; a shadow falls the other way.
-            let away = |effect: usize| (block(effect, 2) + 180.0).rem_euclid(360.0);
-            let mut out = layer.clone();
-            // What lies on the object first, from the bottom of the list up, then what lies around it.
-            if on(6) {
-                out = apply(&out, &part(ColorFill, 6, &[block(6, 1), 0.0]));
-            }
-            if on(5) {
-                out = satin(&out, block(5, 1) / 100.0, block(5, 2), block(5, 3), block(5, 4), filter.ps_color(5));
-            }
-            if on(3) {
-                out = apply(&out, &part(InnerGlow, 3, &[block(3, 4), block(3, 1), block(3, 4) / 2.0]));
-            }
-            if on(1) {
-                out = apply(&out, &part(InnerShadow, 1, &[block(1, 3), block(1, 1), block(1, 4), away(1)]));
-            }
-            if on(4) {
-                out = apply(&out, &part(InnerBevel, 4, &[1.0, block(4, 4).min(35.0), block(4, 1) * block(4, 3) / 100.0, 2.0, block(4, 2)]));
-            }
-            if on(7) {
-                out = outline(&out, &layer.alpha(), block(7, 4), block(7, 1) / 100.0, filter.ps_color(7));
-            }
-            if on(2) {
-                out = apply(&out, &part(Glow, 2, &[block(2, 4).min(35.0), block(2, 1), (block(2, 4) / 2.0).min(30.0), 0.0]));
-            }
-            if on(0) {
-                out = apply(&out, &part(DropShadow, 0, &[block(0, 3), block(0, 1), block(0, 4).min(30.0), away(0)]));
-            }
-            out
-        }
+        PhotoshopEffects => crate::pseffects::apply(layer, filter),
         AutoLevels => {
             // Each channel is stretched so its darkest value is black and its lightest white.
             let mut range = [(1.0f32, 0.0f32); 3];
@@ -819,52 +831,6 @@ pub fn apply(layer: &Layer, filter: &LiveFilter) -> Layer {
         DropShadow | InnerShadow | Glow | InnerGlow | SolidShadow => shadow_or_glow(layer, filter),
         InnerBevel | OuterBevel | InsetEmboss | RaisedEmboss => bevel_or_emboss(layer, filter),
     }
-}
-
-/// Photoshop's Satin: the object's own outline, shifted both ways along an angle and
-/// blurred, laid back on it as soft shading.
-fn satin(layer: &Layer, opacity: f32, angle: f32, distance: f32, size: f32, color: Color) -> Layer {
-    let (w, h) = (layer.width, layer.height);
-    let (dx, dy) = direction(angle);
-    let soft = blur_channel(&layer.alpha(), w, h, size.max(0.5));
-    let at = |x: f32, y: f32| -> f32 {
-        let (ix, iy) = (x.round() as i64, y.round() as i64);
-        if ix < 0 || iy < 0 || ix >= w as i64 || iy >= h as i64 { 0.0 } else { soft[iy as usize * w + ix as usize] }
-    };
-    let tint = [color.r as f32 / 255.0, color.g as f32 / 255.0, color.b as f32 / 255.0];
-    let mut out = layer.clone();
-    for y in 0..h {
-        for x in 0..w {
-            let px = &mut out.pixels[y * w + x];
-            if px[3] <= 0.0 {
-                continue;
-            }
-            let (fx, fy) = (x as f32, y as f32);
-            // Where the two shifted copies differ, the sheen shows.
-            let sheen = (at(fx + dx * distance, fy + dy * distance) - at(fx - dx * distance, fy - dy * distance)).abs();
-            let amount = (sheen * opacity).clamp(0.0, 1.0);
-            for c in 0..3 {
-                px[c] += (tint[c] - px[c]) * amount;
-            }
-        }
-    }
-    out
-}
-
-/// Photoshop's Stroke: a band of color around the outside of the object.
-fn outline(layer: &Layer, alpha: &[f32], size: f32, opacity: f32, color: Color) -> Layer {
-    if size <= 0.0 {
-        return layer.clone();
-    }
-    let (w, h) = (layer.width, layer.height);
-    // The outline grown by the size: half of the blurred edge lies that far out.
-    let grown: Vec<f32> = blur_channel(alpha, w, h, size * 2.0).iter().map(|a| ((a - 0.02) * 8.0).clamp(0.0, 1.0)).collect();
-    let tint = [color.r as f32 / 255.0, color.g as f32 / 255.0, color.b as f32 / 255.0];
-    let mut out = layer.clone();
-    for (px, g) in out.pixels.iter_mut().zip(&grown) {
-        *px = over(*px, [tint[0], tint[1], tint[2], (g * opacity).clamp(0.0, 1.0)]);
-    }
-    out
 }
 
 /// Averages each pixel with others found by `along`, which is given a number from 0 to 1 for each step.
@@ -1102,8 +1068,7 @@ pub fn reach(filter: &LiveFilter) -> f32 {
         SolidShadow => v(1),
         Glow => (v(0) + v(3)) * 3.0 + v(2) * 2.0,
         OuterBevel => v(1) * 3.0 + v(3) * 2.0,
-        // The shadow, the glow and the stroke are what reach past the object.
-        PhotoshopEffects => (v(3) + v(4) * 2.0).max(v(2 * PS_BLOCK + 4) * 4.0).max(v(7 * PS_BLOCK + 4) * 3.0) + 2.0,
+        PhotoshopEffects => crate::pseffects::reach(filter),
         InsetEmboss | RaisedEmboss => v(0) + v(2) * 2.0,
         GaussianBlur => v(0) * 2.0,
         Blur | BlurMore => 4.0,
@@ -1313,6 +1278,59 @@ mod tests {
     }
 
     #[test]
+    fn levels_sliders_keep_black_below_white_and_gamma_in_between() {
+        let start = [0.0, 1.0, 255.0, 0.0, 255.0];
+        assert_eq!(levels_dragged(start, 0, 40.2), [40.0, 1.0, 255.0, 0.0, 255.0]);
+        // Black cannot reach white, nor white black.
+        assert_eq!(levels_dragged(start, 0, 400.0)[0], 253.0);
+        assert_eq!(levels_dragged([100.0, 1.0, 255.0, 0.0, 255.0], 2, 20.0)[2], 102.0);
+        // The middle slider half way between them is a gamma of 1; a quarter of the way, 2.
+        assert_eq!(levels_dragged(start, 1, 127.5)[1], 1.0);
+        assert_eq!(levels_dragged(start, 1, 63.75)[1], 2.0);
+        assert_eq!(levels_dragged([100.0, 1.0, 200.0, 0.0, 255.0], 1, 175.0)[1], 0.42);
+        assert!((gamma_place(1.0) - 0.5).abs() < 1e-6 && (gamma_place(2.0) - 0.25).abs() < 1e-6);
+        // The ones for the way out go anywhere, and may cross.
+        assert_eq!(levels_dragged(start, 3, 300.0)[3], 255.0);
+        assert_eq!(levels_dragged(start, 4, 12.0)[4], 12.0);
+    }
+
+    #[test]
+    fn eyedroppers_set_black_gray_and_white_from_a_picked_color() {
+        let layer = square(8, 2, [40.0 / 255.0, 80.0 / 255.0, 120.0 / 255.0]);
+        let middle = |l: &Layer| l.pixels[4 * 8 + 4];
+        for kind in [Levels, Curves] {
+            // Picked as black, the color comes out black; as white, white.
+            let mut filter = LiveFilter::new(kind);
+            filter.pick_point(0, [40.0, 80.0, 120.0]);
+            let black = middle(&apply(&layer, &filter));
+            assert!(black[0] < 0.01 && black[1] < 0.01 && black[2] < 0.01, "{kind:?} {black:?}");
+            let mut filter = LiveFilter::new(kind);
+            filter.pick_point(2, [40.0, 80.0, 120.0]);
+            let white = middle(&apply(&layer, &filter));
+            assert!(white[0] > 0.99 && white[1] > 0.99 && white[2] > 0.99, "{kind:?} {white:?}");
+            // Picked as gray, it loses its tint and keeps its lightness.
+            let mut filter = LiveFilter::new(kind);
+            filter.pick_point(1, [40.0, 80.0, 120.0]);
+            let gray = middle(&apply(&layer, &filter));
+            assert!(near(gray[0], 80.0 / 255.0) && near(gray[1], 80.0 / 255.0) && near(gray[2], 80.0 / 255.0), "{kind:?} {gray:?}");
+        }
+        // On a curve, picking twice does not pile points up.
+        let mut curves = LiveFilter::new(Curves);
+        curves.pick_point(1, [40.0, 80.0, 120.0]);
+        curves.pick_point(1, [40.0, 90.0, 120.0]);
+        assert_eq!(curves.curve(1).len(), 3);
+        assert_eq!(curves.curve(0), STRAIGHT.to_vec());
+    }
+
+    #[test]
+    fn an_edited_filter_takes_its_place_among_the_others() {
+        let before = vec![LiveFilter::new(Blur), LiveFilter::new(Invert)];
+        let edited = LiveFilter::new(Levels);
+        assert_eq!(placed(&before, 1, edited.clone()).iter().map(|f| f.kind).collect::<Vec<_>>(), [Blur, Levels]);
+        assert_eq!(placed(&before, 2, edited).iter().map(|f| f.kind).collect::<Vec<_>>(), [Blur, Invert, Levels]);
+    }
+
+    #[test]
     fn auto_stretches_each_color_between_its_darkest_and_lightest() {
         let mut counts = [[0u32; 256]; 3];
         (counts[0][40], counts[0][210], counts[1][7]) = (5, 9, 3);
@@ -1327,35 +1345,6 @@ mod tests {
         curves.stretch(&counts);
         assert_eq!(curves.curve(1), vec![(40.0, 0.0), (210.0, 255.0)]);
         assert_eq!((curves.curve(0), curves.curve(2)), (STRAIGHT.to_vec(), STRAIGHT.to_vec()));
-    }
-
-    #[test]
-    fn photoshop_effects_are_switched_on_one_by_one() {
-        let layer = square(60, 20, [0.0, 0.0, 1.0]);
-        let at = |l: &Layer, x: usize, y: usize| l.pixels[y * 60 + x];
-        let mut effects = LiveFilter::new(PhotoshopEffects);
-        assert_eq!(effects.kind.settings().len(), PS_EFFECTS.len() * PS_BLOCK);
-        // Only the drop shadow is on to begin with. Light from 120 degrees, the upper left, throws it down and right.
-        let shadowed = apply(&layer, &effects);
-        assert!(at(&shadowed, 42, 42)[3] > 0.1 && at(&shadowed, 42, 42)[2] < 0.1, "{:?}", at(&shadowed, 42, 42));
-        assert!(at(&shadowed, 15, 15)[3] < 0.01);
-        assert_eq!(at(&shadowed, 30, 30), [0.0, 0.0, 1.0, 1.0]);
-        // A color overlay in place of the shadow paints the whole object in its color.
-        effects.set_value(0, 0.0);
-        effects.set_value(6 * PS_BLOCK, 1.0);
-        let painted = apply(&layer, &effects);
-        assert!(near(at(&painted, 30, 30)[0], 1.0) && near(at(&painted, 30, 30)[2], 0.0));
-        assert!(at(&painted, 42, 42)[3] < 0.01, "and nothing falls outside it now");
-        // A stroke is a band of its color around the outside.
-        effects.set_value(6 * PS_BLOCK, 0.0);
-        effects.set_value(7 * PS_BLOCK, 1.0);
-        effects.set_ps_color(7, Color::rgb(0, 255, 0));
-        let stroked = apply(&layer, &effects);
-        assert!(at(&stroked, 18, 30)[3] > 0.5 && at(&stroked, 18, 30)[1] > 0.9, "{:?}", at(&stroked, 18, 30));
-        assert_eq!(at(&stroked, 30, 30), [0.0, 0.0, 1.0, 1.0]);
-        assert!(at(&stroked, 5, 5)[3] < 0.01);
-        assert_eq!(effects.ps_color(7), Color::rgb(0, 255, 0));
-        assert_eq!(effects.ps_color(0), Color::BLACK);
     }
 
     #[test]

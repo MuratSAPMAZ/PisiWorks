@@ -464,6 +464,15 @@ pub struct Workspace {
     pub curve_bounds: Rc<Cell<Bounds<Pixels>>>,
     /// The effect whose settings show in the Photoshop Live Effects dialog.
     pub ps_effect: usize,
+    /// With Preview off in a filter dialog, the filter as edited so far; the object
+    /// meanwhile shows the filters it had before the dialog opened.
+    pub filter_draft: Option<LiveFilter>,
+    /// The eyedropper of Levels or Curves waiting for a click on the object: 0 black, 1 gray, 2 white.
+    pub filter_dropper: Option<usize>,
+    /// The slider of Levels being dragged: black, gamma and white on the way in, then black and white on the way out.
+    pub level_drag: Option<usize>,
+    /// Where the two rows of Levels sliders are on screen: the way in, then the way out.
+    pub level_bounds: [Rc<Cell<Bounds<Pixels>>>; 2],
     /// The JPEG mask as rectangles to tint, kept until the mask changes.
     jpeg_tint: std::cell::RefCell<Option<(usize, Arc<Vec<Rect>>)>>,
     pub collapsed_layers: Vec<usize>,
@@ -681,6 +690,10 @@ impl Workspace {
             curve_point: None,
             curve_bounds: Rc::new(Cell::new(Bounds::default())),
             ps_effect: 0,
+            filter_draft: None,
+            filter_dropper: None,
+            level_drag: None,
+            level_bounds: [Rc::new(Cell::new(Bounds::default())), Rc::new(Cell::new(Bounds::default()))],
             jpeg_tint: std::cell::RefCell::new(None),
             collapsed_layers: Vec::new(),
             properties_collapsed: false,
@@ -823,6 +836,7 @@ impl Workspace {
     fn show_filter_dialog(&mut self, index: usize, before: Vec<LiveFilter>) {
         self.filter_dialog = Some((index, before));
         (self.curve_drag, self.curve_point, self.ps_effect) = (None, None, 0);
+        (self.filter_draft, self.filter_dropper, self.level_drag) = (None, None, None);
         self.filter_histogram = self.histogram_before(index).map(Rc::new);
     }
 
@@ -867,14 +881,102 @@ impl Workspace {
         })
     }
 
-    /// Changes the filter being edited without a step in the history, for use while dragging.
-    fn touch_edited_filter(&mut self, change: impl Fn(&mut LiveFilter)) {
+    /// Changes the filter being edited: on the selection, or, with Preview off, the
+    /// copy kept aside. `commit` makes it a step in the history; dragging leaves that to the release.
+    fn edit_filter(&mut self, commit: bool, change: impl Fn(&mut LiveFilter)) {
         let Some(index) = self.filter_dialog.as_ref().map(|(index, _)| *index) else { return };
+        if let Some(draft) = self.filter_draft.as_mut() {
+            change(draft);
+            return;
+        }
         self.ed.for_selected(|o| {
             if let Some(filter) = o.filters.get_mut(index) {
                 change(filter);
             }
         });
+        if commit {
+            self.ed.commit(t("Live Filters"));
+        }
+    }
+
+    fn touch_edited_filter(&mut self, change: impl Fn(&mut LiveFilter)) {
+        self.edit_filter(false, change);
+    }
+
+    /// Whether the object shows the filter while its dialog is open.
+    pub fn filter_preview(&self) -> bool {
+        self.filter_draft.is_none()
+    }
+
+    /// The Preview box: off, the object goes back to how it was before the dialog,
+    /// and the settings are kept aside until it is on again or the dialog closes.
+    pub fn toggle_filter_preview(&mut self) {
+        self.commit_field();
+        let Some((index, before)) = self.filter_dialog.clone() else { return };
+        match self.filter_draft.take() {
+            Some(draft) => {
+                let filters = crate::effects::placed(&before, index, draft);
+                self.ed.for_selected(|o| o.filters = filters.clone());
+            }
+            None => {
+                self.filter_draft = self.edited_filter().map(|(_, filter)| filter);
+                self.ed.for_selected(|o| o.filters = before.clone());
+            }
+        }
+    }
+
+    /// Arms one of the eyedroppers, or puts it down again.
+    pub fn pick_filter_dropper(&mut self, dropper: usize) {
+        self.commit_field();
+        self.filter_dropper = if self.filter_dropper == Some(dropper) { None } else { Some(dropper) };
+    }
+
+    /// A click on the canvas with an eyedropper armed: the color of the object
+    /// there, as the filter receives it, becomes black, gray or white.
+    pub fn use_filter_dropper(&mut self, at: Point<Pixels>) -> bool {
+        let Some(dropper) = self.filter_dropper else { return false };
+        let Some((index, _)) = self.filter_dialog.as_ref().map(|(index, before)| (*index, before.len())) else { return false };
+        let p = self.view_map().to_doc(at);
+        let sample = self.ed.selected().first().and_then(|object| sample_before(object, index, p));
+        if let Some(sample) = sample {
+            self.edit_filter(true, |filter| filter.pick_point(dropper, sample));
+            (self.filter_dropper, self.curve_point) = (None, None);
+        }
+        true
+    }
+
+    /// The five numbers of the Levels channel on show.
+    fn shown_levels(&self) -> Option<[f32; 5]> {
+        let (_, filter) = self.edited_filter()?;
+        let at = crate::effects::levels_start(self.filter_channel());
+        Some([0, 1, 2, 3, 4].map(|offset| filter.value(at + offset)))
+    }
+
+    /// A press on one of the two rows of Levels sliders takes hold of the nearest slider there.
+    pub fn press_level(&mut self, row: usize, at: Point<Pixels>) {
+        self.commit_field();
+        let Some(values) = self.shown_levels() else { return };
+        let bounds = self.level_bounds[row].get();
+        let level = f32::from(at.x - bounds.origin.x) / f32::from(bounds.size.width).max(1.0) * 255.0;
+        let middle = values[0] + (values[2] - values[0]) * crate::effects::gamma_place(values[1]);
+        let sliders: &[(usize, f32)] = if row == 0 { &[(0, values[0]), (1, middle), (2, values[2])] } else { &[(3, values[3]), (4, values[4])] };
+        self.level_drag = sliders.iter().min_by(|a, b| (a.1 - level).abs().total_cmp(&(b.1 - level).abs())).map(|(slider, _)| *slider);
+        self.drag_level(at);
+    }
+
+    /// Moves the held Levels slider to the mouse.
+    pub fn drag_level(&mut self, at: Point<Pixels>) -> bool {
+        let (Some(slider), Some(values)) = (self.level_drag, self.shown_levels()) else { return false };
+        let bounds = self.level_bounds[if slider < 3 { 0 } else { 1 }].get();
+        let level = f32::from(at.x - bounds.origin.x) / f32::from(bounds.size.width).max(1.0) * 255.0;
+        let moved = crate::effects::levels_dragged(values, slider, level);
+        let start = crate::effects::levels_start(self.filter_channel());
+        self.edit_filter(false, |filter| {
+            for (offset, value) in moved.into_iter().enumerate() {
+                filter.set_value(start + offset, value);
+            }
+        });
+        true
     }
 
     /// Where a place on screen falls in the curve box, in levels, and the size of the box.
@@ -910,8 +1012,9 @@ impl Workspace {
         true
     }
 
+    /// Lets go of a point of the curve or a slider of Levels.
     pub fn release_curve(&mut self) {
-        if self.curve_drag.take().is_some() {
+        if (self.curve_drag.take().is_some() || self.level_drag.take().is_some()) && self.filter_draft.is_none() {
             self.ed.commit(t("Live Filters"));
         }
     }
@@ -921,37 +1024,40 @@ impl Workspace {
     pub fn auto_filter(&mut self) {
         self.commit_field();
         let Some(histogram) = self.filter_histogram.clone() else { return };
-        let Some((index, _)) = self.edited_filter() else { return };
-        self.change_filters(|filters| {
-            if let Some(filter) = filters.get_mut(index) {
-                filter.stretch(&histogram);
-            }
-        });
+        self.edit_filter(true, |filter| filter.stretch(&histogram));
         self.curve_point = None;
     }
 
     /// The filter whose settings are open.
     pub fn edited_filter(&self) -> Option<(usize, LiveFilter)> {
         let (index, _) = self.filter_dialog.as_ref()?;
-        Some((*index, self.current_filters().get(*index)?.clone()))
+        match &self.filter_draft {
+            Some(draft) => Some((*index, draft.clone())),
+            None => Some((*index, self.current_filters().get(*index)?.clone())),
+        }
     }
 
     pub fn set_filter_value(&mut self, setting: usize, value: f32) {
-        let Some((index, _)) = self.filter_dialog.as_ref().map(|(index, before)| (*index, before.len())) else { return };
-        self.change_filters(|filters| {
-            if let Some(filter) = filters.get_mut(index) {
-                filter.set_value(setting, value);
-            }
-        });
+        self.edit_filter(true, |filter| filter.set_value(setting, value));
     }
 
     /// Closes the filter settings, putting the filters back as they were unless `keep` is set.
     pub fn close_filter_dialog(&mut self, keep: bool) {
         self.commit_field();
-        if let Some((_, before)) = self.filter_dialog.take().filter(|_| !keep) {
-            self.change_filters(|filters| *filters = before.clone());
+        let draft = self.filter_draft.take();
+        if let Some((index, before)) = self.filter_dialog.take() {
+            match (keep, draft) {
+                // With Preview off the object never got the settings, so it gets them now.
+                (true, Some(draft)) => {
+                    let filters = crate::effects::placed(&before, index, draft);
+                    self.change_filters(|current| *current = filters.clone());
+                }
+                (true, None) => {}
+                (false, _) => self.change_filters(|filters| *filters = before.clone()),
+            }
         }
         (self.filter_histogram, self.curve_drag, self.curve_point) = (None, None, None);
+        (self.filter_dropper, self.level_drag) = (None, None);
     }
 
     /// The blend mode the selection has, or Normal with nothing selected.
@@ -3927,23 +4033,11 @@ impl Workspace {
                 self.ed.commit(t("Canvas Color"));
             }
             ColorTarget::Matte => self.set_export(|s| s.matte = color),
-            ColorTarget::Filter => {
-                if let Some(index) = self.filter_dialog.as_ref().map(|(index, _)| *index) {
-                    self.change_filters(|filters| {
-                        if let Some(filter) = filters.get_mut(index) {
-                            filter.color = color;
-                        }
-                    });
-                }
-            }
+            ColorTarget::Filter => self.edit_filter(true, |filter| filter.color = color),
             ColorTarget::PsEffect(effect) => {
                 // An effect always has a color: "none" leaves it as it was.
-                if let (Some(index), Some(color)) = (self.filter_dialog.as_ref().map(|(index, _)| *index), color) {
-                    self.change_filters(|filters| {
-                        if let Some(filter) = filters.get_mut(index) {
-                            filter.set_ps_color(effect, color);
-                        }
-                    });
+                if let Some(color) = color {
+                    self.edit_filter(true, |filter| filter.set_ps_color(effect, color));
                 }
             }
             ColorTarget::JpegMask => {
@@ -4062,6 +4156,20 @@ fn dragged_place(mut index: usize, mut held: Point<Pixels>, at: Point<Pixels>, c
     }
 }
 
+/// The red, green and blue of an object at a place on the page, from 0 to 255, as it
+/// looks with only the filters before the one at `index`. Nothing where it is clear.
+fn sample_before(object: &Object, index: usize, at: Vec2) -> Option<[f32; 3]> {
+    let mut object = object.clone();
+    object.filters.truncate(index);
+    let (bitmap, area) = crate::export::render_object(&object)?;
+    let (x, y) = ((at.x - area.x).floor(), (at.y - area.y).floor());
+    if x < 0.0 || y < 0.0 {
+        return None;
+    }
+    let [r, g, b, a] = bitmap.pixel(x as u32, y as u32)?;
+    (a > 0).then_some([r as f32, g as f32, b as f32])
+}
+
 /// Counts how many pixels of an object have each level of red, green and blue, as it
 /// looks with only the filters before the one at `index`.
 fn histogram_before(object: &Object, index: usize) -> Option<[[u32; 256]; 3]> {
@@ -4153,6 +4261,11 @@ mod tests {
         // The first filter receives the fill as it is.
         let counts = histogram_before(&object, 0).expect("the object draws");
         assert!(counts[0][200] > 1000 && counts[0][55] == 0);
+        // An eyedropper picks the same colors, and nothing beside the object.
+        assert_eq!(sample_before(&object, 1, v2(20.5, 20.5)), Some([55.0, 155.0, 205.0]));
+        assert_eq!(sample_before(&object, 0, v2(49.0, 39.0)), Some([200.0, 100.0, 50.0]));
+        assert_eq!(sample_before(&object, 0, v2(5.0, 20.0)), None);
+        assert_eq!(sample_before(&object, 0, v2(60.0, 20.0)), None);
     }
 
     fn map() -> ViewMap {

@@ -55,6 +55,11 @@ pub(crate) fn icon(name: &str, size: f32, color: u32) -> Svg {
     svg().path(SharedString::from(format!("icons/{name}.svg"))).size(px(size)).text_color(rgb(color))
 }
 
+/// One of the shapes a colored icon is built from, in a color of the caller's choosing.
+pub(crate) fn icon_layer(name: &str, layer: usize, size: f32, color: u32) -> Svg {
+    svg().path(layer_path(name, layer)).size(px(size)).text_color(rgb(color))
+}
+
 /// How a colored icon looks when its command is unavailable.
 fn washed_out(color: u32) -> u32 {
     let channel = |shift: u32| ((color >> shift) & 0xff) as f32;
