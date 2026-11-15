@@ -41,6 +41,14 @@ for size in 16 32 48 64 128 256; do
 done
 install -Dm644 docs/guide.tr.md "$stage/usr/share/doc/pisiworks/kilavuz.md"
 install -Dm644 docs/guide.md "$stage/usr/share/doc/pisiworks/guide.md"
+# The PisiSahne book: its chapters as pages, with their pictures. Help opens it in PisiSahne.
+python3 packaging/kitap.py target/kitap
+for page in target/kitap/*.html; do
+    install -Dm644 "$page" "$stage/usr/share/doc/pisiworks/kitap/$(basename "$page")"
+done
+for picture in target/kitap/img/*.png; do
+    install -Dm644 "$picture" "$stage/usr/share/doc/pisiworks/kitap/img/$(basename "$picture")"
+done
 install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/examples/solstice-landing.pisi"
 
 # The license, in the form Debian keeps it in.

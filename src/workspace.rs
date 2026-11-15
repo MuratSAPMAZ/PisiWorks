@@ -1021,6 +1021,14 @@ pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Res
 /// How wide a frame is in the timeline, in pixels.
 pub const TIMELINE_CELL: f32 = 11.0;
 
+/// Where the PisiSahne book is, if it is there: beside the program as the package installs it, or, when the
+/// program is run from its sources, where `packaging/kitap.py` builds it.
+fn book_index() -> Option<std::path::PathBuf> {
+    let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.parent()?.join("share/doc/pisiworks/kitap/index.html")));
+    let places = [beside, Some("/usr/share/doc/pisiworks/kitap/index.html".into()), Some(concat!(env!("CARGO_MANIFEST_DIR"), "/target/kitap/index.html").into())];
+    places.into_iter().flatten().find(|place| place.is_file())
+}
+
 /// A way to put right at once what a piece of advice in Rules as Text is about.
 #[derive(Clone, Debug, PartialEq)]
 pub enum ScriptFix {
@@ -2655,6 +2663,17 @@ impl Workspace {
     /// Help > User Guide: writes the guide out as a page and opens it in the browser. PisiSahne opens it at the
     /// part about animation, where the lessons are.
     fn open_guide(&mut self) {
+        // PisiSahne has a book of its own, with pictures, that comes with the package: lessons from the first click on.
+        // It is in Turkish; where it is not installed, or in another language, the guide built into the program is shown.
+        if crate::theme::is_sahne() && crate::i18n::language() == crate::i18n::Language::Turkish {
+            if let Some(book) = book_index() {
+                self.status = match std::process::Command::new("xdg-open").arg(&book).spawn() {
+                    Ok(_) => t("The guide is open in the browser").to_string(),
+                    Err(error) => tf("Export failed: {}", &[&error]),
+                };
+                return;
+            }
+        }
         let (html, animation) = crate::guide::page(crate::i18n::language(), t("User Guide"), t("Contents"));
         let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisiworks");
         let path = folder.join(if crate::i18n::language() == crate::i18n::Language::Turkish { "kilavuz.html" } else { "guide.html" });
