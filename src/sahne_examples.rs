@@ -16,6 +16,7 @@ pub const EXAMPLES: &[Example] = &[
     Example { name: "Turning gears", about: "A movie clip with a timeline of its own, placed twice on the stage", build: turning_gears },
     Example { name: "One after another", about: "Layers with times of their own: the car drives for four seconds and stops, then the sun rises, then the words appear", build: one_after_another },
     Example { name: "Stick fight", about: "Pose to pose: figures of lines that turn at their joints, a punch, a kick, and enemies that come and go at their own times", build: stick_fight },
+    Example { name: "Behaviors", about: "Motion with no keyframes: every ready behavior on a single frame. Test the movie to walk, jump and drag", build: behaviors },
     Example { name: "Two scenes with buttons", about: "Scenes, frame actions that stop the film, and buttons that lead from scene to scene", build: two_scenes },
 ];
 
@@ -221,6 +222,48 @@ fn one_after_another() -> Document {
     tween(&mut e, 72, Tween::default());
     // The film is eight seconds long: the last keyframes last until then.
     e.on_timeline(|timeline, layer, _| timeline.insert_frames(layer, 95, 1));
+    fill_out(&mut e);
+    finish(e)
+}
+
+fn behaviors() -> Document {
+    use crate::behavior::{Behavior, BehaviorKind as Kind};
+    // One frame, and not a keyframe more: everything that moves here has been told to with a click.
+    // What falls lands on the bottom edge of the stage, so the stage ends where the ground is.
+    let mut e = start(560, 300, t("Background"), 24.0);
+    let sky = boxed(&mut e, t("Sky"), rect(0.0, 0.0, 560.0, 300.0), 0.0, PALE);
+    gradient(&mut e, sky, FillKind::Linear, Color::rgb(0xbc, 0xdc, 0xf8), WHITE, (0.5, 0.0), (0.5, 1.0));
+    centered(&mut e, t("Arrows walk the box, Up jumps. The bee follows the mouse. Drag the star."), 280.0, 42.0, 12.0, INK, TextStyle::default());
+    layer(&mut e, t("Behaviors"));
+    let give = |e: &mut Editor, id: u64, list: &[(Kind, f32, f32)]| {
+        e.selection = vec![id];
+        e.for_selected(|o| o.behaviors = list.iter().map(|(kind, a, b)| Behavior { kind: *kind, a: *a, b: *b }).collect());
+    };
+    let sun = add(&mut e, t("Sun"), Shape::Auto { kind: AutoKind::Star, a: 0.6, b: 0.0, count: 12 }, rect(24.0, 20.0, 76.0, 76.0), Some(YELLOW), Some(Stroke { color: ORANGE, width: 2.0 }));
+    give(&mut e, sun, &[(Kind::Spin, 8.0, 0.0)]);
+    let cloud = boxed(&mut e, t("Cloud"), rect(130.0, 46.0, 110.0, 36.0), 18.0, WHITE);
+    give(&mut e, cloud, &[(Kind::Drift, 40.0, 0.0)]);
+    let cloud = boxed(&mut e, t("Cloud"), rect(380.0, 92.0, 80.0, 28.0), 14.0, WHITE);
+    give(&mut e, cloud, &[(Kind::Drift, 22.0, 0.0)]);
+    let title = centered(&mut e, "PisiSahne", 280.0, 8.0, 26.0, BLUE, bold());
+    give(&mut e, title, &[(Kind::Fade, 3.0, 0.0)]);
+    let look = centered(&mut e, t("Look!"), 500.0, 150.0, 22.0, ORANGE, bold());
+    give(&mut e, look, &[(Kind::Blink, 1.0, 0.0)]);
+    let bell = add(&mut e, t("Bell"), Shape::Auto { kind: AutoKind::Polygon, a: 0.0, b: 0.0, count: 6 }, rect(34.0, 236.0, 48.0, 48.0), Some(Color::rgb(0xc8, 0x30, 0x30)), None);
+    give(&mut e, bell, &[(Kind::Shake, 3.0, 0.0)]);
+    let ball = add(&mut e, t("Ball"), Shape::Ellipse, rect(120.0, 244.0, 56.0, 56.0), Some(ORANGE), None);
+    gradient(&mut e, ball, FillKind::Radial, YELLOW, ORANGE, (0.35, 0.35), (1.0, 0.5));
+    give(&mut e, ball, &[(Kind::Bounce, 110.0, 0.9)]);
+    let arrow = add(&mut e, t("Arrow"), Shape::Auto { kind: AutoKind::Arrow, a: 0.5, b: 0.5, count: 0 }, rect(200.0, 150.0, 60.0, 30.0), Some(BLUE), None);
+    give(&mut e, arrow, &[(Kind::BackAndForth, 120.0, 2.0)]);
+    let balloon = add(&mut e, t("Balloon"), Shape::Ellipse, rect(420.0, 190.0, 44.0, 56.0), Some(Color::rgb(0xd8, 0x40, 0x60)), None);
+    give(&mut e, balloon, &[(Kind::UpAndDown, 50.0, 2.4)]);
+    let star = add(&mut e, t("Star"), Shape::Auto { kind: AutoKind::Star, a: 0.45, b: 0.0, count: 5 }, rect(480.0, 230.0, 60.0, 60.0), Some(YELLOW), Some(Stroke { color: ORANGE, width: 2.0 }));
+    give(&mut e, star, &[(Kind::Pulse, 25.0, 1.0), (Kind::Draggable, 0.0, 0.0)]);
+    let bee = add(&mut e, t("Bee"), Shape::Ellipse, rect(300.0, 110.0, 28.0, 20.0), Some(YELLOW), Some(Stroke { color: INK, width: 3.0 }));
+    give(&mut e, bee, &[(Kind::FollowMouse, 220.0, 0.0)]);
+    let walker = boxed(&mut e, t("Box"), rect(260.0, 258.0, 36.0, 42.0), 8.0, INK);
+    give(&mut e, walker, &[(Kind::ArrowKeys, 160.0, 0.0), (Kind::Gravity, 900.0, 420.0)]);
     fill_out(&mut e);
     finish(e)
 }
@@ -533,6 +576,8 @@ mod tests {
     fn example_frames() {
         let name = std::env::var("EXAMPLE").unwrap_or_else(|_| "Stick fight".to_string());
         let doc = (EXAMPLES.iter().find(|e| e.name == name).unwrap().build)();
+        // The published page as well, to open in a browser.
+        std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/example.html"), crate::publish::html(&doc, &name).unwrap()).unwrap();
         let frames = std::env::var("FRAMES").unwrap_or_else(|_| "0".to_string());
         for frame in frames.split(',').filter_map(|f| f.trim().parse::<usize>().ok()) {
             let picture = crate::export::render_page(&doc.pages[0].at_frame(frame).played()).unwrap();
@@ -585,6 +630,21 @@ mod tests {
         assert!(sun(47).is_empty() && sun(48).len() == 1 && sun(72)[0].bounds.y < sun(60)[0].bounds.y && sun(95)[0].bounds.y == sun(72)[0].bounds.y);
         assert!(car(0) < car(24) && car(24) < car(48) && car(48) == car(95));
         assert!(words(71).is_empty() && words(72)[0].opacity == 0.0 && words(78)[0].opacity > 0.3 && words(95)[0].opacity == 1.0);
+        // One frame, every kind of behavior, and each object with any is a picture of its own that the page moves.
+        let doc = find("Behaviors");
+        let page = &doc.pages[0];
+        assert_eq!(page.timeline.as_ref().unwrap().frame_count(), 1);
+        let used: std::collections::HashSet<_> = page.objects().flat_map(|o| o.behaviors.iter().map(|b| b.kind)).collect();
+        assert_eq!(used.len(), crate::behavior::KINDS.len());
+        let html = crate::publish::html(&doc, "x").unwrap();
+        assert_eq!(html.matches("[\"m\",[").count(), page.objects().filter(|o| !o.behaviors.is_empty()).count());
+        assert!(html.contains("\"l\":[[\"keys\",160,0],[\"gravity\",900,420]]") && html.contains("[\"spin\",8,0]"));
+        // Half a second into playing, the ball is off the ground and the sun has turned; the box waits for the keys.
+        let (rest, playing) = (page.clone(), page.behaved(11));
+        let named = |page: &crate::model::Page, name: &str| page.objects().find(|o| o.name == name).unwrap().clone();
+        assert!(named(&playing, t("Ball")).bounds.y < named(&rest, t("Ball")).bounds.y - 80.0);
+        assert_ne!(named(&playing, t("Sun")).outline(), named(&rest, t("Sun")).outline());
+        assert_eq!(named(&playing, t("Box")).bounds, named(&rest, t("Box")).bounds);
         // The fight: on a frame between two keyframes every forearm still starts where its upper arm ends, and every
         // shin where its thigh ends, because each line turns at its joint. The enemies are there only for their part.
         let doc = find("Stick fight");

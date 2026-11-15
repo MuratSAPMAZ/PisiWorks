@@ -6,7 +6,9 @@
 //! pictures that are the same are stored once. Movie clips and buttons are kept
 //! apart as pictures of their own, so that a clip can play by its own count of frames
 //! and a button can answer the mouse. A short script plays the scenes one after
-//! another, runs the actions of frames and buttons, and starts the sounds.
+//! another, runs the actions of frames and buttons, and starts the sounds. An object
+//! with behaviors is a picture of its own as well, which the script moves by the rules
+//! of [`crate::behavior`].
 
 use std::collections::HashMap;
 
@@ -224,14 +226,30 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
                     Shape::Instance { symbol, .. } => moving(symbol, &object.filters, &mut pictures, &mut sets)?.map(|kind| (kind, symbol)),
                     _ => None,
                 };
-                let Some((kind, symbol)) = kind else {
+                // What the script needs to move an object by its behaviors: the point it turns around, its box, and the list.
+                let behaving = (!object.behaviors.is_empty()).then(|| {
+                    let (p, b) = (object.pivot_point().unwrap_or(object.bounds.center()), object.bounds);
+                    let list: Vec<String> = object.behaviors.iter().map(|behavior| behavior.text()).collect();
+                    format!("{{\"p\":[{},{}],\"box\":[{},{},{},{}],\"l\":[{}]}}", p.x, p.y, b.x, b.y, b.w, b.h, list.join(","))
+                });
+                if kind.is_none() && behaving.is_none() {
                     run.push(object.clone());
                     continue;
-                };
+                }
                 if !run.is_empty() {
                     ops.push(still(&run, &mut pictures)?);
                     run.clear();
                 }
+                let Some((kind, symbol)) = kind else {
+                    // Anything else that has behaviors is a picture of its own, drawn as it stands at rest.
+                    let mut at_rest = object.clone();
+                    at_rest.behaviors.clear();
+                    if let Some(sprite) = pictures.sprite(&[at_rest])? {
+                        ops.push(format!("[\"m\",{},{},{}]", sprite_text(Some(sprite)), object.id, behaving.unwrap_or_default()));
+                    }
+                    continue;
+                };
+                let behaving = behaving.map_or_else(String::new, |text| format!(",{text}"));
                 // The copy's own box is filled by the symbol's first frame, then turned or slanted as the copy is.
                 let natural = doc.symbols.iter().find(|s| s.id == symbol).and_then(|s| s.objects.iter().map(|o| o.bounds).reduce(Rect::union)).unwrap_or_default();
                 let frame_box = object.placement.map_or(object.bounds, |p| p.frame);
@@ -240,8 +258,8 @@ pub fn html(doc: &Document, title: &str) -> Result<String> {
                 let matrix = format!("[{},{},{},{},{},{}]", m[0], m[1], m[2], m[3], m[4], m[5]);
                 let b = object.bounds;
                 ops.push(match kind {
-                    Moving::Clip(set) => format!("[\"c\",{set},{matrix},{},{}]", object.opacity, object.id),
-                    Moving::Button(set) => format!("[\"b\",{set},{matrix},{},{},{},[{},{},{},{}]]", object.opacity, object.id, serde_json::to_string(&object.link)?, b.x, b.y, b.w, b.h),
+                    Moving::Clip(set) => format!("[\"c\",{set},{matrix},{},{}{behaving}]", object.opacity, object.id),
+                    Moving::Button(set) => format!("[\"b\",{set},{matrix},{},{},{},[{},{},{},{}]{behaving}]", object.opacity, object.id, serde_json::to_string(&object.link)?, b.x, b.y, b.w, b.h),
                 });
             }
             if !run.is_empty() {
@@ -290,6 +308,9 @@ const PAGE: &str = r#"<!doctype html>
 // pictures: every picture of the animation, each stored once.
 // sets: the pictures of each movie clip (one for each of its frames) and of each button (up, over, down).
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).
+// What is drawn is a picture of the stage ("i"), a movie clip ("c"), a button ("b") or an object
+// with behaviors ("m"); the last three may carry behaviors: the point to turn around (p), the
+// object's box (box) and the list (l) of [kind, first number, second number].
 var movie = {
   width: {width}, height: {height}, fps: {fps}, background: {background},
   pictures: [{pictures}],
@@ -300,6 +321,9 @@ var movie = {
 var canvas = document.getElementById("stage"), stage = canvas.getContext("2d");
 var scene = 0, frame = 0, playing = true, depth = 0;
 var clipFrames = {}, buttons = [], hover = null, pressed = false, loaded = 0;
+// For each object with behaviors: how long it has been there (n, in frames), how far the viewer
+// has moved it (x, y), how fast it is falling (vy) and whether it stands on the ground.
+var actors = {}, keys = {}, mouse = null, grips = [], dragging = null;
 var sounds = movie.sounds.map(function (source) { return new Audio(source); });
 var images = movie.pictures.map(function (source) {
   var image = new Image();
@@ -335,12 +359,78 @@ function enter() {
   depth += 1;
   if (depth < 8) act(now.a);
 }
+// The behaviors an op carries, and the number its object is known by.
+function behaviorsOf(op) { return op[0] === "m" ? op[3] : op[0] === "c" ? op[5] : op[0] === "b" ? op[7] : null; }
+function keyOf(op) { return op[0] === "m" ? op[2] : op[4]; }
+function actor(key) { return actors[key] || (actors[key] = { n: 0, x: 0, y: 0, vy: 0, ground: false }); }
+function span(seconds) { return Math.abs(seconds) < 0.01 ? 0.01 : seconds; }
+function wrapped(at, size, room) { var m = room + size; return (((at + size) % m) + m) % m - size; }
+function has(b, kind) { return b.l.some(function (l) { return l[0] === kind; }); }
+// What its behaviors have done to an object by now: moved it (dx, dy), turned it (angle) and
+// resized it (scale) around its point, and let it through by a part (alpha). The first nine
+// kinds follow the same rules as playing inside PisiSahne does.
+function moved(key, b) {
+  var a = actor(key), t = a.n / movie.fps, box = b.box, TAU = Math.PI * 2;
+  var m = { dx: a.x, dy: a.y, angle: 0, scale: 1, alpha: 1 };
+  b.l.forEach(function (l) {
+    var k = l[0], p = l[1], q = l[2];
+    if (k === "spin") m.angle += TAU * t / span(p);
+    else if (k === "bounce") m.dy -= p * Math.abs(Math.sin(Math.PI * t / span(q)));
+    else if (k === "swing") m.dx += p * (1 - Math.cos(TAU * t / span(q))) / 2;
+    else if (k === "rise") m.dy -= p * (1 - Math.cos(TAU * t / span(q))) / 2;
+    else if (k === "drift") {
+      var turn = q * Math.PI / 180;
+      m.dx += wrapped(box[0] + p * Math.cos(turn) * t, box[2], movie.width) - box[0];
+      m.dy += wrapped(box[1] - p * Math.sin(turn) * t, box[3], movie.height) - box[1];
+    }
+    else if (k === "shake") { m.dx += p * Math.sin(a.n * 12.9898); m.dy += p * Math.cos(a.n * 78.233); }
+    else if (k === "pulse") m.scale *= 1 + p / 100 * (1 - Math.cos(TAU * t / span(q))) / 2;
+    else if (k === "blink") { var one = Math.abs(span(p)); if (((t % one) + one) % one >= one / 2) m.alpha = 0; }
+    else if (k === "fade") m.alpha *= (1 + Math.cos(TAU * t / span(p))) / 2;
+  });
+  return m;
+}
+// One frame's worth of what the viewer does to an object: the mouse draws it on, the arrow
+// keys walk it, the ground pulls it down and Up or Space makes it jump.
+function step(key, b) {
+  var a = actor(key), dt = 1 / movie.fps, box = b.box;
+  a.n += 1;
+  if (dragging && dragging.key === key) return;
+  var falls = has(b, "gravity");
+  b.l.forEach(function (l) {
+    var k = l[0], p = l[1], q = l[2];
+    if (k === "mouse" && mouse) {
+      var dx = mouse.x - (box[0] + box[2] / 2 + a.x), dy = mouse.y - (box[1] + box[3] / 2 + a.y);
+      var far = Math.sqrt(dx * dx + dy * dy), go = p <= 0 ? far : Math.min(far, p * dt);
+      if (far > 0.5) { a.x += dx / far * go; a.y += dy / far * go; }
+    } else if (k === "keys") {
+      if (keys.ArrowLeft) a.x -= p * dt;
+      if (keys.ArrowRight) a.x += p * dt;
+      if (!falls && keys.ArrowUp) a.y -= p * dt;
+      if (!falls && keys.ArrowDown) a.y += p * dt;
+      a.x = Math.max(-box[0], Math.min(a.x, movie.width - box[0] - box[2]));
+      a.y = Math.max(-box[1], Math.min(a.y, movie.height - box[1] - box[3]));
+    } else if (k === "gravity") {
+      if (a.ground && q > 0 && (keys.ArrowUp || keys[" "])) { a.vy = -q; a.ground = false; }
+      a.vy += p * dt;
+      a.y += a.vy * dt;
+      var floor = movie.height - box[1] - box[3];
+      if (a.y >= floor) { a.y = floor; a.vy = 0; a.ground = true; } else a.ground = false;
+    }
+  });
+}
+// Sets the stage to draw an object as its behaviors have it.
+function place(m, b) {
+  var cos = Math.cos(m.angle) * m.scale, sin = Math.sin(m.angle) * m.scale, px = b.p[0], py = b.p[1];
+  stage.setTransform(cos, sin, -sin, cos, px + m.dx - (cos * px - sin * py), py + m.dy - (sin * px + cos * py));
+}
 function draw() {
   stage.setTransform(1, 0, 0, 1, 0, 0);
   stage.globalAlpha = 1;
   stage.clearRect(0, 0, movie.width, movie.height);
   if (movie.background) { stage.fillStyle = movie.background; stage.fillRect(0, 0, movie.width, movie.height); }
   buttons = [];
+  grips = [];
   movie.scenes[scene][frame].o.forEach(function (op) {
     if (op[0] === "i") {
       stage.setTransform(1, 0, 0, 1, 0, 0);
@@ -348,23 +438,35 @@ function draw() {
       stage.drawImage(images[op[1]], 0, 0);
       return;
     }
+    var b = behaviorsOf(op), m = b ? moved(keyOf(op), b) : null;
+    if (b && has(b, "drag")) grips.push({ key: keyOf(op), box: [b.box[0] + m.dx, b.box[1] + m.dy, b.box[2], b.box[3]] });
+    if (op[0] === "m") {
+      place(m, b);
+      stage.globalAlpha = m.alpha;
+      stage.drawImage(images[op[1][0]], op[1][1], op[1][2]);
+      return;
+    }
     var set = movie.sets[op[1]], picture;
     if (op[0] === "c") {
       picture = set[(clipFrames[op[4]] || 0) % set.length];
     } else {
-      buttons.push({ key: op[4], action: op[5], box: op[6] });
+      var box = op[6];
+      buttons.push({ key: op[4], action: op[5], box: m ? [box[0] + m.dx, box[1] + m.dy, box[2], box[3]] : box });
       picture = set[hover === op[4] ? (pressed ? 2 : 1) : 0] || set[0];
     }
     if (!picture) return;
-    var m = op[2];
-    stage.setTransform(m[0], m[1], m[2], m[3], m[4], m[5]);
-    stage.globalAlpha = op[3];
+    var matrix = op[2];
+    if (m) { place(m, b); stage.transform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]); }
+    else stage.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+    stage.globalAlpha = op[3] * (m ? m.alpha : 1);
     stage.drawImage(images[picture[0]], picture[1], picture[2]);
   });
 }
 function tick() {
   // Every movie clip on the stage goes on by a frame of its own, whether or not the scene is playing.
   movie.scenes[scene][frame].o.forEach(function (op) { if (op[0] === "c") clipFrames[op[4]] = (clipFrames[op[4]] || 0) + 1; });
+  // So does every object with behaviors.
+  movie.scenes[scene][frame].o.forEach(function (op) { var b = behaviorsOf(op); if (b) step(keyOf(op), b); });
   if (playing) {
     frame += 1;
     if (frame >= movie.scenes[scene].length) { scene = (scene + 1) % movie.scenes.length; frame = 0; }
@@ -379,30 +481,53 @@ function start() {
   draw();
   setInterval(tick, 1000 / movie.fps);
 }
-// The button under the mouse: the topmost one whose box holds the point.
-function buttonAt(event) {
+// Where the mouse is on the stage.
+function pointOf(event) {
   var box = canvas.getBoundingClientRect();
-  var x = (event.clientX - box.left) * movie.width / box.width, y = (event.clientY - box.top) * movie.height / box.height;
-  for (var i = buttons.length - 1; i >= 0; i -= 1) {
-    var b = buttons[i].box;
-    if (x >= b[0] && y >= b[1] && x <= b[0] + b[2] && y <= b[1] + b[3]) return buttons[i];
+  return { x: (event.clientX - box.left) * movie.width / box.width, y: (event.clientY - box.top) * movie.height / box.height };
+}
+// The topmost of some boxes that holds a point.
+function topmost(list, at) {
+  for (var i = list.length - 1; i >= 0; i -= 1) {
+    var b = list[i].box;
+    if (at.x >= b[0] && at.y >= b[1] && at.x <= b[0] + b[2] && at.y <= b[1] + b[3]) return list[i];
   }
   return null;
 }
 canvas.addEventListener("mousemove", function (event) {
-  var over = buttonAt(event);
+  var at = pointOf(event);
+  if (dragging) {
+    var a = actor(dragging.key);
+    a.x += at.x - mouse.x; a.y += at.y - mouse.y; a.vy = 0;
+  }
+  mouse = at;
+  var over = topmost(buttons, at);
   hover = over ? over.key : null;
-  canvas.style.cursor = over ? "pointer" : "default";
+  canvas.style.cursor = over ? "pointer" : dragging ? "grabbing" : topmost(grips, at) ? "grab" : "default";
   draw();
 });
-canvas.addEventListener("mouseleave", function () { hover = null; pressed = false; draw(); });
-canvas.addEventListener("mousedown", function () { pressed = true; draw(); });
+canvas.addEventListener("mouseleave", function () { hover = null; pressed = false; dragging = null; draw(); });
+canvas.addEventListener("mousedown", function (event) {
+  pressed = true;
+  mouse = pointOf(event);
+  dragging = topmost(buttons, mouse) ? null : topmost(grips, mouse);
+  draw();
+});
 canvas.addEventListener("mouseup", function (event) {
   pressed = false;
-  var over = buttonAt(event);
+  dragging = null;
+  var over = topmost(buttons, pointOf(event));
   if (over) { depth = 0; act(over.action); }
   draw();
 });
+// The keys held down. In a film that listens to them the arrows and Space do not scroll the page.
+var listens = JSON.stringify(movie.scenes).search(/\["(keys|gravity)",/) >= 0;
+function keyed(event, down) {
+  keys[event.key] = down;
+  if (listens && (event.key.indexOf("Arrow") === 0 || event.key === " ")) event.preventDefault();
+}
+window.addEventListener("keydown", function (event) { keyed(event, true); });
+window.addEventListener("keyup", function (event) { keyed(event, false); });
 </script>
 </body>
 </html>

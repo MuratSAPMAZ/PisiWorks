@@ -424,6 +424,8 @@ pub enum FieldId {
     TweenTurns,
     /// A number of Twist and Fade: steps, spacing, direction, rotation, scale, the opacity faded to.
     Twist(usize),
+    /// A number of a behavior in Behavior Settings: which behavior of the list, and whether its second number.
+    Behavior(usize, bool),
     /// Reverse State Range: the first state, or the last.
     ReverseState(bool),
     /// A text of Batch Process: 0 width, 1 height, 2 percentage, 3 prefix, 4 suffix.
@@ -747,6 +749,12 @@ pub struct Workspace {
     pub gif_dialog: Option<GifDialog>,
     /// Whether the timeline is being played.
     pub frames_playing: bool,
+    /// How many frames the film has been playing for, which is the time its behaviors go by.
+    pub behavior_tick: usize,
+    /// Whether the picture of the page now on the canvas was made with the behaviors at work.
+    raster_behaved: bool,
+    /// Whether Behavior Settings is open.
+    pub behavior_dialog: bool,
     /// Whether playing in the program starts over at the end. Off, as in Flash, it plays once and stops on the last frame.
     pub loop_playback: bool,
     /// Where the frames of the timeline are scrolled to.
@@ -1146,6 +1154,9 @@ impl Workspace {
             tween_dialog: None,
             gif_dialog: None,
             frames_playing: false,
+            behavior_tick: 0,
+            raster_behaved: false,
+            behavior_dialog: false,
             loop_playback: false,
             timeline_scroll: gpui::ScrollHandle::new(),
             context_menu: None,
@@ -1295,8 +1306,10 @@ impl Workspace {
         // A page with blend modes is rendered whole, as it will export. It is rendered
         // again when the document changes, and on every frame of an edit in progress.
         let editing = self.drag.is_some() || self.transform.is_some() || self.text_edit.is_some() || self.field.is_some();
-        let wanted = self.ed.needs_compositing();
-        let stale = self.page_raster.as_ref().is_none_or(|(revision, _)| *revision != self.ed.revision || editing);
+        // While the film plays, behaviors move things: the page is drawn anew on each frame with them at work.
+        let behaving = self.frames_playing && self.ed.doc.page().has_behaviors();
+        let wanted = self.ed.needs_compositing() || behaving;
+        let stale = behaving || self.raster_behaved || self.page_raster.as_ref().is_none_or(|(revision, _)| *revision != self.ed.revision || editing);
         if !wanted || stale {
             if let Some((_, image)) = self.page_raster.take() {
                 self.stale_previews.push(image);
@@ -1310,7 +1323,9 @@ impl Workspace {
             } else {
                 self.ed.doc.page().open_groups_need_drawing().then(|| self.ed.doc.page().with_groups_closed())
             };
-            self.page_raster = crate::export::render_page(closed.as_ref().unwrap_or(self.ed.doc.page()))
+            let moving = behaving.then(|| closed.as_ref().unwrap_or(self.ed.doc.page()).behaved(self.behavior_tick));
+            self.raster_behaved = behaving;
+            self.page_raster = crate::export::render_page(moving.as_ref().or(closed.as_ref()).unwrap_or(self.ed.doc.page()))
                 .ok()
                 .and_then(|pixmap| crate::canvas_view::pixmap_texture(&pixmap))
                 .map(|image| (self.ed.revision, image));
@@ -2050,6 +2065,7 @@ impl Workspace {
             Cmd::Frame(crate::menus::FrameCmd::GuideLayer) => self.active_layer_kind() == crate::model::LayerKind::Guide,
             Cmd::Frame(crate::menus::FrameCmd::MaskLayer) => self.active_layer_kind() == crate::model::LayerKind::Mask,
             Cmd::Frame(crate::menus::FrameCmd::LoopPlayback) => self.loop_playback,
+            Cmd::Behavior(crate::menus::BehaviorCmd::Toggle(kind)) => !self.ed.selection.is_empty() && self.ed.selected().iter().all(|o| o.behaviors.iter().any(|b| b.kind == kind)),
             Cmd::Frame(crate::menus::FrameCmd::BindLayer) => {
                 let page = self.ed.doc.page();
                 page.timeline.as_ref().is_some_and(|timeline| timeline.is_bound(page.active_layer))
@@ -2506,6 +2522,12 @@ impl Workspace {
             FrameCmd::Play => {
                 if self.frames_playing {
                     self.frames_playing = false;
+                } else if count < 2 && self.ed.doc.page().has_behaviors() {
+                    // A scene of one frame still has its behaviors to show.
+                    self.frames_playing = true;
+                    self.behavior_tick = 0;
+                    self.play_token += 1;
+                    self.schedule_timeline(self.play_token, cx);
                 } else if count < 2 {
                     self.status = t("The scene has only one frame: insert frames (F5) or a keyframe (F6) to animate").into();
                 } else {
@@ -2515,6 +2537,7 @@ impl Workspace {
                         self.reveal_frame(0);
                     }
                     self.frames_playing = true;
+                    self.behavior_tick = 0;
                     self.play_token += 1;
                     self.schedule_timeline(self.play_token, cx);
                 }
@@ -2540,18 +2563,23 @@ impl Workspace {
             cx.background_executor().timer(Duration::from_secs_f32(1.0 / fps)).await;
             this.update(cx, |this, cx| {
                 if this.frames_playing && this.play_token == token {
+                    this.behavior_tick += 1;
                     if let Some((current, count)) = this.frame_position() {
-                        // At the end it stops, as Flash does, unless Loop Playback is on.
-                        if current + 1 >= count && !this.loop_playback {
+                        // At the end it stops, as Flash does, unless Loop Playback is on. Behaviors have no end:
+                        // where there are any, the last frame stays on show with them at work until Stop.
+                        let ended = current + 1 >= count && !this.loop_playback;
+                        if ended && !this.ed.doc.page().has_behaviors() {
                             this.frames_playing = false;
                             cx.notify();
                             return;
                         }
-                        let next = if current + 1 >= count { 0 } else { current + 1 };
-                        this.ed.goto_frame(next);
-                        this.reveal_frame(next);
-                        for sound in this.sounds_starting(next) {
-                            this.play_sound(sound);
+                        if !ended && count > 1 {
+                            let next = if current + 1 >= count { 0 } else { current + 1 };
+                            this.ed.goto_frame(next);
+                            this.reveal_frame(next);
+                            for sound in this.sounds_starting(next) {
+                                this.play_sound(sound);
+                            }
                         }
                     }
                     this.schedule_timeline(token, cx);
@@ -3223,6 +3251,8 @@ impl Workspace {
             | Cmd::FlipH | Cmd::FlipV => has_selection,
             Cmd::Filter(_) => self.ed.has_selected_bitmap(),
             Cmd::ConvertToSymbol | Cmd::Animate => has_selection,
+            Cmd::Behavior(crate::menus::BehaviorCmd::Toggle(_)) => has_selection,
+            Cmd::Behavior(_) => self.ed.selected().iter().any(|o| !o.behaviors.is_empty()),
             Cmd::TextAlignDown(_) => self.shown_text_style().orientation.is_vertical(),
             Cmd::SaveSteps => !self.steps_to_save().is_empty(),
             Cmd::Ready(ready) => match ready {
@@ -3533,6 +3563,58 @@ impl Workspace {
         }
     }
 
+    /// What the first selected object has been given, which is what Behavior Settings lists.
+    pub fn shown_behaviors(&self) -> Vec<crate::behavior::Behavior> {
+        self.ed.selected().first().map_or_else(Vec::new, |o| o.behaviors.clone())
+    }
+
+    fn run_behavior(&mut self, cmd: crate::menus::BehaviorCmd) {
+        use crate::behavior::Behavior;
+        use crate::menus::BehaviorCmd;
+        match cmd {
+            BehaviorCmd::Toggle(kind) => {
+                // Chosen again when everything selected has it, the behavior is taken away.
+                let all = self.ed.selected().iter().all(|o| o.behaviors.iter().any(|b| b.kind == kind));
+                self.ed.for_selected(|o| {
+                    if all {
+                        o.behaviors.retain(|b| b.kind != kind);
+                    } else if !o.behaviors.iter().any(|b| b.kind == kind) {
+                        o.behaviors.push(Behavior::new(kind));
+                    }
+                });
+                self.ed.commit(t(kind.name()));
+                self.status = if all {
+                    t("The behavior was removed").into()
+                } else if kind.interactive() {
+                    t("Added. This behavior answers the mouse or the keyboard: see it with Test Movie (Ctrl+Enter)").into()
+                } else {
+                    t("Added. Press Enter to see it; its numbers are in Behaviors > Behavior Settings").into()
+                };
+            }
+            BehaviorCmd::Settings => self.behavior_dialog = true,
+            BehaviorCmd::Clear => {
+                self.ed.for_selected(|o| o.behaviors.clear());
+                self.ed.commit(t("Remove All Behaviors"));
+                self.behavior_dialog = false;
+            }
+        }
+    }
+
+    /// Takes one behavior away from the selection, as the button beside it in Behavior Settings does.
+    pub fn remove_behavior(&mut self, kind: crate::behavior::BehaviorKind) {
+        self.commit_field();
+        self.ed.for_selected(|o| o.behaviors.retain(|b| b.kind != kind));
+        self.ed.commit(t("Remove Behavior"));
+        if self.shown_behaviors().is_empty() {
+            self.behavior_dialog = false;
+        }
+    }
+
+    pub fn close_behavior_dialog(&mut self) {
+        self.commit_field();
+        self.behavior_dialog = false;
+    }
+
     /// Closes Twist and Fade; kept, the copies are made.
     pub fn close_twist_dialog(&mut self, keep: bool) {
         self.commit_field();
@@ -3592,6 +3674,7 @@ impl Workspace {
         match cmd {
             Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate | Cmd::Example(_) | Cmd::SahneExample(_) => self.confirm_discard(cmd, window, cx),
             Cmd::OpenInOther => self.open_in_other(),
+            Cmd::Behavior(behavior) => self.run_behavior(behavior),
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
                 self.commands_dialog = Some(None);
@@ -5649,6 +5732,8 @@ impl Workspace {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -6660,6 +6745,8 @@ impl Workspace {
             self.close_tween_dialog(key == "enter");
         } else if self.mask_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_mask_dialog(key == "enter");
+        } else if self.behavior_dialog && matches!(key, "enter" | "escape") {
+            self.close_behavior_dialog();
         } else if self.twist_dialog.is_some() && matches!(key, "enter" | "escape") {
             self.close_twist_dialog(key == "enter");
         } else if self.arrow_dialog.is_some() && matches!(key, "enter" | "escape") {
@@ -6963,6 +7050,7 @@ impl Workspace {
             FieldId::FillFeather => number(self.current_fill_look().feather),
             FieldId::PathOffset => number(self.shown_text_style().path_offset),
             FieldId::TemplateName => self.template_name.clone().unwrap_or_default(),
+            FieldId::Behavior(which, second) => self.shown_behaviors().get(which).map_or_else(String::new, |b| number(if second { b.b } else { b.a })),
             FieldId::Twist(which) => self.twist_dialog.map_or_else(String::new, |s| number([s.steps as f32, s.spacing, s.direction, s.rotation, s.scale, s.fade_to][which.min(5)])),
             FieldId::ActionParam(button) => {
                 let action = if button { self.button_action().flatten() } else { self.current_span().and_then(|span| crate::model::Action::parse(&span.action)) };
@@ -7205,6 +7293,21 @@ impl Workspace {
                     (4, _) => dialog.suffix = text.to_string(),
                     _ => {}
                 }
+            }
+            FieldId::Behavior(which, second) => {
+                let (Some(v), Some(shown)) = (number, self.shown_behaviors().get(which).copied()) else { return };
+                let v = v.clamp(-100000.0, 100000.0);
+                // The number goes to that kind of behavior on everything selected.
+                self.ed.for_selected(|o| {
+                    for behavior in o.behaviors.iter_mut().filter(|b| b.kind == shown.kind) {
+                        if second {
+                            behavior.b = v;
+                        } else {
+                            behavior.a = v;
+                        }
+                    }
+                });
+                self.ed.commit(t("Behavior Settings"));
             }
             FieldId::Twist(which) => {
                 let (Some(v), Some(s)) = (number, self.twist_dialog.as_mut()) else { return };

@@ -242,6 +242,28 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Sırayla** örneği bunların hepsini sekiz saniyede gösterir: araba dört saniye gidip durur, sonra güneş doğar, sonra yazı belirir.
 
+**Davranışlar: anahtar karesiz hareket.** Bu PisiSahne'nin kendi özelliğidir; Flash'ta karşılığı yoktur. Bir nesneyi seçin ve menü çubuğunun sağındaki **Davranışlar** menüsünden (ya da sağ tık menüsünden) bir hareket seçin: nesne bundan sonra her karede o hareketi yapar; anahtar kare de ara doldurma da gerekmez. Aynı davranışı yeniden seçmek onu kaldırır. Bir nesnenin aynı anda birkaç davranışı olabilir.
+
+| Davranış | Nesne ne yapar | Sayıları |
+|---|---|---|
+| Dön | Dönüştürme noktasının çevresinde döner durur | Bir tur kaç saniye (eksi sayı ters yöne döndürür) |
+| Zıpla | Yukarı sıçrar, iner; yeniden | Yükseklik, bir zıplama kaç saniye |
+| Git Gel | Sağa gider, geri gelir (eksi uzaklık sola gider) | Uzaklık, gidiş dönüş kaç saniye |
+| İn Çık | Yükselir, alçalır | Uzaklık, gidiş dönüş kaç saniye |
+| Sürekli Git | Durmadan gider; sahnenin bir kenarından çıkınca karşı kenarından girer | Hız, yön (0 sağ, 90 yukarı) |
+| Titre | Titrer | Güç |
+| Büyü Küçül | Büyür, eski boyuna döner | Büyüme yüzdesi, bir atım kaç saniye |
+| Yanıp Sön | Görünür, kaybolur | Bir yanıp sönme kaç saniye |
+| Belir Kaybol | Yavaşça silinir, geri gelir | Gidiş dönüş kaç saniye |
+| Fareyi İzle | Farenin peşinden gider | Hız (0: farenin üstünde durur) |
+| Ok Tuşlarıyla Yürü | İzleyen ok tuşlarıyla hareket ettirir; sahnenin dışına çıkmaz | Hız |
+| Düş ve Zıpla | Sahnenin alt kenarına düşer; Yukarı ok ya da Boşluk zıplatır | Çekim, zıplama hızı (0: zıplamaz) |
+| Sürüklenebilir | İzleyen fareyle sürükler | |
+
+İlk dokuzu program içinde oynatırken (Enter) görünür: film o zaman son karesinde bekleyerek, siz durdurana kadar oynar. Son dördü izleyene yanıt verir, bu yüzden yayımlanan filmde çalışır: **Filmi Test Et** (Ctrl+Enter) ile görün. **Davranışlar > Davranış Ayarları**, seçili nesnenin davranışlarını sayılarıyla ve her biri için bir Kaldır düğmesiyle listeler. Davranışlar ara doldurmayla birlikte kullanılabilir: ara doldurması olan nesne ikisini de yapar. Davranışlar sahnedeki nesnelerde çalışır, bir sembolün ya da grubun içindekilerde çalışmaz; davranışı sembolün kopyasına ya da grubun kendisine verin.
+
+*İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
+
 **Eklem yerinden döndürmek.** Hareket ara doldurması, nesneyi Flash'taki gibi *dönüştürme noktasının* çevresinde döndürür. Bu nokta başlangıçta nesnenin ortasındadır. Taşımak için nesneyi seçin, **Ölçekle** aracını (Q) alın ve kutunun ortasındaki küçük kareyi nesnenin döneceği yere sürükleyin: bir kolun omuz ucuna, bir tekerleğin göbeğine, bir kapının menteşesine. Enter'a basın. Nokta bundan sonra nesneyle birlikte kalır; taşımada, döndürmede ve yeni anahtar karelerde de. Ara doldurma noktayı anahtar kareden anahtar kareye düz götürür, nesne onun çevresinde döner. Noktayı ilk anahtar karede, ötekileri eklemeden önce yerine koyun. Bir grup ya da resim için önce sembole dönüştürün (F8); Flash da her hareket ara doldurması için bunu ister.
 
 **Ders: çöp adam dövüşü.** **Örnekler > Çöp adam dövüşü**'nü açıp oynatın (Enter), sonra parçalarına bakın. Böyle bir film şöyle yapılır:
@@ -275,4 +297,4 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde sekiz hazır animasyon vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde dokuz hazır animasyon vardır; her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, sahneler ve düğmeler). Yanındaki **PisiWorks > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **PisiSahne > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.

@@ -847,6 +847,9 @@ pub struct Object {
     /// None is the middle of the object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pivot: Option<Vec2>,
+    /// The ready-made motions the object has been given in PisiSahne: see [`crate::behavior`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub behaviors: Vec<crate::behavior::Behavior>,
     /// How the object's colors mix with the artwork under it.
     #[serde(default, skip_serializing_if = "BlendMode::is_normal")]
     pub blend: BlendMode,
@@ -907,6 +910,8 @@ impl Object {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -936,6 +941,8 @@ impl Object {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -1311,6 +1318,8 @@ impl Object {
                     handles: Vec::new(),
                     placement: None,
                     pivot: None,
+
+                    behaviors: Vec::new(),
                     blend: crate::blend::BlendMode::Normal,
                     mask: None,
                     mask_of: None,
@@ -1680,6 +1689,26 @@ impl Object {
     fn anchored(&self, at: Vec2) -> Vec2 {
         let (o, x, y) = self.anchor();
         v2(o.x + at.x * x.x + at.y * y.x, o.y + at.x * x.y + at.y * y.y)
+    }
+
+    /// The object as its behaviors have it after `tick` frames of playing at `fps` frames a second: moved,
+    /// and turned and resized around its transformation point.
+    pub fn behaved(&self, tick: usize, fps: f32, stage: (f32, f32)) -> Object {
+        let moved = crate::behavior::moved(&self.behaviors, tick, fps, self.bounds, stage);
+        let pivot = self.pivot_point().unwrap_or(self.bounds.center());
+        let mut object = self.clone();
+        if (moved.scale - 1.0).abs() > 1e-4 {
+            let size = moved.scale.max(0.01);
+            object.warp(&Warp::fit(Rect { x: pivot.x - 1.0, y: pivot.y - 1.0, w: 2.0, h: 2.0 }, Rect { x: pivot.x - size, y: pivot.y - size, w: 2.0 * size, h: 2.0 * size }));
+        }
+        if moved.angle.abs() > 1e-4 {
+            object.warp(&Warp::rotation(pivot, moved.angle));
+        }
+        if moved.dx != 0.0 || moved.dy != 0.0 {
+            object.translate(moved.dx, moved.dy);
+        }
+        object.opacity *= moved.alpha;
+        object
     }
 
     /// Where the object's transformation point is in the document, if it has been taken off the middle.
@@ -2558,6 +2587,22 @@ impl Page {
     }
 
     /// Changes the timeline with the work on the frame on show kept, and shows the frame afresh afterwards.
+    /// Whether anything on the page has been given a behavior.
+    pub fn has_behaviors(&self) -> bool {
+        self.objects().any(|o| !o.behaviors.is_empty())
+    }
+
+    /// The page with its behaviors at work, as they have things after `tick` frames of playing.
+    pub fn behaved(&self, tick: usize) -> Page {
+        let fps = self.timeline.as_ref().map_or(24.0, |timeline| timeline.fps);
+        let stage = (self.width as f32, self.height as f32);
+        let mut page = self.clone();
+        for object in page.objects_mut().filter(|o| !o.behaviors.is_empty()) {
+            *object = object.behaved(tick, fps, stage);
+        }
+        page
+    }
+
     pub fn edit_timeline<T>(&mut self, change: impl FnOnce(&mut Timeline) -> T) -> Option<T> {
         self.store_frame();
         let done = change(self.timeline.as_mut()?);
@@ -5050,6 +5095,8 @@ impl Editor {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -5823,6 +5870,8 @@ impl Editor {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,
@@ -6638,6 +6687,8 @@ mod tests {
             handles: Vec::new(),
             placement: None,
             pivot: None,
+
+            behaviors: Vec::new(),
             blend: crate::blend::BlendMode::Normal,
             mask: None,
             mask_of: None,

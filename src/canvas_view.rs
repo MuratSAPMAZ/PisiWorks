@@ -688,6 +688,8 @@ fn preview(shape: Shape, bounds: Rect) -> Object {
         handles: Vec::new(),
         placement: None,
         pivot: None,
+
+        behaviors: Vec::new(),
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,

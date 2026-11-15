@@ -60,6 +60,8 @@ fn style_preview(fill: Option<Color>, stroke: Option<Stroke>, opacity: f32) -> O
         handles: Vec::new(),
         placement: None,
         pivot: None,
+
+        behaviors: Vec::new(),
         blend: crate::blend::BlendMode::Normal,
         mask: None,
         mask_of: None,
@@ -2119,6 +2121,43 @@ impl Workspace {
             .child(self.text_button(t("OK"), true, cx, |this, _, _| this.close_mask_dialog(true)))
             .child(self.text_button(t("Cancel"), true, cx, |this, _, _| this.close_mask_dialog(false)));
         Some(self.dialog_frame(290., t("Auto Vector Mask"), rows, buttons))
+    }
+
+    /// Behaviors > Behavior Settings: the behaviors of the selected object, each with its numbers and a button that takes it away.
+    pub(crate) fn behavior_dialog_view(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        if !self.behavior_dialog {
+            return None;
+        }
+        let shown = self.shown_behaviors();
+        let mut rows: Vec<AnyElement> = Vec::new();
+        for (index, behavior) in shown.iter().enumerate() {
+            let kind = behavior.kind;
+            rows.push(
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .pt_1()
+                    .child(div().font_weight(FontWeight::BOLD).child(label(t(kind.name()))))
+                    .child(self.text_button(t("Remove"), true, cx, move |this, _, _| this.remove_behavior(kind)))
+                    .into_any_element(),
+            );
+            let (first, second) = kind.settings();
+            if !first.0.is_empty() {
+                rows.push(labelled_row(t(first.0), 230., self.field(FieldId::Behavior(index, false), 60., cx)).into_any_element());
+            }
+            if let Some(second) = second {
+                rows.push(labelled_row(t(second.0), 230., self.field(FieldId::Behavior(index, true), 60., cx)).into_any_element());
+            }
+            if kind.interactive() {
+                rows.push(div().text_color(rgb(TEXT_DIM)).child(label(t("Works in the published film (Test Movie)"))).into_any_element());
+            }
+        }
+        if shown.is_empty() {
+            rows.push(label(t("The selected object has no behaviors")).into_any_element());
+        }
+        let buttons = div().flex().justify_end().gap_1().child(self.text_button(t("Close"), true, cx, |this, _, _| this.close_behavior_dialog()));
+        Some(self.dialog_frame(340., t("Behavior Settings"), rows, buttons))
     }
 
     /// Commands > Creative > Twist and Fade: how many copies, and how each differs from the one before.

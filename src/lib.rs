@@ -3,6 +3,7 @@
 
 pub mod autoshape;
 pub mod batch;
+pub mod behavior;
 pub mod bitmap;
 pub mod blend;
 pub mod canvas_view;

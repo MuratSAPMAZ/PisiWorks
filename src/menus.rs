@@ -229,6 +229,8 @@ pub enum Cmd {
     SahneExample(u8),
     /// Hands the document to the other of the two programs and opens it there.
     OpenInOther,
+    /// Gives the selection a ready-made motion, takes it away, or opens the motions' settings.
+    Behavior(BehaviorCmd),
     ManageCommands,
     RunScript,
     /// Plays the saved command with this place in the list.
@@ -374,9 +376,11 @@ pub const SAHNE_EXTRA_MENUS: &[(&str, &[Entry])] = &[
             cmd("Turning gears", "", Cmd::SahneExample(4)),
             cmd("One after another", "", Cmd::SahneExample(5)),
             cmd("Stick fight", "", Cmd::SahneExample(6)),
-            cmd("Two scenes with buttons", "", Cmd::SahneExample(7)),
+            cmd("Behaviors", "", Cmd::SahneExample(7)),
+            cmd("Two scenes with buttons", "", Cmd::SahneExample(8)),
         ],
     ),
+    ("Behaviors", BEHAVIOR_MENU),
     ("PisiWorks", &[cmd("Open Frame in PisiWorks", "", Cmd::OpenInOther)]),
 ];
 
@@ -386,6 +390,30 @@ pub fn extra_menus() -> &'static [(&'static str, &'static [Entry])] {
 }
 
 /// What the animation program does with its timeline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BehaviorCmd {
+    /// Gives the selection the behavior, or takes it away if all of it has it.
+    Toggle(crate::behavior::BehaviorKind),
+    Settings,
+    Clear,
+}
+
+/// PisiSahne's Behaviors menu: every kind, those that move by themselves first, then those the viewer moves.
+pub const BEHAVIOR_MENU: &[Entry] = &{
+    use crate::behavior::KINDS;
+    let mut entries = [Sep; 17];
+    let mut index = 0;
+    while index < 13 {
+        // The first nine move by themselves; a line parts them from the four that wait for the viewer.
+        let at = if index < 9 { index } else { index + 1 };
+        entries[at] = cmd(KINDS[index].name(), "", Cmd::Behavior(BehaviorCmd::Toggle(KINDS[index])));
+        index += 1;
+    }
+    entries[15] = cmd("Behavior Settings...", "", Cmd::Behavior(BehaviorCmd::Settings));
+    entries[16] = cmd("Remove All Behaviors", "", Cmd::Behavior(BehaviorCmd::Clear));
+    entries
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FrameCmd {
     InsertFrame,
@@ -473,7 +501,8 @@ pub const CANVAS_MENU: &[Entry] = &STAGE_COMMON;
 
 /// What a right-click on the animation program's stage offers: the tweens of the frame on show first, as in Flash.
 pub const STAGE_MENU: &[Entry] = &{
-    let mut entries = [Sep; 21];
+    let mut entries = [Sep; 23];
+    entries[22] = Sub("Behaviors", BEHAVIOR_MENU);
     entries[0] = cmd("Create Motion Tween", "", Cmd::Frame(FrameCmd::Tween));
     entries[1] = cmd("Create Shape Tween", "", Cmd::Frame(FrameCmd::ShapeTween));
     entries[2] = cmd("Insert Keyframe", "F6", Cmd::Frame(FrameCmd::Keyframe));

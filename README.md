@@ -178,7 +178,8 @@ Bu aşamada çalışanlar:
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - Flash'taki gibi sona kadar bir kez oynatma, seçenek olarak Döngülü Oynat; doğrudan bir kareye ya da saniyeye gitme kutuları, cetvelde saniye işaretleri, uzun filmlerde oynatma kafasını izleyen zaman çizelgesi.
 - Flash'taki gibi dönüştürme noktası: Ölçekle aracıyla taşınır, nesneyle birlikte kalır, hareket ara doldurması nesneyi onun çevresinde döndürür; böylece kol omuzdan döner.
-- Örnekler menüsünde sekiz hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, sırayla (kendi zamanı olan katmanlar), çöp adam dövüşü, düğmeli iki sahne. Kılavuzda dövüş adım adım ders olarak anlatılır.
+- **Davranışlar**, PisiSahne'nin kendi özelliği: bir nesneye tek tıkla verilen on üç hazır hareket; anahtar kare gerekmez. Dön, zıpla, git gel, in çık, sürekli git, titre, büyü küçül, yanıp sön, belir kaybol; ve yayımlanan filmde izleyenin yönettiği dördü: fareyi izle, ok tuşlarıyla yürü, düş ve zıpla, sürüklenebilir.
+- Örnekler menüsünde dokuz hazır animasyon: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, sırayla (kendi zamanı olan katmanlar), çöp adam dövüşü, davranışlar, düğmeli iki sahne. Kılavuzda dövüş adım adım ders olarak anlatılır.
 - PisiWorks ile alışveriş: PisiWorks'teki **PisiSahne > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **PisiWorks > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.

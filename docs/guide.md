@@ -240,6 +240,28 @@ PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline ove
 
 The **One after another** example shows all of this in eight seconds: a car drives for four seconds and stops, then the sun rises, then the words fade in.
 
+**Behaviors: motion with no keyframes.** This is PisiSahne's own; Flash has nothing like it. Select an object and pick a motion from the **Behaviors** menu at the right end of the menu bar (or from the right-click menu): the object has it from then on, on every frame, with no keyframes and no tween. Picking it again takes it away. An object can have several at once.
+
+| Behavior | What the object does | Its numbers |
+|---|---|---|
+| Spin | Turns round and round its transformation point | Seconds for one turn (negative turns the other way) |
+| Bounce | Jumps up and comes down, again and again | Height, seconds for one bounce |
+| Go Back and Forth | Goes right and comes back (a negative distance goes left) | Distance, seconds there and back |
+| Go Up and Down | Rises and sinks | Distance, seconds there and back |
+| Keep Going | Travels on without stopping; leaving one edge of the stage it comes in from the other | Speed, direction (0 right, 90 up) |
+| Shake | Trembles | Strength |
+| Grow and Shrink | Swells and goes back | Growth in percent, seconds for one beat |
+| Blink | Shows and hides | Seconds for one blink |
+| Fade In and Out | Fades away and comes back | Seconds there and back |
+| Follow the Mouse | Goes after the mouse | Speed (0: stays on the mouse) |
+| Walk with the Arrow Keys | The viewer moves it with the arrow keys; it stays on the stage | Speed |
+| Fall and Jump | Falls to the bottom edge of the stage; Up or Space makes it jump | Pull, jump speed (0: no jumping) |
+| Can Be Dragged | The viewer drags it with the mouse | |
+
+The first nine show when you play inside the program (Enter): the film then plays on, holding its last frame, until you stop it. The last four answer the viewer, so they work in the published film: see them with **Test Movie** (Ctrl+Enter). **Behaviors > Behavior Settings** lists the selected object's behaviors with their numbers and a Remove button for each. Behaviors and tweens can be used together: a tweened object does both. They work on objects on the stage, not on those inside a symbol or a group; give the behavior to the copy of the symbol or to the group itself.
+
+*A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
+
 **Turning at a joint.** A motion tween turns an object around its *transformation point*, as in Flash. It starts in the middle of the object. To move it, select the object, take the **Scale** tool (Q) and drag the small square in the middle of the box to where the object is to turn: the shoulder end of an arm, the hub of a wheel, the hinge of a door. Press Enter. The point stays with the object from then on, through moves, turns and new keyframes, and the tween keeps it going straight from keyframe to keyframe while the object turns around it. Put the point in place on the first keyframe, before inserting the others. A group or a picture should be made a symbol first (F8), as Flash asks for any motion tween.
 
 **Lesson: a stick-figure fight.** Open **Examples > Stick fight** and play it (Enter), then take it apart. This is how such a film is made:
@@ -273,4 +295,4 @@ The **One after another** example shows all of this in eight seconds: a car driv
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has eight ready animations, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has nine ready animations, each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, scenes and buttons). Beside it, **PisiWorks > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **PisiSahne > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
