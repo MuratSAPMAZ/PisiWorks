@@ -58,6 +58,10 @@ pub struct Mask {
     width: u32,
     height: u32,
     cells: Vec<bool>,
+    /// For a feathered selection, how much of each pixel is selected, from 0 to
+    /// 255. `cells` then marks those at least half selected, which is where the
+    /// marquee is drawn.
+    soft: Option<Vec<u8>>,
 }
 
 /// How a mask is written to a file: its size, then how many cells in a row are
@@ -96,7 +100,7 @@ impl<'de> Deserialize<'de> for Mask {
         for (index, run) in file.runs.iter().enumerate() {
             cells.extend(std::iter::repeat_n(index % 2 == 1, *run as usize));
         }
-        Ok(Mask { width: file.width, height: file.height, cells })
+        Ok(Mask { width: file.width, height: file.height, cells, soft: None })
     }
 }
 
@@ -152,7 +156,7 @@ impl Mask {
     }
 
     pub fn empty(width: u32, height: u32) -> Self {
-        Self { width, height, cells: vec![false; width as usize * height as usize] }
+        Self { width, height, cells: vec![false; width as usize * height as usize], soft: None }
     }
 
     /// Selects the pixels between two corners, clamped to the image.
@@ -199,6 +203,11 @@ impl Mask {
                 }
             }
         }
+        if let Some(soft) = &self.soft {
+            let (w, h) = (self.width as i64, self.height as i64);
+            let at = |x: i64, y: i64| if x < 0 || y < 0 || x >= w || y >= h { 0 } else { soft[(y * w + x) as usize] };
+            moved.soft = Some((0..h).flat_map(|y| (0..w).map(move |x| (x, y))).map(|(x, y)| at(x - dx, y - dy)).collect());
+        }
         moved
     }
 
@@ -227,6 +236,8 @@ impl Mask {
         if (self.width, self.height) != (other.width, other.height) {
             return;
         }
+        // Adding to or taking from a feathered selection leaves a plain one.
+        self.soft = None;
         for (cell, new) in self.cells.iter_mut().zip(&other.cells) {
             *cell = match mode {
                 MaskMode::Replace => *new,
@@ -243,12 +254,44 @@ impl Mask {
     }
 
     fn with_cells(&self, cells: Vec<bool>) -> Mask {
-        Mask { width: self.width, height: self.height, cells }
+        Mask { width: self.width, height: self.height, cells, soft: None }
     }
 
     /// The selection with everything else selected instead.
     pub fn inverted(&self) -> Mask {
-        self.with_cells(self.cells.iter().map(|cell| !cell).collect())
+        let mut inverse = self.with_cells(self.cells.iter().map(|cell| !cell).collect());
+        inverse.soft = self.soft.as_ref().map(|soft| soft.iter().map(|w| 255 - w).collect());
+        inverse
+    }
+
+    /// Fireworks' Feather: the edge of the selection fades out over about `radius`
+    /// pixels to each side of where it was.
+    pub fn feathered(&self, radius: f32) -> Mask {
+        let hard: Vec<f32> = (0..self.cells.len()).map(|cell| self.weight(cell)).collect();
+        let blurred = crate::effects::blur_channel(&hard, self.width as usize, self.height as usize, radius.max(0.1));
+        let mut soft = self.with_cells(blurred.iter().map(|w| *w >= 0.5).collect());
+        soft.soft = Some(blurred.iter().map(|w| (w.clamp(0.0, 1.0) * 255.0).round() as u8).collect());
+        soft
+    }
+
+    /// How much of the pixel in a cell is selected, from 0 to 1.
+    pub fn weight(&self, cell: usize) -> f32 {
+        match &self.soft {
+            Some(soft) => soft.get(cell).map_or(0.0, |w| *w as f32 / 255.0),
+            None => self.cells.get(cell).map_or(0.0, |set| if *set { 1.0 } else { 0.0 }),
+        }
+    }
+
+    pub fn is_feathered(&self) -> bool {
+        self.soft.is_some()
+    }
+
+    /// Whether any part of the pixel in a cell is selected.
+    fn touches(&self, cell: usize) -> bool {
+        match &self.soft {
+            Some(soft) => soft[cell] > 0,
+            None => self.cells[cell],
+        }
     }
 
     /// The selection grown by `by` pixels all around.
@@ -294,6 +337,13 @@ impl Mask {
     /// Returns x, y, width and height of the smallest box around the selection.
     fn bounds(&self) -> Option<(u32, u32, u32, u32)> {
         let w = self.width as usize;
+        // A feathered selection reaches as far as its faintest pixel.
+        if self.soft.is_some() {
+            let touched: Vec<usize> = (0..self.cells.len()).filter(|cell| self.touches(*cell)).collect();
+            let (first, last) = (*touched.first()?, *touched.last()?);
+            let (left, right) = touched.iter().fold((usize::MAX, 0), |(l, r), cell| (l.min(cell % w), r.max(cell % w)));
+            return Some((left as u32, (first / w) as u32, (right - left + 1) as u32, (last / w - first / w + 1) as u32));
+        }
         let first = self.cells.iter().position(|c| *c)?;
         let last = self.cells.iter().rposition(|c| *c)?;
         let (mut left, mut right) = (u32::MAX, 0);
@@ -563,7 +613,7 @@ impl Bitmap {
             }
         }
         let alike = |px: &[u8]| (0..4).all(|c| px[c] >= low[c].saturating_sub(tolerance) && px[c] <= high[c].saturating_add(tolerance));
-        Some(Mask { width: self.width, height: self.height, cells: self.rgba.chunks_exact(4).map(alike).collect() })
+        Some(Mask { width: self.width, height: self.height, cells: self.rgba.chunks_exact(4).map(alike).collect(), soft: None })
     }
 
     pub fn flood_fill(&mut self, x: u32, y: u32, color: Color, tolerance: u8) -> bool {
@@ -580,17 +630,29 @@ impl Bitmap {
         if !mask.fits(self) || before.rgba.len() != self.rgba.len() {
             return;
         }
-        let cells = self.rgba.chunks_exact_mut(4).zip(before.rgba.chunks_exact(4)).zip(&mask.cells);
-        for ((px, old), _) in cells.filter(|(_, set)| !**set) {
-            px.copy_from_slice(old);
+        for (cell, (px, old)) in self.rgba.chunks_exact_mut(4).zip(before.rgba.chunks_exact(4)).enumerate() {
+            let weight = mask.weight(cell);
+            if weight <= 0.0 {
+                px.copy_from_slice(old);
+            } else if weight < 1.0 {
+                // A partly selected pixel takes that part of the change.
+                for (new, old) in px.iter_mut().zip(old) {
+                    *new = (*old as f32 + (*new as f32 - *old as f32) * weight).round() as u8;
+                }
+            }
         }
     }
 
     /// Makes the selected pixels fully transparent.
     pub fn clear(&mut self, mask: &Mask) {
         if mask.fits(self) {
-            for (px, _) in self.rgba.chunks_exact_mut(4).zip(&mask.cells).filter(|(_, set)| **set) {
-                px.fill(0);
+            for (cell, px) in self.rgba.chunks_exact_mut(4).enumerate() {
+                let weight = mask.weight(cell);
+                if weight >= 1.0 {
+                    px.fill(0);
+                } else if weight > 0.0 {
+                    px[3] = (px[3] as f32 * (1.0 - weight)).round() as u8;
+                }
             }
         }
     }
@@ -631,9 +693,11 @@ impl Bitmap {
         let mut rgba = vec![0; w as usize * h as usize * 4];
         for (n, px) in rgba.chunks_exact_mut(4).enumerate() {
             let (x, y) = (left + n as u32 % w, top + n as u32 / w);
-            if mask.is_set(x, y) {
+            let weight = mask.weight(y as usize * self.width as usize + x as usize);
+            if weight > 0.0 {
                 let i = self.index(x, y);
                 px.copy_from_slice(&self.rgba[i..i + 4]);
+                px[3] = (px[3] as f32 * weight).round() as u8;
             }
         }
         Some((Bitmap::from_rgba(w, h, rgba)?, left, top))
@@ -827,6 +891,41 @@ mod tests {
         rough.cells[15 * 30 + 15] = false;
         let even = rough.smoothed(2);
         assert!(!even.is_set(2, 2) && even.is_set(15, 15) && even.is_set(12, 12));
+    }
+
+    #[test]
+    fn a_feathered_selection_fades_out_and_what_is_done_in_it_fades_with_it() {
+        let square = Mask::rect(40, 40, Vec2 { x: 10.0, y: 10.0 }, Vec2 { x: 30.0, y: 30.0 });
+        assert!(!square.is_feathered() && square.weight(20 * 40 + 20) == 1.0 && square.weight(0) == 0.0);
+        let soft = square.feathered(4.0);
+        assert!(soft.is_feathered());
+        let weight = |x: usize, y: usize| soft.weight(y * 40 + x);
+        // Whole in the middle, half at the old edge, a little beyond it, nothing far away.
+        assert!(weight(20, 20) > 0.98 && (weight(10, 20) - 0.5).abs() < 0.15, "{}", weight(10, 20));
+        assert!(weight(7, 20) > 0.02 && weight(7, 20) < 0.4 && weight(13, 20) > 0.6 && weight(0, 20) == 0.0);
+        // The marquee is drawn where half is selected.
+        assert!(soft.is_set(20, 20) && !soft.is_set(5, 20));
+        // Deleting through it leaves a soft hole.
+        let mut bitmap = Bitmap::from_rgba(40, 40, [200, 0, 0, 255].repeat(1600)).unwrap();
+        bitmap.clear(&soft);
+        let alpha = |b: &Bitmap, x: u32, y: u32| b.pixel(x, y).unwrap()[3];
+        assert!(alpha(&bitmap, 20, 20) < 5 && alpha(&bitmap, 0, 20) == 255 && (60..200).contains(&alpha(&bitmap, 10, 20)), "{}", alpha(&bitmap, 10, 20));
+        // Copying through it gives a piece with soft edges, as big as the selection reaches.
+        let whole = Bitmap::from_rgba(40, 40, [200, 0, 0, 255].repeat(1600)).unwrap();
+        let (piece, left, top) = whole.extract(&soft).unwrap();
+        assert!(left < 10 && top < 10 && piece.width() > 20);
+        assert!(alpha(&piece, piece.width() / 2, piece.height() / 2) > 250 && alpha(&piece, 0, piece.height() / 2) < 40);
+        // A change made to the whole bitmap is kept in proportion.
+        let mut changed = Bitmap::from_rgba(40, 40, [0, 0, 0, 255].repeat(1600)).unwrap();
+        changed.restore_outside(&whole, &soft);
+        assert_eq!(changed.pixel(0, 20).unwrap()[0], 200);
+        assert!(changed.pixel(20, 20).unwrap()[0] < 5 && (60..160).contains(&changed.pixel(10, 20).unwrap()[0]));
+        // Inverted it is the other part of every pixel; moved, it keeps its softness; added to, it is plain again.
+        assert!((soft.inverted().weight(20 * 40 + 10) + weight(10, 20) - 1.0).abs() < 0.01);
+        assert!((soft.shifted(5, 0).weight(20 * 40 + 15) - weight(10, 20)).abs() < 0.01);
+        let mut plain = soft.clone();
+        plain.combine(&square, MaskMode::Add);
+        assert!(!plain.is_feathered());
     }
 
     #[test]

@@ -2290,6 +2290,7 @@ impl Workspace {
             crate::menus::MarqueeOp::Contract => mask.contracted(by),
             crate::menus::MarqueeOp::Border => mask.border(by),
             crate::menus::MarqueeOp::Smooth => mask.smoothed(by),
+            crate::menus::MarqueeOp::Feather => mask.feathered(by as f32),
         };
         if changed.is_empty() {
             self.status = t("Nothing would be left of the marquee").into();

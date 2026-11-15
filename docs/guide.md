@@ -24,7 +24,7 @@ Save never overwrites the opened image. It creates a `.pisi` document that keeps
 
 Marquee (M), Lasso (L) and Magic Wand (W) select pixels on a bitmap. Hold Shift to add to the selection, or Alt to subtract. Painting, filling and filters stay inside the selection. Cut, Copy and Delete act on the selected pixels, and Paste adds them as a new bitmap. Drag inside the selection with the Pointer, or press the arrow keys, to move the selected pixels; hold Alt to leave a copy behind. Dragging inside it with Marquee or Lasso moves only the selection border, and with Ctrl held it moves the pixels. Ctrl+D or Esc drops the selection.
 
-The Select menu changes a pixel selection. Select Similar adds every pixel of a like color anywhere on the bitmap, and Select Inverse (Ctrl+Shift+I) selects everything else. Expand Marquee and Contract Marquee grow or shrink it by a number of pixels, Border Marquee turns it into a band along its edge, and Smooth Marquee evens out a ragged edge. With no pixels selected, Select Inverse selects the objects that were not selected.
+The Select menu changes a pixel selection. Select Similar adds every pixel of a like color anywhere on the bitmap, and Select Inverse (Ctrl+Shift+I) selects everything else. Expand Marquee and Contract Marquee grow or shrink it by a number of pixels, Border Marquee turns it into a band along its edge, and Smooth Marquee evens out a ragged edge. Feather fades the edge of the selection out over a radius, so that deleting, copying, moving, painting and filters fade with it. With no pixels selected, Select Inverse selects the objects that were not selected.
 
 Rubber Stamp (S): Alt+click to set the source, then drag to clone from it.
 

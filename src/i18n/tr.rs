@@ -835,4 +835,6 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Expand by:", "Genişlet:"),
     ("Contract by:", "Daralt:"),
     ("Sample radius:", "Örnek yarıçapı:"),
+    ("Feather Selection", "Seçimde Geçiş Yumuşatma"),
+    ("Radius:", "Yarıçap:"),
 ];

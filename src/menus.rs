@@ -216,6 +216,7 @@ pub enum MarqueeOp {
     Contract,
     Border,
     Smooth,
+    Feather,
 }
 
 impl MarqueeOp {
@@ -225,6 +226,7 @@ impl MarqueeOp {
             MarqueeOp::Contract => crate::i18n::t("Contract Marquee"),
             MarqueeOp::Border => crate::i18n::t("Border Marquee"),
             MarqueeOp::Smooth => crate::i18n::t("Smooth Marquee"),
+            MarqueeOp::Feather => crate::i18n::t("Feather Selection"),
         }
     }
 
@@ -235,6 +237,7 @@ impl MarqueeOp {
             MarqueeOp::Contract => crate::i18n::t("Contract by:"),
             MarqueeOp::Border => crate::i18n::t("Width:"),
             MarqueeOp::Smooth => crate::i18n::t("Sample radius:"),
+            MarqueeOp::Feather => crate::i18n::t("Radius:"),
         }
     }
 }
@@ -500,7 +503,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             Sep,
             cmd("Select Similar", "", Cmd::SelectSimilar),
             cmd("Select Inverse", "Ctrl+Shift+I", Cmd::SelectInverse),
-            na("Feather..."),
+            cmd("Feather...", "", Cmd::Marquee(MarqueeOp::Feather)),
             Sep,
             cmd("Expand Marquee...", "", Cmd::Marquee(MarqueeOp::Expand)),
             cmd("Contract Marquee...", "", Cmd::Marquee(MarqueeOp::Contract)),
