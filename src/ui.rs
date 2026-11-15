@@ -109,10 +109,8 @@ fn web_safe_colors() -> impl Iterator<Item = Color> {
 
 impl Workspace {
     fn app_bar(&self, window: &Window, cx: &mut Context<Self>) -> Div {
-        let titles: Vec<_> = MENUS
-            .iter()
-            .enumerate()
-            .map(|(i, (title, entries))| {
+        // A title of the menu bar with, when it is open, its menu under it. The menus at the right end open leftward.
+        let mut title_of = |i: usize, (title, entries): &(&'static str, &'static [Entry]), right: bool| {
                 let open = self.open_menu == Some(i);
                 div()
                     .relative()
@@ -144,11 +142,13 @@ impl Workspace {
                         // The saved commands are files, so their part of the Commands menu is made as it is shown.
                         let entries: &'static [Entry] = if *title == "Commands" { self.commands_menu(entries) } else { entries };
                         d.child(deferred(
-                            self.menu_panel(entries, true, cx).absolute().top(px(MENU_BAR_HEIGHT)).left_0(),
+                            self.menu_panel(entries, true, cx).absolute().top(px(MENU_BAR_HEIGHT)).when(right, |panel| panel.right_0()).when(!right, |panel| panel.left_0()),
                         ))
                     })
-            })
-            .collect();
+        };
+        let titles: Vec<_> = MENUS.iter().enumerate().map(|(i, menu)| title_of(i, menu, false)).collect();
+        // PisiWorks' own menus are numbered after the others and stand at the right.
+        let extras: Vec<_> = crate::menus::EXTRA_MENUS.iter().enumerate().map(|(i, menu)| title_of(MENUS.len() + i, menu, true)).collect();
         let window_button = |id: &'static str, name: &'static str, area: WindowControlArea, close: bool| {
             div()
                 .id(id)
@@ -236,6 +236,7 @@ impl Workspace {
             .child(div().id("app-bar-tools").flex().flex_none().children(VIEW_TOOLS.iter().map(|s| self.tool_slot(s, cx)).collect::<Vec<_>>()))
             .child(div().ml_1().flex_none().child(self.combo(Combo::Zoom, format!("{zoom}%"), 64., cx).bg(rgb(PANEL_RAISED))))
             .child(drag_area(div().flex_1().h_full()))
+            .child(div().h_full().mr_2().flex().flex_none().children(extras))
             .child(div().mr_2().flex_none().child(self.combo(Combo::WorkspaceMode, mode, 112., cx).bg(rgb(PANEL_RAISED))))
             .children(window_buttons)
     }

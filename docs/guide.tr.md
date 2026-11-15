@@ -191,3 +191,17 @@ Metin seçiliyken Özellikler'deki yön listesi dört seçenek sunar: **Soldan s
 ## Fireworks PNG dosyaları
 
 Fireworks'ün kendi PNG dosyaları **Dosya > Aç** ile katmanlarıyla açılır: katman adları ve görünürlükleri, durumlar, bitmap nesneleri ve Alt Gölge efekti okunur. Dosyada yol, metin ya da grup varsa bunlar okunamaz; o zaman dosya düz görüntü olarak açılır ve durum çubuğu bunu söyler. Açılan belge yeni bir belgedir: kaydetmek Fireworks dosyasının üzerine yazmaz.
+
+## Örnekler
+
+Menü çubuğunun sağ ucundaki **Örnekler** menüsü, Fireworks'te bulunmayan ve PisiWorks'e özgü olan özellikler içindir; soldaki menüler Fireworks kullanıcısının bildiği gibi kalır. Menüden bir örnek seçince yeni, adsız bir belge olarak açılır; istediğiniz gibi değiştirebilir, kaydedebilir ya da dışa aktarabilirsiniz. Örneklerdeki yazılar arayüzün dilinde gelir.
+
+| Örnek | Gösterdiği |
+|---|---|
+| Web afişi | Degrade dolgu, metin, canlı filtre ve Otomatik Şekil |
+| Gezinme düğmeleri | Üç durumlu düğme sembolleri ve bağlantılar; Önizleme'de fareyle deneyin, dışa aktarınca HTML sayfası da yazılır |
+| Uçan yıldız | Sekiz duruma yayılan animasyon sembolü; Durumlar panelinden oynatın, animasyonlu GIF olarak dışa aktarın |
+| Okul afişi | Yola eklenmiş metin, maske ve canlı filtreler |
+| Dolgular ve degradeler | On iki degrade türü yan yana |
+| Canlı filtreler | Aynı şekil sekiz filtreyle |
+| Web sayfası taslağı | 12 sütunlu kılavuz ızgarası, katmanlar, dilimler ve sıcak noktalar |

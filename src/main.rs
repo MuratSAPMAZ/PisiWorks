@@ -7,6 +7,7 @@ mod blend;
 mod canvas_view;
 mod commands;
 mod effects;
+mod examples;
 mod export;
 mod fit;
 mod fonts;

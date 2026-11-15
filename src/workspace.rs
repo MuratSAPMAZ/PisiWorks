@@ -2923,7 +2923,7 @@ impl Workspace {
         }
         let pixels = self.active_pixels().map(|s| (s.object, s.mask.clone()));
         match cmd {
-            Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate => self.confirm_discard(cmd, window, cx),
+            Cmd::New | Cmd::Open | Cmd::Exit | Cmd::NewFromTemplate | Cmd::Example(_) => self.confirm_discard(cmd, window, cx),
             Cmd::ManageCommands => {
                 self.saved_commands = crate::commands::saved();
                 self.commands_dialog = Some(None);
@@ -3730,6 +3730,14 @@ impl Workspace {
             }
             Cmd::Open => self.pick_file(window, cx, |this, path| this.open_file(path)),
             Cmd::NewFromTemplate => self.template_dialog = Some((crate::templates::saved(), 0)),
+            Cmd::Example(which) => {
+                if let Some(example) = crate::examples::EXAMPLES.get(which as usize) {
+                    // An example opens as a new document of the user's own, with no file behind it.
+                    self.load_document((example.build)(), None);
+                    self.fit_if_larger_than_view();
+                    self.status = format!("{}: {}", t(example.name), t(example.about));
+                }
+            }
             Cmd::Exit => cx.quit(),
             _ => {}
         }
@@ -3737,6 +3745,10 @@ impl Workspace {
 
     fn load_document(&mut self, doc: Document, path: Option<PathBuf>) {
         self.recorded.clear();
+        // The picture kept of the page is of the old document: a new one counts its changes from nothing again.
+        if let Some((_, image)) = self.page_raster.take() {
+            self.stale_previews.push(image);
+        }
         self.ed = Editor::new(doc);
         self.path = path;
         self.source_image = None;

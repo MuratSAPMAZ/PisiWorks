@@ -219,6 +219,8 @@ pub enum Cmd {
     ConvertToSymbol,
     NewSymbol,
     NewFromTemplate,
+    /// Opens the example with this place in the list.
+    Example(u8),
     ManageCommands,
     RunScript,
     /// Plays the saved command with this place in the list.
@@ -330,6 +332,22 @@ pub fn font_entries() -> &'static [Entry] {
     });
     &ENTRIES
 }
+
+/// The menus of PisiWorks' own, which Fireworks does not have. They stand apart from
+/// the others, at the right end of the menu bar, so that the menus on the left stay
+/// the ones a Fireworks user knows. What is added to the program later goes here.
+pub const EXTRA_MENUS: &[(&str, &[Entry])] = &[(
+    "Examples",
+    &[
+        cmd("Web banner", "", Cmd::Example(0)),
+        cmd("Navigation buttons", "", Cmd::Example(1)),
+        cmd("Flying star", "", Cmd::Example(2)),
+        cmd("School poster", "", Cmd::Example(3)),
+        cmd("Fills and gradients", "", Cmd::Example(4)),
+        cmd("Live filters", "", Cmd::Example(5)),
+        cmd("Web page mockup", "", Cmd::Example(6)),
+    ],
+)];
 
 /// The commands that come ready in the Commands menu.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

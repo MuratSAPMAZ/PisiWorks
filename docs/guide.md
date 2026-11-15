@@ -189,3 +189,17 @@ With text selected, the orientation list in Properties offers four choices: **Ho
 ## Fireworks PNG files
 
 Fireworks' own PNG files open with their layers through **File > Open**: layer names and visibility, states, bitmap objects and the Drop Shadow effect are read. Paths, text and groups cannot be read; a file that has any opens as its flat picture, and the status bar says so. What opens is a new document: saving never writes over the Fireworks file.
+
+## Examples
+
+The **Examples** menu at the right end of the menu bar is for what PisiWorks has of its own and Fireworks does not; the menus on the left stay as a Fireworks user knows them. Picking an example opens it as a new, unnamed document that you can change, save or export. The texts in the examples come in the language of the interface.
+
+| Example | What it shows |
+|---|---|
+| Web banner | Gradient fill, text, a live filter and an Auto Shape |
+| Navigation buttons | Button symbols with three states and links; try them with the mouse in Preview, and exporting writes an HTML page as well |
+| Flying star | An animation symbol across eight states; play it from the States panel, export it as an animated GIF |
+| School poster | Text on a path, a mask and live filters |
+| Fills and gradients | The twelve kinds of gradient side by side |
+| Live filters | One shape under eight filters |
+| Web page mockup | A 12-column grid of guides, layers, slices and hotspots |
