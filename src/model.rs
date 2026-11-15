@@ -2234,6 +2234,9 @@ pub struct Page {
     /// `button_symbols`, only on the copy of a page handed to the exporter.
     #[serde(skip)]
     pub button_looks: Vec<ButtonLooks>,
+    /// The timeline, in a document of the animation program; the page is then a scene of the animation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeline: Option<Timeline>,
     /// How many times an animated GIF made from the page plays: 0 is for ever, 1 is once through.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub gif_loops: u16,
@@ -2314,6 +2317,7 @@ impl Page {
             guides: Guides::default(),
             open_groups: Vec::new(),
             symbol_edit: None,
+            timeline: None,
             gif_loops: 0,
             animations: Vec::new(),
             button_looks: Vec::new(),
@@ -2350,6 +2354,82 @@ impl Page {
             page.layers[layer].objects.insert(at, shell);
         }
         page
+    }
+
+    /// Gives the page a timeline, if it has none: each layer starts with one keyframe holding what it shows.
+    pub fn start_timeline(&mut self, fps: f32) {
+        if self.timeline.is_none() {
+            let layers = self.layers.iter().map(|layer| vec![Span { start: 0, length: 1, objects: layer.objects.clone(), tween: None }]).collect();
+            self.timeline = Some(Timeline { fps, current: 0, layers });
+        }
+    }
+
+    /// Writes what the layers show into the timeline, as work done on the frame on show.
+    /// On a frame of a plain keyframe that work belongs to the keyframe. On a frame inside
+    /// a tween it makes a keyframe of the frame, as Flash does, if anything was changed there.
+    pub fn store_frame(&mut self) {
+        let Some(mut timeline) = self.timeline.take() else { return };
+        timeline.layers.resize(self.layers.len(), Vec::new());
+        let frame = timeline.current;
+        for (index, layer) in self.layers.iter().enumerate() {
+            if timeline.layers[index].is_empty() {
+                timeline.layers[index].push(Span { start: 0, length: frame + 1, objects: Vec::new(), tween: None });
+            }
+            let Some(at) = timeline.span_at(index, frame) else {
+                // Past the end of the layer: drawing there makes it reach the frame, with a keyframe of what was drawn.
+                if !layer.objects.is_empty() {
+                    timeline.insert_keyframe(index, frame, true);
+                    if let Some(at) = timeline.span_at(index, frame) {
+                        timeline.layers[index][at].objects = layer.objects.clone();
+                    }
+                }
+                continue;
+            };
+            let span = &timeline.layers[index][at];
+            if span.tween.is_none() || span.start == frame {
+                timeline.layers[index][at].objects = layer.objects.clone();
+            } else if timeline.objects_at(index, frame) != layer.objects {
+                timeline.insert_keyframe(index, frame, true);
+                if let Some(at) = timeline.span_at(index, frame) {
+                    let tween = timeline.layers[index][at - 1].tween;
+                    (timeline.layers[index][at].objects, timeline.layers[index][at].tween) = (layer.objects.clone(), tween);
+                }
+            }
+        }
+        self.timeline = Some(timeline);
+    }
+
+    /// Puts into the layers what the timeline has for the frame on show.
+    pub fn load_frame(&mut self) {
+        let Some(timeline) = &self.timeline else { return };
+        let shown: Vec<Vec<Object>> = (0..self.layers.len()).map(|layer| timeline.objects_at(layer, timeline.current)).collect();
+        for (layer, objects) in self.layers.iter_mut().zip(shown) {
+            layer.objects = objects;
+        }
+    }
+
+    /// Shows another frame: the work on this one is kept first.
+    pub fn goto_frame(&mut self, frame: usize) {
+        self.store_frame();
+        if let Some(timeline) = &mut self.timeline {
+            timeline.current = frame.min(MAX_FRAMES - 1);
+        }
+        self.load_frame();
+    }
+
+    /// A copy of the page showing another frame, as playing and exporting need it.
+    pub fn at_frame(&self, frame: usize) -> Page {
+        let mut page = self.clone();
+        page.goto_frame(frame);
+        page
+    }
+
+    /// Changes the timeline with the work on the frame on show kept, and shows the frame afresh afterwards.
+    pub fn edit_timeline<T>(&mut self, change: impl FnOnce(&mut Timeline) -> T) -> Option<T> {
+        self.store_frame();
+        let done = change(self.timeline.as_mut()?);
+        self.load_frame();
+        Some(done)
     }
 
     /// The buttons that change under the mouse: the copies, lying loose on the page, of button symbols with more than one look.
@@ -2737,6 +2817,198 @@ pub struct TwistSettings {
 impl Default for TwistSettings {
     fn default() -> Self {
         Self { steps: 8, spacing: 15.0, direction: 0.0, rotation: 15.0, scale: 95.0, fade_to: 10.0 }
+    }
+}
+
+/// A motion tween: how the objects of a keyframe go over to those of the next one.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct Tween {
+    /// From -100, which starts slowly, to 100, which ends slowly; 0 goes evenly.
+    #[serde(default)]
+    pub ease: f32,
+    /// Whole turns made on the way, on top of the turn from one keyframe to the next; clockwise if positive.
+    #[serde(default)]
+    pub turns: i32,
+}
+
+impl Tween {
+    /// How far along the way a frame is, once the easing has had its say, for a part of the span from 0 to 1.
+    pub fn eased(&self, part: f32) -> f32 {
+        let strength = (self.ease.abs() / 100.0).min(1.0);
+        let curved = if self.ease > 0.0 { 1.0 - (1.0 - part) * (1.0 - part) } else { part * part };
+        part + (curved - part) * strength
+    }
+}
+
+/// A keyframe and the frames that follow it until the next keyframe.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Span {
+    /// The frame the keyframe is on, counted from 0.
+    pub start: usize,
+    /// How many frames it lasts, the keyframe included.
+    pub length: usize,
+    /// What the keyframe holds, bottom-most first; nothing for a blank keyframe.
+    pub objects: Vec<Object>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tween: Option<Tween>,
+}
+
+/// The timeline of a scene: for each layer of the page, its keyframes one after
+/// another from frame 0. The objects of the frame on show lie in the page's layers,
+/// where every tool works on them; the timeline has the other frames.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Timeline {
+    /// Frames a second.
+    pub fps: f32,
+    /// The frame on show.
+    pub current: usize,
+    /// For each layer of the page, bottom-most first.
+    pub layers: Vec<Vec<Span>>,
+}
+
+/// The most frames a timeline may have.
+pub const MAX_FRAMES: usize = 20_000;
+
+/// An object on its way from how one keyframe has it to how the next has it.
+fn between(from: &Object, to: &Object, part: f32, turns: i32) -> Object {
+    let pose = |object: &Object| {
+        let frame = object.placement.map_or(object.bounds, |p| p.frame);
+        (object.bounds.center(), frame.w, frame.h, object.placement.map_or(0.0, |p| p.warp.turn()), object.opacity)
+    };
+    let (a, b) = (pose(from), pose(to));
+    let mut sweep = b.3 - a.3;
+    if sweep > std::f32::consts::PI {
+        sweep -= std::f32::consts::TAU;
+    } else if sweep < -std::f32::consts::PI {
+        sweep += std::f32::consts::TAU;
+    }
+    sweep += turns as f32 * std::f32::consts::TAU;
+    let mix = |x: f32, y: f32| x + (y - x) * part;
+    let center = v2(mix(a.0.x, b.0.x), mix(a.0.y, b.0.y));
+    let (w, h) = (mix(a.1, b.1), mix(a.2, b.2));
+    let mut object = from.clone();
+    object.placement = None;
+    // What was turned is laid straight again before it is given its new size and turn.
+    if let Some(placement) = from.placement {
+        object.bounds = placement.frame;
+    }
+    object.set_bounds(Rect { x: center.x - w / 2.0, y: center.y - h / 2.0, w, h });
+    let angle = a.3 + sweep * part;
+    if angle.abs() > 0.0001 {
+        object.warp(&Warp::rotation(center, angle));
+    }
+    object.opacity = mix(a.4, b.4);
+    object
+}
+
+impl Timeline {
+    /// How many frames the scene has: as many as its longest layer.
+    pub fn frame_count(&self) -> usize {
+        self.layers.iter().filter_map(|spans| spans.last().map(|span| span.start + span.length)).max().unwrap_or(0)
+    }
+
+    /// Which span of a layer a frame falls in.
+    pub fn span_at(&self, layer: usize, frame: usize) -> Option<usize> {
+        self.layers.get(layer)?.iter().position(|span| (span.start..span.start + span.length).contains(&frame))
+    }
+
+    /// Whether a frame of a layer is a keyframe.
+    pub fn is_keyframe(&self, layer: usize, frame: usize) -> bool {
+        self.layers.get(layer).is_some_and(|spans| spans.iter().any(|span| span.start == frame))
+    }
+
+    /// What a layer shows on a frame: its keyframe's objects, or, in a tween, objects on their way to the next keyframe's.
+    pub fn objects_at(&self, layer: usize, frame: usize) -> Vec<Object> {
+        let Some(index) = self.span_at(layer, frame) else { return Vec::new() };
+        let spans = &self.layers[layer];
+        let span = &spans[index];
+        let (Some(tween), Some(next)) = (span.tween, spans.get(index + 1)) else { return span.objects.clone() };
+        if frame == span.start {
+            return span.objects.clone();
+        }
+        let part = tween.eased((frame - span.start) as f32 / span.length as f32);
+        // An object goes over to the one with its number in the next keyframe; one that has none there stays as it is.
+        span.objects.iter().map(|object| next.objects.iter().find(|other| other.id == object.id).map_or_else(|| object.clone(), |other| between(object, other, part, tween.turns))).collect()
+    }
+
+    /// Puts the starts of a layer's spans in line with their lengths again.
+    fn renumber(spans: &mut [Span]) {
+        let mut at = 0;
+        for span in spans {
+            span.start = at;
+            at += span.length;
+        }
+    }
+
+    /// Makes a layer reach a frame, by letting its last keyframe last longer.
+    fn reach(&mut self, layer: usize, frame: usize) {
+        let Some(spans) = self.layers.get_mut(layer) else { return };
+        match spans.last_mut() {
+            Some(last) if last.start + last.length <= frame => last.length = frame + 1 - last.start,
+            Some(_) => {}
+            None => spans.push(Span { start: 0, length: frame + 1, objects: Vec::new(), tween: None }),
+        }
+    }
+
+    /// Flash's Insert Frame: the keyframe a frame belongs to lasts longer by `count`
+    /// frames, and what follows moves later. Past the end, the layer is made to reach the frame.
+    pub fn insert_frames(&mut self, layer: usize, frame: usize, count: usize) {
+        if self.frame_count() + count > MAX_FRAMES || frame >= MAX_FRAMES {
+            return;
+        }
+        match self.span_at(layer, frame) {
+            Some(index) => {
+                self.layers[layer][index].length += count;
+                Self::renumber(&mut self.layers[layer]);
+            }
+            None => self.reach(layer, frame),
+        }
+    }
+
+    /// Flash's Remove Frames: the layer loses a frame. A keyframe that has only its own frame goes with it, unless it is the layer's last.
+    pub fn remove_frame(&mut self, layer: usize, frame: usize) {
+        let Some(index) = self.span_at(layer, frame) else { return };
+        let spans = &mut self.layers[layer];
+        if spans[index].length > 1 {
+            spans[index].length -= 1;
+        } else if spans.len() > 1 {
+            spans.remove(index);
+        }
+        Self::renumber(spans);
+    }
+
+    /// Flash's Insert Keyframe and Insert Blank Keyframe: a keyframe on a frame that has none.
+    /// It starts with what the layer shows there, or, blank, with nothing.
+    pub fn insert_keyframe(&mut self, layer: usize, frame: usize, blank: bool) -> bool {
+        if frame >= MAX_FRAMES || layer >= self.layers.len() || self.is_keyframe(layer, frame) {
+            return false;
+        }
+        self.reach(layer, frame);
+        let objects = if blank { Vec::new() } else { self.objects_at(layer, frame) };
+        let Some(index) = self.span_at(layer, frame) else { return false };
+        let spans = &mut self.layers[layer];
+        let rest = spans[index].start + spans[index].length - frame;
+        spans[index].length -= rest;
+        // A tween goes on to the new keyframe, and from it to where it went before.
+        let tween = spans[index].tween.filter(|_| !blank);
+        spans.insert(index + 1, Span { start: frame, length: rest, objects, tween });
+        true
+    }
+
+    /// Flash's Clear Keyframe: the keyframe becomes ordinary frames of the one before it. The first keyframe stays.
+    pub fn clear_keyframe(&mut self, layer: usize, frame: usize) -> bool {
+        let Some(index) = self.span_at(layer, frame).filter(|index| *index > 0 && self.layers[layer][*index].start == frame) else { return false };
+        let spans = &mut self.layers[layer];
+        let removed = spans.remove(index);
+        spans[index - 1].length += removed.length;
+        true
+    }
+
+    /// Sets or removes the tween of the keyframe a frame belongs to.
+    pub fn set_tween(&mut self, layer: usize, frame: usize, tween: Option<Tween>) -> bool {
+        let Some(index) = self.span_at(layer, frame) else { return false };
+        self.layers[layer][index].tween = tween;
+        true
     }
 }
 
@@ -3633,6 +3905,11 @@ impl Editor {
         let at = page.active_layer + 1;
         page.layers.insert(at, Layer::new(name));
         page.active_layer = at;
+        if let Some(timeline) = &mut page.timeline {
+            // A new layer of an animation is empty for as long as the scene lasts.
+            let frames = timeline.frame_count().max(1);
+            timeline.layers.insert(at.min(timeline.layers.len()), vec![Span { start: 0, length: frames, objects: Vec::new(), tween: None }]);
+        }
         for state in page.inactive_states_mut() {
             state.objects.insert(at, Vec::new());
         }
@@ -3798,6 +4075,9 @@ impl Editor {
         }
         let at = page.active_layer;
         page.layers.remove(at);
+        if let Some(timeline) = page.timeline.as_mut().filter(|timeline| at < timeline.layers.len()) {
+            timeline.layers.remove(at);
+        }
         for state in page.inactive_states_mut() {
             state.objects.remove(at);
         }
@@ -4463,6 +4743,29 @@ impl Editor {
             }
         }
         made
+    }
+
+    /// Shows another frame of the scene. Like switching state or page, this is not a step to undo.
+    pub fn goto_frame(&mut self, frame: usize) {
+        if self.doc.page().timeline.as_ref().is_some_and(|timeline| timeline.current != frame) {
+            self.leave_symbol_for_good();
+            self.end_mask_edit();
+            self.close_groups();
+            self.navigate(|doc| doc.page_mut().goto_frame(frame));
+            self.selection.clear();
+        }
+    }
+
+    /// Changes the timeline at the active layer and the frame on show. Returns what the change returned.
+    pub fn on_timeline<T>(&mut self, change: impl FnOnce(&mut Timeline, usize, usize) -> T) -> Option<T> {
+        self.leave_symbol();
+        self.end_mask_edit();
+        self.close_groups();
+        let page = self.doc.page_mut();
+        let (layer, frame) = (page.active_layer, page.timeline.as_ref()?.current);
+        let done = page.edit_timeline(|timeline| change(timeline, layer, frame));
+        self.prune_selection();
+        done
     }
 
     /// The animation a selected object belongs to.
@@ -5565,6 +5868,88 @@ mod tests {
         assert_eq!((whole.filters.len(), whole.instance_parts().len()), (1, 2));
         // The page itself is left as it was.
         assert_eq!((e.doc.page().objects().count(), e.doc.page().open_groups.len()), (3, 1));
+    }
+
+    #[test]
+    fn a_timeline_keeps_keyframes_and_tweens_between_them() {
+        let mut e = editor();
+        e.doc.page_mut().start_timeline(12.0);
+        let frames = |e: &Editor| e.doc.page().timeline.as_ref().unwrap().frame_count();
+        let xs = |e: &Editor| e.doc.page().objects().map(|o| o.bounds.x).collect::<Vec<_>>();
+        assert_eq!((frames(&e), xs(&e)), (1, vec![0.0, 50.0, 200.0]));
+        // A keyframe on frame 10 starts with what frame 0 shows; the layer now lasts 11 frames.
+        e.goto_frame(10);
+        assert!(e.doc.page().objects().count() == 0, "past the end of the layer nothing shows");
+        assert_eq!(e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false)), Some(true));
+        assert_eq!((frames(&e), xs(&e)), (11, vec![0.0, 50.0, 200.0]));
+        // Moved there, the first box is 100 further right on frame 10 and still at 0 on frames 0 to 9.
+        e.selection = vec![100];
+        e.for_selected(|o| {
+            o.translate(100.0, 0.0);
+            o.opacity = 0.0;
+        });
+        e.commit("move");
+        e.goto_frame(5);
+        assert_eq!(xs(&e)[0], 0.0);
+        // With a motion tween on the first keyframe, frame 5 is halfway.
+        e.goto_frame(0);
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween::default())));
+        e.goto_frame(5);
+        let halfway = e.object(100).unwrap().clone();
+        assert_eq!((halfway.bounds.x, halfway.opacity), (50.0, 0.5));
+        assert_eq!(e.object(101).unwrap().bounds.x, 50.0, "what does not change between the keyframes stays put");
+        // Easing out is ahead of an even pace at the middle; easing in is behind it.
+        assert!(Tween { ease: 100.0, turns: 0 }.eased(0.5) > 0.7 && Tween { ease: -100.0, turns: 0 }.eased(0.5) < 0.3);
+        // Changing an object inside the tween makes a keyframe of that frame, and the tween goes through it.
+        e.selection = vec![100];
+        e.for_selected(|o| o.translate(0.0, 40.0));
+        e.goto_frame(0);
+        let timeline = e.doc.page().timeline.as_ref().unwrap();
+        assert!(timeline.is_keyframe(0, 5) && timeline.layers[0].len() == 3);
+        assert_eq!(timeline.layers[0].iter().map(|span| (span.start, span.length, span.tween.is_some())).collect::<Vec<_>>(), [(0, 5, true), (5, 5, true), (10, 1, false)]);
+        assert_eq!(e.doc.page().at_frame(5).objects().next().unwrap().bounds.y, 50.0);
+        assert_eq!(e.doc.page().at_frame(7).objects().next().unwrap().bounds.x, 70.0);
+        // Undo takes the page and the timeline back together.
+        e.commit("keyframe by moving");
+        // Clearing the keyframe gives its frames back to the one before; removing frames shortens the layer.
+        e.goto_frame(5);
+        assert_eq!(e.on_timeline(|timeline, layer, frame| timeline.clear_keyframe(layer, frame)), Some(true));
+        assert_eq!(e.doc.page().timeline.as_ref().unwrap().layers[0].len(), 2);
+        e.on_timeline(|timeline, layer, frame| timeline.remove_frame(layer, frame));
+        e.on_timeline(|timeline, layer, frame| timeline.insert_frames(layer, frame, 3));
+        assert_eq!(frames(&e), 13);
+        assert_eq!(e.on_timeline(|timeline, layer, frame| timeline.clear_keyframe(layer, frame)), Some(false), "frame 5 is no keyframe now");
+        // A new layer lasts as long as the scene and is empty; deleting it takes its frames along.
+        e.add_layer();
+        let timeline = e.doc.page().timeline.as_ref().unwrap();
+        assert_eq!((timeline.layers.len(), timeline.layers[1][0].length), (2, 13));
+        assert!(e.delete_layer());
+        assert_eq!(e.doc.page().timeline.as_ref().unwrap().layers.len(), 1);
+        // The whole of it survives a file.
+        e.goto_frame(0);
+        let again = document_from_json(&document_to_json(&e.doc).unwrap()).unwrap();
+        assert_eq!(again.pages[0].timeline, e.doc.pages[0].timeline);
+        assert_eq!(again.pages[0].at_frame(12).objects().next().unwrap().bounds.x, 100.0);
+    }
+
+    #[test]
+    fn a_tween_turns_and_resizes_on_its_way() {
+        let mut e = editor();
+        e.doc.page_mut().start_timeline(24.0);
+        e.goto_frame(4);
+        e.on_timeline(|timeline, layer, frame| timeline.insert_keyframe(layer, frame, false));
+        e.selection = vec![100];
+        e.for_selected(|o| o.set_bounds(Rect { x: 0.0, y: 10.0, w: 80.0, h: 80.0 }));
+        e.goto_frame(0);
+        // One whole turn on the way, though the two keyframes stand the same way up.
+        e.on_timeline(|timeline, layer, frame| timeline.set_tween(layer, frame, Some(Tween { ease: 0.0, turns: 1 })));
+        let quarter = e.doc.page().at_frame(1);
+        let object = quarter.objects().next().unwrap();
+        assert!((object.placement.unwrap().warp.turn() - std::f32::consts::FRAC_PI_2).abs() < 0.001);
+        assert_eq!(object.placement.unwrap().frame.w, 50.0);
+        // The keyframes themselves are untouched by the tween.
+        assert_eq!(e.doc.page().at_frame(4).objects().next().unwrap().bounds.w, 80.0);
+        assert!(e.doc.page().at_frame(0).objects().next().unwrap().placement.is_none());
     }
 
     #[test]
