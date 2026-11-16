@@ -64,7 +64,9 @@ Derleme ve paketleme Linux Mint 22.3 üzerinde yapılır. `.deb` paketi hedef si
 
 ### Paketle kurma
 
-Depoda hazır `.deb` dosyası bulunmaz; paket kaynaktan tek komutla üretilir (aşağıdaki derleme gereksinimleri kurulu olmalıdır):
+Hazır paket [sürümler sayfasından](https://github.com/MuratSAPMAZ/PisiWorks/releases) indirilir ve `sudo apt install ./pisiworks_0.1.0_amd64.deb` ile kurulur; sürüm notları [`docs/surum-notlari/`](docs/surum-notlari/) klasöründedir.
+
+Paket kaynaktan da tek komutla üretilir (aşağıdaki derleme gereksinimleri kurulu olmalıdır):
 
 ```bash
 packaging/build-deb.sh
@@ -210,7 +212,7 @@ Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması"
 - Fireworks'ün JavaScript (JSF) komut dosyaları ve uzantıları: Komut Dosyası Çalıştır yalnızca PisiWorks'ün kendi komut dosyalarını (her satırda bir menü komutu) çalıştırır. Komutlar menüsünün hazır komutları Fireworks'ünkilerin iletişim kutularıyla birebir aynı değildir: Ok Başları Ekle beş biçim, Otomatik Vektör Maskesi yedi maske sunar. Adobe'nin şablonları da yoktur; Şablondan Yeni kendi şablonlarımızı ve sizin kaydettiklerinizi listeler.
 - Fireworks PNG dosyalarındaki yollar, metinler ve gruplar. Katmanlar, durumlar, bitmap nesneleri ve Alt Gölge efekti okunur; içinde yol, metin ya da grup olan dosya düz görüntü olarak açılır. Biçim Adobe tarafından yayımlanmadığı için okuyucu Fireworks 8 ile yazılmış birkaç dosyadan çıkarıldı; başka sürümlerin dosyalarıyla denenmedi. Fireworks PNG yazılmaz.
 - Photoshop Canlı Efektleri'nde Photoshop'un kendi desen ve degrade kitaplıkları.
-- İndirilebilir hazır paket. `.deb` dosyası şimdilik kaynaktan üretilir.
+- Pardus deposunda yer almak. Hazır `.deb` paketi şimdilik sürümler sayfasından indirilir; `apt` ile kendiliğinden güncellenmez.
 
 Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı; filtrelerin ve karışım modlarının piksel sonuçları Fireworks'tekilerden farklı olabilir. Tek istisna: Fireworks 8 ile yazılmış bir dosyadaki Alt Gölge (yumuşaklık 1) bizim çizimimizle karşılaştırıldı ve 289 pikselin 287'si aynı çıktı. Karşılaştığınız farkları ve hataları bildirirseniz düzeltilir.
 

@@ -25,14 +25,13 @@ Bu depo PisiAnimasyon'un **tanıtım sitesini ve kitabını** barındırır. Pro
 
 ## Kurulum
 
-Henüz hazır bir paket yayımlanmadı; program şimdilik kaynağından derlenir:
+[Paketi indirin](https://github.com/MuratSAPMAZ/PisiWorks/releases/download/pisiworks-0.1.0/pisiworks_0.1.0_amd64.deb) (0.1.0, amd64; Pardus 25'te denenmiştir) ve indirdiğiniz klasörde:
 
 ```bash
-git clone https://github.com/MuratSAPMAZ/PisiWorks.git
-cd PisiWorks
-bash packaging/build-deb.sh
-sudo apt install ./target/deb/pisiworks_*.deb
+sudo apt install ./pisiworks_0.1.0_amd64.deb
 ```
+
+Sürüm notları: <https://github.com/MuratSAPMAZ/PisiWorks/releases>
 
 ## Amaç
 

@@ -63,7 +63,9 @@ Building and packaging are done on Linux Mint 22.3. The `.deb` package **has bee
 
 ### Installing a package
 
-There is no ready-made `.deb` in the repository; one command builds it from source (the build requirements below must be installed):
+A ready-made package is on the [releases page](https://github.com/MuratSAPMAZ/PisiWorks/releases) and is installed with `sudo apt install ./pisiworks_0.1.0_amd64.deb`; the release notes (in Turkish) are in [`docs/surum-notlari/`](docs/surum-notlari/).
+
+One command also builds the package from source (the build requirements below must be installed):
 
 ```bash
 packaging/build-deb.sh
