@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/lisans-MIT-ff6a2b" alt="MIT lisansı"></a>
+  <a href="COPYING"><img src="https://img.shields.io/badge/lisans-GPL--3.0--or--later-ff6a2b" alt="GPL-3.0-or-later lisansı"></a>
   <img src="https://img.shields.io/badge/Rust-1.91%2B-1b2042?logo=rust" alt="Rust 1.91 veya üzeri">
   <img src="https://img.shields.io/badge/aray%C3%BCz-GPUI-7a5cff" alt="GPUI ile yapıldı">
   <img src="https://img.shields.io/badge/platform-Linux-2ed3b7" alt="Linux">
@@ -222,6 +222,6 @@ Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı;
 - Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [proje sayfası](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-**Lisans.** PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır. Kodun kökeni, içine derlenen kitaplıkların lisansları ve Adobe ile ilişkisi [lisans ve telif bildirimi](docs/lisans-ve-telif.md) belgesinde ayrıntısıyla yazılıdır. Lisans dosyası Emberframe'in yazarının telif satırını korur ve PisiWorks için yazılanların telif satırını onun yanına ekler.
+**Lisans.** PisiWorks ve PisiAnimasyon, [GNU Genel Kamu Lisansı, sürüm 3 ya da sonrası](COPYING) ile yayımlanan özgür yazılımlardır: herkes kullanabilir, inceleyebilir, değiştirebilir ve dağıtabilir; değiştirip dağıtan da kendi sürümünün kaynak kodunu aynı lisansla vermelidir. Emberframe'den gelen kod, yazarının [MIT lisansı](LICENSES/MIT.txt) altında kalır. **Programlarla yaptığınız film ve sayfalar sizindir**; içlerine yazılan oynatıcı betiğiyle birlikte dilediğiniz koşulla dağıtabilirsiniz ([NOTICE](NOTICE)). Kodun kökeni, içine derlenen kitaplıkların lisansları ve Adobe ile ilişkisi [lisans ve telif bildirimi](docs/lisans-ve-telif.md) belgesinde ayrıntısıyla yazılıdır.
 
 Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markalarıdır. PisiWorks ve PisiAnimasyon Adobe'ye ait hiçbir kod, görsel ya da belge içermez; Adobe ile hiçbir bağlantıları yoktur ve Adobe tarafından onaylanmamıştır. Bu adlar yalnızca programların neyin benzeri olduğunu ve hangi dosyaları açabildiğini anlatmak için kullanılır.

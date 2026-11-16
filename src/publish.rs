@@ -1,3 +1,22 @@
+// This file is part of PisiWorks.
+// Copyright (C) 2026 Murat SAPMAZ
+//
+// PisiWorks is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// PisiWorks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along with PisiWorks. If
+// not, see <https://www.gnu.org/licenses/>.
+//
+// Additional permission under GNU GPL version 3 section 7: the script this file writes into a
+// published film may be conveyed with that film under terms of your choice. See NOTICE.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Publishing an animation as a page that plays in a browser.
 //!
 //! The page carries the whole animation in itself: one file to hand in or put on a
@@ -372,7 +391,8 @@ const PAGE: &str = r#"<!doctype html>
 <body>
 <canvas id="stage" width="{width}" height="{height}"></canvas>
 <script>
-// Made with PisiAnimasyon.
+// Made with PisiAnimasyon. The film is its maker's own work. The script below is PisiAnimasyon's,
+// and may be passed on with this film under any terms (https://github.com/MuratSAPMAZ/PisiWorks, NOTICE).
 // pictures: every picture of the animation, each stored once.
 // sets: the pictures of each movie clip (one for each of its frames) and of each button (up, over, down).
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).

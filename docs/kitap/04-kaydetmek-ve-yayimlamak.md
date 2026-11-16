@@ -46,7 +46,7 @@ Pencerenin başlığına bak. Dosya adının yanında yıldız (`*`) varsa son k
 ![Kontrol menüsü. Filmi Test Et denemek içindir; HTML5 Olarak Yayımla kalıcı dosyayı üretir.](04-kontrol.png "Kontrol menüsü; HTML5 Olarak Yayımla işaretli" 380)
 
 !why Ne oldu?
-Yayımlanan dosyanın içinde filmin her şeyi vardır: resimler, sesler, davranışlar. Yanında başka dosya gerekmez, internet gerekmez, PisiAnimasyon gerekmez. E-postayla gönderebilir, bir belleğe kopyalayabilir, okulun sitesine koyabilirsin. Açan kişinin bilgisayarında yalnızca bir tarayıcı olması yeter.
+Yayımlanan dosyanın içinde filmin her şeyi vardır: resimler, sesler, davranışlar. Yanında başka dosya gerekmez, internet gerekmez, PisiAnimasyon gerekmez. E-postayla gönderebilir, bir belleğe kopyalayabilir, okulun sitesine koyabilirsin. Açan kişinin bilgisayarında yalnızca bir tarayıcı olması yeter. Yayımladığın film **senindir**: dilediğin gibi paylaşabilirsin.
 
 ## Filmi Test Et ile Yayımla arasındaki fark
 

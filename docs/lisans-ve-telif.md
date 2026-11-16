@@ -16,34 +16,48 @@ PisiWorks ve PisiAnimasyon **ticari bir amaç taşımaz.** Tek amaçları, müfr
 - Adobe'nin bir ürününün yerine pazarda yer almayı amaçlamaz. Fireworks 2013'ten beri geliştirilmiyor; Flash Player 2020'de sonlandırıldı. İkisi de Pardus'ta hiç çalışmadı. Bu programlar, o araçların çalışmadığı bir yerde dersin sürebilmesi içindir.
 - Benzerlik bu amaca hizmet ettiği kadardır: öğretmenin ders notundaki adım, öğrencinin ekranındaki adımla aynı olsun diye. Bunun ötesinde Adobe'ye ait hiçbir şey alınmadı.
 
-Kaynak kodunun MIT lisansıyla açık olması da aynı amaçtandır: okullar, Pardus ekibi ve isteyen herkes programı inceleyebilsin, değiştirebilsin ve dağıtabilsin. MIT lisansı başkalarının ticari kullanımına da izin verir; bu, lisansın bir özelliğidir, projenin bir hedefi değildir.
+Kaynak kodunun GNU Genel Kamu Lisansı (GPL) ile açık olması da aynı amaçtandır: okullar, Pardus ekibi ve isteyen herkes programı inceleyebilsin, değiştirebilsin ve dağıtabilsin; ve değiştirip dağıtan da kendi sürümünü aynı biçimde açık tutsun. GPL ticari kullanımı yasaklamaz; ama programı alıp kapalı bir ürüne çevirmeye izin vermez.
 
 ## 1. Özet
 
 | Soru | Cevap |
 |---|---|
 | Amaç | Eğitim. Ticari amaç yoktur; programlar ücretsizdir, reklam ve veri toplama içermez (bkz. Amaç) |
-| İki programın lisansı | MIT (Debian'daki adıyla Expat). Tam metin: [`LICENSE`](../LICENSE) |
+| İki programın lisansı | GNU GPL, sürüm 3 ya da sonrası. Tam metin: [`COPYING`](../COPYING); özet ve istisna: [`NOTICE`](../NOTICE) |
+| Emberframe'den gelen kodun lisansı | MIT (Debian'daki adıyla Expat), yazarının telif bildirimiyle: [`LICENSES/MIT.txt`](../LICENSES/MIT.txt) |
+| Programlarla yapılan film ve sayfalar | Yapanındır; içlerine yazılan oynatıcı betiğiyle birlikte istenen koşulla dağıtılabilir (GPL 7. madde uyarınca ek izin) |
 | Telif sahipleri | Med Amine Belbachir (Emberframe, 2026) ve Murat SAPMAZ (PisiWorks için yazılanlar, 2026) |
 | Kaynağı | MIT lisanslı [Emberframe](https://github.com/gregstein/emberframe) projesinin çatalı |
 | İçine derlenen kitaplıklar | 517 kitaplık, hepsi özgür yazılım; listesi [`THIRD-PARTY.md`](THIRD-PARTY.md) |
-| Copyleft (GPL türü) yükümlülük | Yok. Tek zayıf copyleft kitaplık MPL-2.0 lisanslı `option-ext`; değiştirilmeden kullanılıyor (bkz. 4. bölüm) |
+| Copyleft (GPL türü) yükümlülük | Var: programın kendisi GPL'dir; değiştirilmiş bir sürümünü dağıtan, kaynak kodunu da aynı lisansla vermelidir. Kitaplıklardan gelen tek zayıf copyleft, MPL-2.0 lisanslı `option-ext`; değiştirilmeden kullanılıyor (bkz. 4. bölüm) |
 | Adobe'ye ait kod, görsel, font ya da dosya | Depoda ve pakette yok |
 | Adobe dosya biçimleri | Fireworks PNG'nin katmanları okunur. Flash'ın `.fla` ve `.swf` biçimleri ne okunur ne yazılır |
-| Ticari kullanım, değiştirme, yeniden dağıtım | Serbest; tek koşul telif ve lisans bildirimlerinin korunması |
+| Ticari kullanım, değiştirme, yeniden dağıtım | Serbest; koşulu, dağıtılan sürümün de GPL ile, kaynak koduyla birlikte ve telif bildirimleri korunarak verilmesi |
 | Pardus, TÜBİTAK ya da Adobe ile kurumsal bağ | Yok; bağımsız bir projedir |
 
 ## 2. PisiWorks'ün lisansı
 
-PisiWorks, MIT lisansı altında yayımlanır. MIT lisansı programın kullanılmasına, kopyalanmasına, değiştirilmesine, birleştirilmesine, yayımlanmasına, dağıtılmasına, alt lisanslanmasına ve satılmasına izin verir. Tek koşulu, telif bildiriminin ve lisans metninin programın bütün kopyalarında ya da önemli parçalarında yer almasıdır. Program "olduğu gibi", hiçbir garanti verilmeden sunulur.
+PisiWorks ve PisiAnimasyon, 16 Kasım 2026'dan itibaren **GNU Genel Kamu Lisansı, sürüm 3 ya da sonrası** (GPL-3.0-or-later) ile yayımlanır. GPL programın kullanılmasına, kopyalanmasına, değiştirilmesine ve dağıtılmasına izin verir; karşılığında, programı ya da değiştirilmiş bir sürümünü dağıtanın kaynak kodunu da aynı lisansla vermesini ister. Program "olduğu gibi", hiçbir garanti verilmeden sunulur.
 
-MIT lisansı Özgür Yazılım Vakfı'nın özgür yazılım, Açık Kaynak Girişimi'nin açık kaynak, Debian'ın da Debian Özgür Yazılım Yönergeleri'ne uygun saydığı lisanslardandır.
+GPL, Özgür Yazılım Vakfı'nın özgür yazılım, Açık Kaynak Girişimi'nin açık kaynak, Debian'ın da Debian Özgür Yazılım Yönergeleri'ne uygun saydığı lisanslardandır; Pardus'un gönüllü geliştiricilere önerdiği lisanstır.
 
-`LICENSE` dosyasındaki telif satırları:
+**Neden MIT'ten GPL'ye geçildi.** Proje başlangıçta, üzerine kurulduğu Emberframe gibi MIT lisansıyla yayımlandı. MIT, kodun kapalı bir ürünün içine alınmasına da izin verir. Okullar için yazılmış bir programın başkasınca alınıp kapatılması projenin amacına aykırıdır; GPL bunu önler ve Pardus'un yönlendirmesine uyar.
+
+**Geçiş nasıl yapıldı.**
+
+- Lisans metni [`COPYING`](../COPYING) dosyasındadır; kısa bildirim, Emberframe'e ilişkin açıklama ve ek izin [`NOTICE`](../NOTICE) dosyasındadır.
+- Her kaynak dosyasının başında telif ve lisans bildirimi vardır; Emberframe'den gelen kod barındıran on beş dosya bunu ayrıca söyler.
+- Emberframe'den gelen kod MIT lisansı altında kalır. MIT lisanslı kod GPL'li bir işin içinde kullanılabilir; koşulu, yazarının telif bildiriminin ve lisans metninin korunmasıdır. Bunlar [`LICENSES/MIT.txt`](../LICENSES/MIT.txt) dosyasındadır.
+- 16 Kasım 2026'dan önce yayımlanan sürümler MIT ile yayımlanmıştı ve öyle kalır; verilmiş bir lisans geri alınamaz.
+- İçine derlenen kitaplıkların lisansları GPL sürüm 3 ile bağdaşır (bkz. 4. bölüm). Bazıları (Apache-2.0) GPL sürüm 2 ile bağdaşmadığı için lisans "sürüm 3 ya da sonrası"dır.
+
+**Yapılan filmler ve sayfalar: ek izin.** PisiAnimasyon bir filmi yayımlarken, PisiWorks bir sayfayı dışa aktarırken HTML dosyasının içine kendi yazdığı bir betiği koyar. Bu betik programın parçasıdır; ek bir izin olmasaydı bir öğrencinin yaptığı oyunun da GPL'ye bağlanıp bağlanmadığı tartışılabilirdi. Bunu açıkça ortadan kaldırmak için GPL'nin 7. maddesinin tanıdığı yolla bir ek izin verilmiştir: böyle bir dosya, içindeki betik programın yazdığı hâliyle kaldıkça, istenen koşulla dağıtılabilir. Film ya da sayfa yapanındır. Ek izin programın kendisini ve değiştirilmiş betiği kapsamaz. Tam metni `NOTICE` dosyasındadır; yayımlanan her filmin başında da kısa bir not vardır.
+
+Telif satırları:
 
 ```
-Copyright (c) 2026 Med Amine Belbachir (https://medamineweb.com)
-Copyright (c) 2026 Murat SAPMAZ (https://github.com/MuratSAPMAZ/PisiWorks)
+Copyright (C) 2026 Murat SAPMAZ
+Copyright (c) 2026 Med Amine Belbachir (https://medamineweb.com)   (Emberframe; MIT)
 ```
 
 ## 3. Kodun kökeni
@@ -53,7 +67,7 @@ PisiWorks, Med Amine Belbachir'in yazdığı ve MIT lisansıyla yayımladığı 
 - Emberframe'den gelen: çatal anında 12.286 satır Rust kodu. Bunun yaklaşık %88'i hâlâ yerindedir.
 - PisiWorks ve PisiAnimasyon için yazılan: yaklaşık 26.400 satır. Bugünkü 37.312 satırın yüzde yetmişinden fazlası.
 - PisiAnimasyon'un tamamı bu proje için yazıldı; Emberframe'de bir animasyon programı ya da zaman çizelgesi yoktur. PisiAnimasyon, PisiWorks'ün çizim kodunu bir kitaplık olarak kullanır.
-- MIT lisansının gereği olan telif bildirimi `LICENSE` dosyasında, README'lerde, Yardım > Hakkında penceresinde ve `.deb` paketinin `copyright` dosyasında korunur.
+- MIT lisansının gereği olan telif bildirimi `LICENSES/MIT.txt` ve `NOTICE` dosyalarında, Emberframe'den kod barındıran kaynak dosyalarının başında, README'lerde, Yardım > Hakkında penceresinde ve `.deb` paketinin `copyright` dosyasında korunur.
 
 Doğrulamak için: `git log` çatal noktasını (`64dcd71`) ve sonrasındaki işlemeleri gösterir; `git diff 64dcd71 HEAD --stat -- src` eklenen ve silinen satırları verir.
 
@@ -144,7 +158,8 @@ Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markala
 
 | Dosya | İçeriği |
 |---|---|
-| `copyright` | Debian biçiminde telif ve lisans: iki telif sahibi, MIT (Expat) metni, Emberframe'e atıf |
+| `copyright` | Debian biçiminde telif ve lisans: iki telif sahibi, GPL-3+ bildirimi, Emberframe'in MIT (Expat) metni ve atfı |
+| `NOTICE` | Kısa lisans bildirimi, Emberframe açıklaması ve yapılan filmlere ilişkin ek izin |
 | `THIRD-PARTY.md` | 517 kitaplığın adı, sürümü, lisansı ve kaynak adresi |
 | `third-party-licenses.txt.gz` | Her kitaplığın kendi `LICENSE`, `COPYING` ve `NOTICE` dosyaları, yazarlarının yayımladığı haliyle |
 | `lisans-ve-telif.md` | Bu belge |
@@ -177,16 +192,20 @@ Kaynak koddan derleme ve testler README'de anlatılır; 349 otomatik test her de
 Bunlar bizim tek başımıza karar veremediğimiz ya da bir hukukçunun bakmasını doğru bulduğumuz konulardır. Gizlemek yerine buraya yazıyoruz.
 
 1. **Görünüm benzerliği.** PisiWorks'ün çalışma alanı Fireworks'e, PisiAnimasyon'unki Flash'ın klasik çalışma alanına (zaman çizelgesi üstte, araçlar solda, Özellikler altta) bilerek benzer. PisiAnimasyon, PisiWorks'ün renklerini ve simgelerini kullanır; Flash'ın görsellerinden hiçbiri alınmadı. Kod ve görseller Adobe'ye ait değildir, ancak bir programın genel görünümünün ne ölçüde korunduğu ülkeden ülkeye değişen bir hukuk konusudur. Fireworks 2013'ten beri geliştirilmiyor ve satılmıyor; bu durumu değiştirmez ama riski değerlendirirken bilinmelidir.
-2. **Sol üstteki "Pw" ve "Sh" işaretleri.** Uygulama çubuğunun başındaki iki harfli işaretler Emberframe'in "Ef" işaretinden uyarlandı ve Adobe ürünlerinin iki harfli işaretlerini andırır. PisiAnimasyon'un işareti, Adobe Photoshop'un kullandığı "Ps" ile karışmasın diye "Sh" seçildi. Uygulama simgesi bu yüzden daha önce değiştirildi (kedi başı); pencere içindeki işaret duruyor. Değiştirilmesi istenirse küçük bir iştir.
+2. **Sol üstteki "Pw" ve "Pa" işaretleri.** Uygulama çubuğunun başındaki iki harfli işaretler Emberframe'in "Ef" işaretinden uyarlandı ve Adobe ürünlerinin iki harfli işaretlerini andırır. PisiAnimasyon'un işareti "Pa"dır; Adobe Animate'in kullandığı "An" ile karışmasın diye o seçilmedi. Uygulama simgesi bu yüzden daha önce değiştirildi (kedi başı); pencere içindeki işaret duruyor. Değiştirilmesi istenirse küçük bir iştir.
 3. **Türkçe terimlerin kaynağı.** Kısa komut adlarının 581'i Türkçe Fireworks'tekilerle aynıdır; hepsi bir ile üç sözcük arasındadır (ölçüm 5. bölümde). Tek tek komut adlarının telifle korunmadığını düşünüyoruz. Değerlendirilmesini istediğimiz soru şudur: bu adların tek tek değil, toplu olarak aynı olması bir derleme hakkı doğurur mu? Doğurduğu sonucuna varılırsa adlar değiştirilebilir; bunun bedeli, öğretmenlerin ders notlarıyla programın uyuşmamasıdır.
 4. **Fireworks PNG biçiminin incelenmesi.** Okuyucu, yasal olarak edinilmiş bir Fireworks kurulumunun örnek dosyaları incelenerek, birlikte çalışabilirlik için yazıldı. 5846 sayılı Kanun'un bilgisayar programlarına ilişkin hükümlerinin bu tür incelemeye ne ölçüde izin verdiği teyit edilmelidir. Gerekirse okuyucu tek dosya olduğu için kolayca çıkarılabilir.
 5. **"Pisi" ve "PisiAnimasyon" adları.** PisiAnimasyon adı bu projede konuldu; başka bir ürünle çakışıp çakışmadığı araştırılmadı.  Ad, Pardus geleneğine bir göndermedir. "PiSi" Pardus'un eski paket yöneticisinin adıdır ve "Pisi Linux" adında ayrı bir dağıtım vardır. Karışıklık ya da bir marka hakkı doğurup doğurmadığına Pardus ekibi karar vermelidir.
 6. **Emberframe yazarının ad ricası.** Yazar, çatalın "Emberframe" adını korumasını rica etti. Lisans buna zorlamaz; PisiWorks her yerde kaynağını ve yazarını belirtir. Kendisine henüz cevap verilmedi.
 7. **Telif satırındaki kişi.** PisiWorks için yazılanların telifi şimdilik Murat SAPMAZ adınadır. Proje bir kurum çatısı altına alınacaksa telif sahipliği ve katkı kuralları buna göre düzenlenmelidir.
 8. **Kitaplık sayısı.** 517 kitaplığın lisansları Cargo'nun bildirdiği bilgilere dayanır; her birinin kaynak kodu tek tek gözle denetlenmedi. Pardus depoları için gerekiyorsa bağımlılıkların ayrıca denetlenmesi ya da Debian'da paketlenmiş sürümlerine geçilmesi ayrı bir çalışmadır.
-9. **Garanti ve sorumluluk.** MIT lisansı programı garantisiz sunar. Okullarda kullanım için ayrı bir destek ya da sorumluluk taahhüdü yoktur.
+9. **Garanti ve sorumluluk.** GPL programı garantisiz sunar. Okullarda kullanım için ayrı bir destek ya da sorumluluk taahhüdü yoktur.
 10. **Bakılan Fireworks kurulumunun lisans koşulları.** Terimler karşılaştırılırken ve PNG biçimi incelenirken bir Fireworks kurulumunun dosyalarına bakıldı. O kurulumun son kullanıcı lisans sözleşmesinin arayüz metinlerine ve örnek dosyalara bu amaçla bakmayı kısıtlayıp kısıtlamadığı incelenmedi. Bu telif değil sözleşme konusudur ve kurulumun sahibini ilgilendirir; yine de inceleyenin bilmesi için yazıyoruz. O dosyalar depoya ve pakete hiç girmedi.
 11. **Ticari amacın bulunmaması.** Proje gelir amacı taşımaz (bkz. Amaç). Bunun hukuki değerlendirmede ne ölçüde ağırlık taşıdığı, özellikle eğitim amaçlı kullanım ve marka hukuku bakımından, inceleyenin takdirindedir; biz bunu bir savunma olarak değil, durumun doğru anlaşılması için yazıyoruz.
+12. **Emberframe yazarına bildirim.** Lisans değişikliği Emberframe'in yazarının iznini gerektirmez: onun kodu MIT altında kalır ve MIT buna izin verir. Yine de kendisine haber verilmesi doğru olur; ayrıca PisiWorks için yazılanları kendi MIT projesine geri almak isterse bunun için ayrı bir izin gerekir. Henüz yazılmadı.
+13. **İşveren ya da okul feragatnamesi.** Pardus'un gönüllüler için yayımladığı yönerge, yazarın işvereninden ya da okulundan telif feragatnamesi almasını önerir. Yazarın çalıştığı kurumun bu çalışma üzerinde bir hak ileri sürüp süremeyeceği burada değerlendirilmedi.
+14. **Ek iznin sözleri.** Yapılan filmlere ilişkin ek izin bir hukukçu tarafından yazılmadı; GCC'nin çalışma zamanı kitaplığı istisnası gibi bilinen örneklerin amacını izler. Sözlerinin bir hukukçuya gösterilmesi yerinde olur.
+15. **Kitabın lisansı.** `docs/kitap/` altındaki kitap için ayrı bir lisans belirlenmedi; deponun parçası olarak aynı lisansın altındadır. Ders kitabı gibi çoğaltılıp dağıtılacaksa Creative Commons türü bir belge lisansı daha uygun olabilir.
 
 ## 9. İletişim
 

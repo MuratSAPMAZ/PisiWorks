@@ -1,3 +1,19 @@
+// This file is part of PisiWorks.
+// Copyright (C) 2026 Murat SAPMAZ
+//
+// PisiWorks is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// PisiWorks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along with PisiWorks. If
+// not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Printing: the page setup, the page laid out on paper as a PDF, and handing that to the system's printers.
 //!
 //! The page is printed at 72 pixels to the inch, as Fireworks does for a document at

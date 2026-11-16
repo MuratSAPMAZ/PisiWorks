@@ -1,3 +1,19 @@
+// This file is part of PisiWorks.
+// Copyright (C) 2026 Murat SAPMAZ
+//
+// PisiWorks is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// PisiWorks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along with PisiWorks. If
+// not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! Turkish interface text, keyed by the English text in the source.
 //!
 //! Where Adobe Fireworks has the same command, tool or panel, the wording follows
@@ -1106,8 +1122,9 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("for Pardus, in Turkish.", "Fireworks benzeri tasarım programı."),
     ("Developed by Murat SAPMAZ", "Geliştiren: Murat SAPMAZ"),
     ("Thanks to Med Amine Belbachir:", "Med Amine Belbachir'e teşekkürler:"),
-    ("PisiWorks is built on his Emberframe.", "PisiWorks, Emberframe üzerine kuruludur."),
-    ("Free software, MIT license.", "MIT lisanslı özgür yazılımdır."),
+    ("PisiWorks is built on his Emberframe (MIT).", "Emberframe üzerine kuruludur (MIT)."),
+    ("Free software: GNU GPL, version 3 or later.", "Özgür yazılım: GNU GPL 3 ve sonrası."),
+    ("It comes with no warranty.", "Hiçbir garantisi yoktur."),
     ("Not affiliated with Adobe.", "Adobe ile bir bağı yoktur."),
     ("Print on both sides", "Kâğıdın iki yüzüne yazdır"),
     ("Print in grayscale", "Gri tonlamalı yazdır"),

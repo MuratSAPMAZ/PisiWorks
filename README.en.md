@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-ff6a2b" alt="MIT license"></a>
+  <a href="COPYING"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-ff6a2b" alt="GPL-3.0-or-later license"></a>
   <img src="https://img.shields.io/badge/Rust-1.91%2B-1b2042?logo=rust" alt="Rust 1.91 or later">
   <img src="https://img.shields.io/badge/UI-GPUI-7a5cff" alt="Built with GPUI">
   <img src="https://img.shields.io/badge/platform-Linux-2ed3b7" alt="Linux">
@@ -221,6 +221,6 @@ The program has not been tested side by side with Adobe Fireworks itself; the pi
 - Emberframe: [github.com/gregstein/emberframe](https://github.com/gregstein/emberframe) · [project page](https://medamineweb.com/en/emberframe/)
 - GitHub: [@gregstein](https://github.com/gregstein)
 
-**License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. Where the code comes from, the licenses of the libraries compiled into it ([list](docs/THIRD-PARTY.md)) and how it stands toward Adobe are set out in the [license and copyright statement](docs/lisans-ve-telif.md) (in Turkish). The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
+**License.** PisiWorks and PisiAnimasyon are free software under the [GNU General Public License, version 3 or later](COPYING): anyone may use, study, change and pass them on, and whoever passes on a changed version must give its source under the same license. The code that came from Emberframe stays under its author's [MIT license](LICENSES/MIT.txt). **The films and pages you make with the programs are yours**: you may pass them on, with the player script written into them, under any terms ([NOTICE](NOTICE)). Where the code comes from, the licenses of the libraries compiled into it ([list](docs/THIRD-PARTY.md)) and how it stands toward Adobe are set out in the [license and copyright statement](docs/lisans-ve-telif.md) (in Turkish).
 
 Adobe, Fireworks, Flash, Photoshop and ActionScript are trademarks of Adobe Inc. PisiWorks and PisiAnimasyon contain no code, artwork or documents of Adobe's; they are not affiliated with Adobe and are not endorsed by it. These names are used only to say what the programs resemble and which files they can open.

@@ -85,4 +85,5 @@ Bölümlerin hiçbiri ön bilgi olarak kod yazmayı istemez. Kurallar 3. ve 4. k
 - Davranışlar, kurallar ve kamera Flash'ta bulunmayan, PisiAnimasyon'a özgü özelliklerdir.
 - Oyuncuyla ilgili her şey yalnızca yayımlanan filmde (tarayıcıda) çalışır; program içinde [[Enter]] yalnızca zaman çizelgesini ve kendi kendine olan davranışları oynatır.
 - Yayımlanan film tek bir `.html` dosyasıdır; internet gerektirmez.
-- PisiAnimasyon ücretsizdir ve ticari bir amaç taşımaz.
+- PisiAnimasyon ücretsizdir, ticari bir amaç taşımaz ve özgür yazılımdır (GNU GPL, sürüm 3 ya da sonrası): okulun bütün bilgisayarlarına kurulabilir, kopyalanıp dağıtılabilir.
+- Öğrencilerin yaptığı filmler ve oyunlar kendilerinindir; programın lisansı onları bağlamaz.

@@ -1,3 +1,19 @@
+// This file is part of PisiWorks.
+// Copyright (C) 2026 Murat SAPMAZ
+//
+// PisiWorks is free software: you can redistribute it and/or modify it under the terms of the
+// GNU General Public License as published by the Free Software Foundation, either version 3 of
+// the License, or (at your option) any later version.
+//
+// PisiWorks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+// even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+// General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along with PisiWorks. If
+// not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 //! The text being written in Rules as Text: its lines, where the caret is, and what the
 //! reading of it has found. A small editor of its own, since the program has no other
 //! place where many lines are typed: enough to write, correct and paste rules in.

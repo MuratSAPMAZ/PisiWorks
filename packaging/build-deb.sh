@@ -1,4 +1,20 @@
 #!/bin/sh
+# This file is part of PisiWorks.
+# Copyright (C) 2026 Murat SAPMAZ
+#
+# PisiWorks is free software: you can redistribute it and/or modify it under the terms of the
+# GNU General Public License as published by the Free Software Foundation, either version 3 of
+# the License, or (at your option) any later version.
+#
+# PisiWorks is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without
+# even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with PisiWorks. If
+# not, see <https://www.gnu.org/licenses/>.
+#
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 # Builds a .deb package of PisiWorks for Pardus and other Debian-based systems.
 #
 #   packaging/build-deb.sh
@@ -55,19 +71,38 @@ for film in target/kitap/film/*.html; do
 done
 install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/examples/solstice-landing.pisi"
 
-# The license, in the form Debian keeps it in.
+# The license, in the form Debian keeps it in: the work as a whole under the GNU GPL, whose text Debian
+# and Pardus keep in one place for every package, and what came from Emberframe under the MIT license.
 {
     echo "Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/"
     echo "Upstream-Name: PisiWorks"
+    echo "Upstream-Contact: Murat SAPMAZ <https://muratsapmaz.web.app/>"
     echo "Source: https://github.com/MuratSAPMAZ/PisiWorks"
-    echo "Comment: PisiWorks is a fork of Emberframe, https://github.com/gregstein/emberframe"
+    echo "Comment: PisiWorks is built on Emberframe, https://github.com/gregstein/emberframe,"
+    echo " whose code stays under the MIT license of its author. A film or a page that the"
+    echo " programs write may be conveyed under any terms: see NOTICE."
     echo
     echo "Files: *"
-    echo "Copyright: 2026 Med Amine Belbachir (https://medamineweb.com)"
-    echo "           2026 Murat SAPMAZ (https://github.com/MuratSAPMAZ/PisiWorks)"
+    echo "Copyright: 2026 Murat SAPMAZ"
+    echo "           2026 Med Amine Belbachir (https://medamineweb.com)"
+    echo "License: GPL-3+ and Expat"
+    echo
+    echo "License: GPL-3+"
+    echo " This program is free software: you can redistribute it and/or modify it under the"
+    echo " terms of the GNU General Public License as published by the Free Software"
+    echo " Foundation, either version 3 of the License, or (at your option) any later version."
+    echo " ."
+    echo " This program is distributed in the hope that it will be useful, but WITHOUT ANY"
+    echo " WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A"
+    echo " PARTICULAR PURPOSE. See the GNU General Public License for more details."
+    echo " ."
+    echo " On Debian and Pardus systems the full text of the GNU General Public License"
+    echo " version 3 is in /usr/share/common-licenses/GPL-3."
+    echo
     echo "License: Expat"
-    sed -e '1,/^$/d' -e '/^Copyright/,/^$/d' -e 's/^$/./' -e 's/^/ /' LICENSE
+    sed -e '1,/^$/d' -e '/^Copyright/,/^$/d' -e 's/^$/./' -e 's/^/ /' LICENSES/MIT.txt
 } > "$stage/usr/share/doc/pisiworks/copyright"
+install -Dm644 NOTICE "$stage/usr/share/doc/pisiworks/NOTICE"
 chmod 644 "$stage/usr/share/doc/pisiworks/copyright"
 
 # The notices of the libraries compiled into the program: the list, and every
