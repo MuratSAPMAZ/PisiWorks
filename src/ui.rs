@@ -284,7 +284,14 @@ impl Workspace {
                     })
                     .when(checked, |d| d.child(div().absolute().left(px(1.)).child(icon("check", 10., TEXT))))
                     // The one command that leads to the other program is named after where it leads.
-                    .child(if *cmd == Some(Cmd::OpenInOther) && crate::theme::is_sahne() { t("Open Frame in PisiWorks") } else { t(name) })
+                    .child(if *cmd == Some(Cmd::OpenInOther) && crate::theme::is_sahne() {
+                        t("Open Frame in PisiWorks")
+                    } else if *cmd == Some(Cmd::About) && crate::theme::is_sahne() {
+                        // Each program's About is about itself.
+                        t("About PisiAnimasyon")
+                    } else {
+                        t(name)
+                    })
                     .child(div().text_color(rgb(TEXT_DIM)).child(self.shortcut_of(name, keys)))
                     .into_any_element()
             }

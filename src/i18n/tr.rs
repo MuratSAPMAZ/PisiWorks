@@ -1666,4 +1666,5 @@ pub const ENTRIES: &[(&str, &str)] = &[
     ("Hill", "Tepe"),
     ("Road mark", "Yol çizgisi"),
     ("Bush", "Çalı"),
+    ("About PisiAnimasyon", "PisiAnimasyon Hakkında"),
 ];
