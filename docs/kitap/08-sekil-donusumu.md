@@ -1,7 +1,7 @@
 @kisim 2. Hareket
 # Şekil dönüşümü
 > Bir kare yavaş yavaş daireye, daire yıldıza dönüşsün. Hareket ara doldurması nesneyi taşır; şekil ara doldurması nesnenin kendisini değiştirir.
-:: ⏱ 15 dakika | 🎯 7. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 15 dakika | 🎯 7. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Dört kare, tek dönüşüm.](08-donusum.png "Mavi karenin kırmızı daireye dönüşümünden dört kare"){08-donusum.html 660x500}
 
@@ -44,7 +44,7 @@ Kare köşelerini yuvarlatarak daireye, mavi de mordan geçerek kırmızıya dö
 
 ## Dönüşüm tuhaf olursa: şekil ipuçları
 
-Karmaşık şekillerde PisiSahne hangi köşenin nereye gideceğini yanlış tahmin edebilir; şekil ortada buruşur. O zaman ona yol gösterirsin.
+Karmaşık şekillerde PisiAnimasyon hangi köşenin nereye gideceğini yanlış tahmin edebilir; şekil ortada buruşur. O zaman ona yol gösterirsin.
 
 1. İlk karedeyken {{Zaman Çizelgesi > Şekil İpucu Ekle}}'ye tıkla ([[Ctrl]]+[[Shift]]+[[H]]). Şeklin köşesinde küçük, numaralı sarı bir işaret belirir; zaman çizelgesinin altındaki **İpucu** sayısı bir artar.
 2. İşareti ilk şekilde, izlemek istediğin köşeye sürükle.

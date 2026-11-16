@@ -1,4 +1,4 @@
-//! The code PisiWorks and PisiSahne share: the object model, the renderer, the
+//! The code PisiWorks and PisiAnimasyon share: the object model, the renderer, the
 //! filters, the fonts, the translations, and PisiWorks' own window.
 
 pub mod autoshape;

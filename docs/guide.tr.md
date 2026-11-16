@@ -213,9 +213,9 @@ Menü çubuğunun sağ ucundaki **Örnekler** menüsü, Fireworks'te bulunmayan 
 - **Ara kareler.** Aynı sembolün iki ya da daha çok kopyasını seçip **Değiştir > Sembol > Örneklerin Arasını Doldur** (Ctrl+Alt+Shift+T) deyin. Adım sayısı kadar ara kopya üretilir; konum, boyut, dönüş ve opaklık adım adım değişir. **Durumlara dağıt** işaretliyse her kopya kendi durumuna yerleşir ve animasyon hazır olur.
 - **GIF Oluştur.** Menü çubuğunun sağındaki **GIF > GIF Oluştur** resim dosyalarından animasyon yapar: dosyaları ekleyin (ada göre sıralanır), kare süresini ve döngüyü seçin. **GIF Kaydet** doğrudan dosyaya yazar; **Belge Olarak Aç** kareleri durumlara dağıtır ve üzerinde çalışmaya devam edersiniz. Farklı boyuttaki resimler en büyüğünün boyutundaki tuvalin ortasına yerleşir.
 
-## PisiSahne ile animasyon
+## PisiAnimasyon ile animasyon
 
-PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahnenin üstündeki zaman çizelgesidir. Aşağıdaki terimler bizim çevirimizdir; ders notlarınızdaki sözcükler farklı olabilir.
+PisiAnimasyon, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahnenin üstündeki zaman çizelgesidir. Aşağıdaki terimler bizim çevirimizdir; ders notlarınızdaki sözcükler farklı olabilir.
 
 **Zaman çizelgesi.** Her katmanın bir kare satırı vardır. Bir kareye tıklayınca o kare gösterilir; numaraların üzerinde sürükleyerek kareler arasında gezinirsiniz. Katman adının yanındaki göz katmanı gizler, kilit kilitler.
 
@@ -242,7 +242,7 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 **Sırayla** örneği bunların hepsini sekiz saniyede gösterir: araba dört saniye gidip durur, sonra güneş doğar, sonra yazı belirir.
 
-**Davranışlar: anahtar karesiz hareket.** Bu PisiSahne'nin kendi özelliğidir; Flash'ta karşılığı yoktur. Bir nesneyi seçin ve menü çubuğunun sağındaki **Davranışlar** menüsünden (ya da sağ tık menüsünden) bir hareket seçin: nesne bundan sonra her karede o hareketi yapar; anahtar kare de ara doldurma da gerekmez. Aynı davranışı yeniden seçmek onu kaldırır. Bir nesnenin aynı anda birkaç davranışı olabilir.
+**Davranışlar: anahtar karesiz hareket.** Bu PisiAnimasyon'un kendi özelliğidir; Flash'ta karşılığı yoktur. Bir nesneyi seçin ve menü çubuğunun sağındaki **Davranışlar** menüsünden (ya da sağ tık menüsünden) bir hareket seçin: nesne bundan sonra her karede o hareketi yapar; anahtar kare de ara doldurma da gerekmez. Aynı davranışı yeniden seçmek onu kaldırır. Bir nesnenin aynı anda birkaç davranışı olabilir.
 
 | Davranış | Nesne ne yapar | Sayıları |
 |---|---|---|
@@ -272,7 +272,7 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 
 *İki dakikada ilk oyun:* bir kutu çizin, ona **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** verin; bir yıldız çizip ona **Dön** verin; Ctrl+Enter'a basın. **Davranışlar** örneğinde bütün türler tek karededir.
 
-**Kurallar: filmden oyuna.** Bu da PisiSahne'nin kendi özelliğidir. Bir kural *şu olunca şunu yap* der; iki yarısı da listeden seçilir, sayılardan başka hiçbir şey yazılmaz. **Kurallar > Kurallar ve Sayılar** her kuralı bir cümle olarak gösterir; birine tıklayınca parçalarına ayrılır.
+**Kurallar: filmden oyuna.** Bu da PisiAnimasyon'un kendi özelliğidir. Bir kural *şu olunca şunu yap* der; iki yarısı da listeden seçilir, sayılardan başka hiçbir şey yazılmaz. **Kurallar > Kurallar ve Sayılar** her kuralı bir cümle olarak gösterir; birine tıklayınca parçalarına ayrılır.
 
 - *Önce adlar.* Kural bir nesneyi adıyla tanır. Ad, nesne seçiliyken **Özellikler** panelinin solundaki **Ad** kutusuna yazılır (Enter ile alınır); çizilen her şekil için aynıdır: otomatik şekil, elle çizim, grup. Bir sembolün sahnedeki kopyası seçiliyken açılan **Sembol Özellikleri** panelinde de aynı **Ad** kutusu vardır; orada yazan ad kopyanın adıdır, **Sembol** kutusundaki ise kitaplıktaki sembolün adıdır ve kurallar ona bakmaz. Yeni çizilen şekil türünün adını taşır ("Elips", "Çark"); kural yazmadan önce ona kendi adını verin. Elmaya "Elma", sepete "Sepet" adını verin. Aynı adı taşıyan nesneler kurallarını paylaşır: "Elma" hakkındaki bir kural bütün elmalar için geçerlidir.
 - *Yeni Kural* olayları listeler:
@@ -349,14 +349,14 @@ PisiSahne, PisiWorks'ün bütün çizim araçlarını kullanır; farkı, sahneni
 - *Sembol.* Pisi: Demir Pençe'nin bütün karakterleri semboldür: fare, dron, ateş, bomba, kalp, mermi, patlama, taret, Dev Fare. Çift tıklayınca sembol olduğu yerde açılır ve sahnenin üstünde hangi sembolün düzenlendiği yazar. Bitirmek için üç yoldan biri: boş bir yere çift tıklayın, Esc'ye basın ya da sahnenin üstündeki **◀** düğmesine tıklayın. Yarıda kalmış bir eğme ya da ölçekleme varsa ilk Esc onu iptal eder, ikincisi sembolden çıkarır; çift tıklama ve düğme onu uygulayıp çıkarır. Sembolde yapılan değişiklik **bütün sahnelerde** ve o karakterin bütün kopyalarında görünür; fareyi bir kez değiştirirsiniz, her bölümdeki her fare değişir. Semboller **Belge Kitaplığı** panelinde listelenir.
 - *Film klibi.* Bacaklarını oynatan karakter bir film klibidir: Pisi öyledir. Çift tıklayınca klip açılır; zaman çizelgesinde koşunun dört adımı vardır, her biri ayrı bir çizimdir. Sahnenin üstündeki **◀** düğmesi geri döner.
 
-*Sahnenin çevresi.* Sahnenin etrafındaki gri alan çalışma alanıdır ve PisiSahne, Flash gibi, orada duranları gösterir. Kopyaların çıkarıldığı asıl nesneler orada tutulur: Pisi: Demir Pençe'de sol kenarın dışında alt alta dururlar; geçitler (küçük pembe yıldızlar) sağ kenarın ve üst kenarın dışındadır. Görünmüyorlarsa uzaklaştırın ya da kaydırın.
+*Sahnenin çevresi.* Sahnenin etrafındaki gri alan çalışma alanıdır ve PisiAnimasyon, Flash gibi, orada duranları gösterir. Kopyaların çıkarıldığı asıl nesneler orada tutulur: Pisi: Demir Pençe'de sol kenarın dışında alt alta dururlar; geçitler (küçük pembe yıldızlar) sağ kenarın ve üst kenarın dışındadır. Görünmüyorlarsa uzaklaştırın ya da kaydırın.
 
 *Dikkat edilecekler.* Bir karakteri Ölçekle, Eğ ya da Deforme Et aracıyla biçimlendirirseniz değişiklik Enter'a basınca ya da çift tıklayınca uygulanır; yalnızca o sahnedeki o kopyayı etkiler. Karakterin kendisini her yerde değiştirmek için semboldeki çizimi değiştirin. Bir karakter her sahnede oyuna girmez: dron ancak Fabrika'da gelir, bu yüzden ona yapılan değişiklik ilk bölümde görünmez. Adları değiştirmeyin; kurallar adlara bakar.
 
 **Vitrin oyunu: Pisi: Demir Pençe.** Örnekler menüsünün ilk satırı uzunca bir oyundur: silahlı robot pars Pisi bir şehirden, bir fabrikadan ve bir çatıdan geçer, sonunda dev bir fareyle karşılaşır. Robot fareler gelip ateş eder, dronlar bomba bırakır, çatıyı bir taret korur, arada bir kalp düşer. Derslerde anlatılmayan hiçbir şey kullanmaz, yalnızca daha çoğunu kullanır; parçalarına ayırıp bakmaya değer:
 
 - *Pisi koşar.* Pisi, her biri üç kare süren dört adımlık bir film klibidir. Klibin sahnedeki kopyasının **Ok Tuşlarıyla Yürü** ve **Düş ve Zıpla** davranışları vardır: bir klibin de her nesne gibi davranışı ve adı olabilir.
-- *Dünya Pisi'ye gelir.* PisiSahne'de kamera yoktur. Manzaranın her katmanı sahne genişliğinde, sola doğru **Sürekli Git** verilmiş bir şerittir ve ardında ikinci bir şerit vardır; uzaktakiler yavaş, yakındakiler hızlı gider, şehir akıp geçiyormuş gibi görünür.
+- *Dünya Pisi'ye gelir.* PisiAnimasyon'da kamera yoktur. Manzaranın her katmanı sahne genişliğinde, sola doğru **Sürekli Git** verilmiş bir şerittir ve ardında ikinci bir şerit vardır; uzaktakiler yavaş, yakındakiler hızlı gider, şehir akıp geçiyormuş gibi görünür.
 - *Düşmanlar bir geçitten gelir.* Sol kenarın dışına tek bir fare çizilir ve sahne başlayınca gizlenir. *Her 2.6 saniyede bir: Fare nesnesinin kopyasını Geçit nesnesinin yerinde oluştur*. *Her 2.3 saniyede bir: Ateş nesnesinin kopyasını Fare nesnesinin yerinde oluştur*. *Mermi nesnesi Fare nesnesine değince: Puan sayısını 1 artır; Patlama nesnesinin kopyasını Fare nesnesinin yerinde oluştur; Mermi nesnesini sil; Fare nesnesini sil*.
 - *Bölümler.* *Puan sayısı 10 olunca: 2. sahneye git*. Her sahnede aynı adlarda nesneler vardır, bu yüzden aynı kurallar hepsinde geçerlidir; Gök geçidi olmayan sahnede dron da olmaz.
 - *Dev Fare.* Zırh adlı bir sayı 30'dan başlar. *Mermi nesnesi Dev Fare nesnesine değince: Zırh sayısını 1 azalt; … Dev Fare nesnesini bir an yanıp söndür*. *Zırh sayısı 1 değerinin altına inince: 5. sahneye git*.
@@ -513,4 +513,4 @@ Listelerde (Kurallar ve Sayılar) bloklar ve komutlar görünür ama orada kurul
 
 **Yayımlama.** **Kontrol > HTML5 Olarak Yayımla** filmi tek bir HTML dosyasına yazar; **Filmi Test Et** aynı dosyayı geçici olarak üretip tarayıcıda açar. Film klipleri, düğmeler, eylemler ve ses yalnızca yayımlanan filmde çalışır; program içinde oynatırken klipler ilk kareleriyle görünür.
 
-**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on altı hazır film vardır (ilki vitrin oyunu Pisi: Demir Pençe; beş küçük oyun karakterler, manzara, parlamalar ve seslerle çizilmiştir); her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış beş oyun, hızlanıp yavaşlayan bir araba, sahneler ve düğmeler). **Dosya > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **Dosya > PisiSahne'de Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.
+**Örnekler ve PisiWorks ile alışveriş.** Menü çubuğunun sağındaki **Örnekler** menüsünde on altı hazır film vardır (ilki vitrin oyunu Pisi: Demir Pençe; beş küçük oyun karakterler, manzara, parlamalar ve seslerle çizilmiştir); her biri bir konuyu gösterir (yavaşlamalı hareket, şekil dönüşümü, kılavuz, maske, film klibi, kendi zamanı olan katmanlar, pozdan poza yapılmış bir çöp adam dövüşü, davranışlar, kurallarla yapılmış beş oyun, hızlanıp yavaşlayan bir araba, sahneler ve düğmeler). **Dosya > Kareyi PisiWorks'te Aç**, o anki kareyi PisiWorks'te bir kopya olarak açar; PisiWorks'teki **Dosya > PisiAnimasyon'da Aç** tersini yapar. Kopyalar önbellek klasörüne yazılır; özgün belgeniz değişmez. Bir programda hazırladığınız çizimi öbürüne almak için **Dosya > İçe Aktar** ile `.pisi` ya da `.sahne` dosyasını seçin: nesneler etkin katmana, semboller kitaplığa gelir.

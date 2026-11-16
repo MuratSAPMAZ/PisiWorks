@@ -1,6 +1,6 @@
 @kisim 2. Hareket
 # Hareket ara doldurma
-> Geçen bölümde top bir yerden öbürüne atlıyordu. Şimdi aradaki kareleri PisiSahne'ye çizdireceksin: top kayarak gidecek.
+> Geçen bölümde top bir yerden öbürüne atlıyordu. Şimdi aradaki kareleri PisiAnimasyon'a çizdireceksin: top kayarak gidecek.
 :: ⏱ 20 dakika | 🎯 6. bölümü bitirenler için | 🧰 6. bölümde yaptığın film
 
 !goal Bu bölümde öğreneceklerin
@@ -8,7 +8,7 @@
 
 ## Ara doldurma nedir?
 
-Sen iki anahtar kare verirsin: başlangıç ve bitiş. PisiSahne aradaki bütün kareleri kendisi hesaplar. Topun 1. karede solda, 12. karede yukarıda olduğunu biliyorsa 6. karede yolun ortasında olması gerektiğini de bilir. Buna **ara doldurma** denir. Yalnızca yer değil; boyut, dönüş ve saydamlık da böyle doldurulur.
+Sen iki anahtar kare verirsin: başlangıç ve bitiş. PisiAnimasyon aradaki bütün kareleri kendisi hesaplar. Topun 1. karede solda, 12. karede yukarıda olduğunu biliyorsa 6. karede yolun ortasında olması gerektiğini de bilir. Buna **ara doldurma** denir. Yalnızca yer değil; boyut, dönüş ve saydamlık da böyle doldurulur.
 
 ## Adım adım
 
@@ -63,7 +63,7 @@ Ara doldurma, iki anahtar kare arasında değişen her şeyi doldurur. Bitiş ka
 
 ## Bir ara doldurmanın ortasını düzeltmek
 
-Topun yolun ortasında biraz daha yukarıdan geçmesini mi istiyorsun? O kareye git ve topu sürükle. PisiSahne o kareyi kendiliğinden anahtar kareye çevirir ve iki yanını yeniden doldurur. Flash'ta da böyledir.
+Topun yolun ortasında biraz daha yukarıdan geçmesini mi istiyorsun? O kareye git ve topu sürükle. PisiAnimasyon o kareyi kendiliğinden anahtar kareye çevirir ve iki yanını yeniden doldurur. Flash'ta da böyledir.
 
 !stuck Takıldıysan
 - **Menüde "Hareket Ara Doldurması Oluştur" soluk.** Bulunduğun kareden sonra başka anahtar kare yok. Ara doldurma iki anahtar kare ister.
@@ -85,4 +85,4 @@ Topun yolun ortasında biraz daha yukarıdan geçmesini mi istiyorsun? O kareye 
 | Tur | Nesnenin yol boyunca attığı tam dönüş sayısı. |
 
 !teacher Öğretmene not
-Bu, Flash müfredatının merkezindeki konudur ve PisiSahne'de aynı adlarla, aynı mantıkla çalışır. Öğrencilerin kavraması gereken tek şey şudur: ara doldurma bir **aralığa** konur ve o aralığın **ilk** anahtar karesinden oluşturulur. Yavaşlama için sınıfta gerçek bir topu havaya atıp tepe noktasındaki duraksamayı göstermek çok işe yarar. "Zor soru" dört anahtar kare ister (dışarıda, ortada, ortada, dışarıda) ve "beklemek de iki anahtar kare ister" fikrini öğretir.
+Bu, Flash müfredatının merkezindeki konudur ve PisiAnimasyon'da aynı adlarla, aynı mantıkla çalışır. Öğrencilerin kavraması gereken tek şey şudur: ara doldurma bir **aralığa** konur ve o aralığın **ilk** anahtar karesinden oluşturulur. Yavaşlama için sınıfta gerçek bir topu havaya atıp tepe noktasındaki duraksamayı göstermek çok işe yarar. "Zor soru" dört anahtar kare ister (dışarıda, ortada, ortada, dışarıda) ve "beklemek de iki anahtar kare ister" fikrini öğretir.

@@ -1,14 +1,14 @@
 @kisim 2. Hareket
 # Zaman çizelgesi ve anahtar kare
 > Davranışlar hep aynı şeyi yapar. Bir hikâye anlatmak için "şimdi burada ol, bir saniye sonra şurada" diyebilmen gerekir. Bunu zaman çizelgesi yapar.
-:: ⏱ 20 dakika | 🎯 1. kısmı bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 20 dakika | 🎯 1. kısmı bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 !goal Bu bölümde öğreneceklerin
 Karenin ve anahtar karenin ne olduğunu, zaman çizelgesinde gezinmeyi, [[F6]] ile anahtar kare eklemeyi ve soğan zarıyla önceki kareyi görmeyi öğreneceksin. Sonunda top üç ayrı yerde görünecek; hareketi yumuşatmak bir sonraki bölümün işi.
 
 ## Film nedir?
 
-Film, art arda gösterilen resimlerdir. Her resme **kare** denir. PisiSahne saniyede 24 kare gösterir; yani 24 kare bir saniye, 48 kare iki saniye eder.
+Film, art arda gösterilen resimlerdir. Her resme **kare** denir. PisiAnimasyon saniyede 24 kare gösterir; yani 24 kare bir saniye, 48 kare iki saniye eder.
 
 Pencerenin üstündeki **zaman çizelgesi** bu kareleri yan yana dizer. Üstteki sayılar kare numaralarıdır; mavi "1sn", "2sn" işaretleri saniyeleri gösterir. Kırmızı dikdörtgen **oynatma kafasıdır**: sahnede o an hangi kareyi gördüğünü söyler.
 

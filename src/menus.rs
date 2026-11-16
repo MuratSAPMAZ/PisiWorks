@@ -229,7 +229,7 @@ pub enum Cmd {
     SahneExample(u8),
     /// Hands the document to the other of the two programs and opens it there.
     OpenInOther,
-    /// Opens the user guide in the browser; in PisiSahne, at the part about animation and games.
+    /// Opens the user guide in the browser; in PisiAnimasyon, at the part about animation and games.
     Guide,
     /// Opens Rules and Numbers.
     Rules,
@@ -415,7 +415,7 @@ pub enum BehaviorCmd {
     Clear,
 }
 
-/// PisiSahne's Behaviors menu: every kind, those that move by themselves first, then those the viewer moves.
+/// PisiAnimasyon's Behaviors menu: every kind, those that move by themselves first, then those the viewer moves.
 pub const BEHAVIOR_MENU: &[Entry] = &{
     use crate::behavior::KINDS;
     let mut entries = [Sep; 24];
@@ -847,7 +847,7 @@ pub const MENUS: &[(&str, &[Entry])] = &[
             cmd("Import...", "Ctrl+R", Cmd::Import),
             cmd("Export...", "Ctrl+Shift+R", Cmd::Export),
             // Hands the work to the other of the two programs. The menu shows the name that fits the program it is in.
-            cmd("Open in PisiSahne", "", Cmd::OpenInOther),
+            cmd("Open in PisiAnimasyon", "", Cmd::OpenInOther),
             cmd("Image Preview...", "Ctrl+Shift+X", Cmd::ImagePreview),
             Sep,
             cmd("Batch Process...", "", Cmd::BatchProcess),

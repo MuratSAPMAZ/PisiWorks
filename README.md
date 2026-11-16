@@ -28,7 +28,7 @@
 
 ## Amaç
 
-**Bu proje ticari bir amaç taşımaz.** PisiWorks ve PisiSahne ücretsizdir ve ücretsiz kalacaktır: satılmaz, reklam göstermez, bağış istemez, veri toplamaz. Tek amaçları, müfredatında hâlâ Fireworks ve Flash anlatılan okullarda Pardus kullanan öğretmen ve öğrencilerin dersi kendi bilgisayarlarında işleyebilmesidir. Adobe'nin bir ürününün yerine geçmeyi değil, o araçların çalışmadığı bir yerde dersin sürmesini hedefler.
+**Bu proje ticari bir amaç taşımaz.** PisiWorks ve PisiAnimasyon ücretsizdir ve ücretsiz kalacaktır: satılmaz, reklam göstermez, bağış istemez, veri toplamaz. Tek amaçları, müfredatında hâlâ Fireworks ve Flash anlatılan okullarda Pardus kullanan öğretmen ve öğrencilerin dersi kendi bilgisayarlarında işleyebilmesidir. Adobe'nin bir ürününün yerine geçmeyi değil, o araçların çalışmadığı bir yerde dersin sürmesini hedefler.
 
 ## Neden PisiWorks
 
@@ -157,12 +157,12 @@ PisiWorks için yazılanlar:
 
 Rakamlar Kasım 2026'ya aittir ve çalışma sürdükçe değişecektir.
 
-## PisiSahne: animasyon programı (ilk aşama)
+## PisiAnimasyon: animasyon programı (ilk aşama)
 
-Aynı depodan ikinci bir program derlenir: **PisiSahne**, okullarda hâlâ anlatılan Adobe Flash'ın çalışma biçimini örnek alan bir animasyon programı. PisiWorks'ün çizim araçlarının, filtrelerinin ve sembollerinin tamamını kullanır; sahnenin altına bir zaman çizelgesi ekler.
+Aynı depodan ikinci bir program derlenir: **PisiAnimasyon**, okullarda hâlâ anlatılan Adobe Flash'ın çalışma biçimini örnek alan bir animasyon programı. PisiWorks'ün çizim araçlarının, filtrelerinin ve sembollerinin tamamını kullanır; sahnenin altına bir zaman çizelgesi ekler.
 
 ```bash
-cargo run --release --bin pisisahne
+cargo run --release --bin pisianimasyon
 ```
 
 Bu aşamada çalışanlar:
@@ -182,20 +182,20 @@ Bu aşamada çalışanlar:
 - Oynatma, kare kare ilerleme, kare hızı ve soğan zarı.
 - Flash'taki gibi sona kadar bir kez oynatma, seçenek olarak Döngülü Oynat; doğrudan bir kareye ya da saniyeye gitme kutuları, cetvelde saniye işaretleri, uzun filmlerde oynatma kafasını izleyen zaman çizelgesi.
 - Flash'taki gibi dönüştürme noktası: Ölçekle aracıyla taşınır, nesneyle birlikte kalır, hareket ara doldurması nesneyi onun çevresinde döndürür; böylece kol omuzdan döner.
-- **Davranışlar**, PisiSahne'nin kendi özelliği: bir nesneye tek tıkla verilen on dokuz hazır davranış; anahtar kare gerekmez. Dön, zıpla, git gel, in çık, sürekli git, titre, büyü küçül, yanıp sön, belir kaybol, bir süre sonra kaybol; ve yayımlanan film için dokuzu: fareyi izle, ok tuşlarıyla yürü, düş ve zıpla, sürüklenebilir, kenarlardan sek, teker gibi yuvarlan, kamera beni izlesin, arka plan gibi kay (yana kayan kamera ve paralel arka plan) ve katı (zemin, platform, duvar).
-- **Kurallar**, PisiSahne'nin kendi özelliği: kod yazmadan oyun. Kural bir olay ve eylemlerdir; ikisi de listeden seçilir ve cümle olarak görünür: "Elma nesnesi Sepet nesnesine değince: Puan sayısını 1 artır". Olaylar: başlangıç, tuş, tıklama, iki nesnenin değmesi, sahnenin kenarı, her şu kadar saniye, bir sayının bir değere gelmesi. Kuralın koşulu olabilir ("Puan 2 değerinden büyükse"); kural bir nesnenin kopyasını oluşturabilir (mermi), nesneyi silebilir, hızlandırabilir, döndürebilir, büyütüp küçültebilir, saydamlaştırabilir, ona bir davranış verip geri alabilir bir nesneyi ötekinin peşine takabilir, bir nesneyi ötekine bağlayabilir ve hızlanıp yavaşlayan bir harekete çıkarabilir (tuş bırakılınca olayıyla birlikte: tekerleri dönen, yavaşlayarak duran bir araba). Puan gibi sayıları, içinde `{Puan}` geçen her yazı gösterir.
+- **Davranışlar**, PisiAnimasyon'un kendi özelliği: bir nesneye tek tıkla verilen on dokuz hazır davranış; anahtar kare gerekmez. Dön, zıpla, git gel, in çık, sürekli git, titre, büyü küçül, yanıp sön, belir kaybol, bir süre sonra kaybol; ve yayımlanan film için dokuzu: fareyi izle, ok tuşlarıyla yürü, düş ve zıpla, sürüklenebilir, kenarlardan sek, teker gibi yuvarlan, kamera beni izlesin, arka plan gibi kay (yana kayan kamera ve paralel arka plan) ve katı (zemin, platform, duvar).
+- **Kurallar**, PisiAnimasyon'un kendi özelliği: kod yazmadan oyun. Kural bir olay ve eylemlerdir; ikisi de listeden seçilir ve cümle olarak görünür: "Elma nesnesi Sepet nesnesine değince: Puan sayısını 1 artır". Olaylar: başlangıç, tuş, tıklama, iki nesnenin değmesi, sahnenin kenarı, her şu kadar saniye, bir sayının bir değere gelmesi. Kuralın koşulu olabilir ("Puan 2 değerinden büyükse"); kural bir nesnenin kopyasını oluşturabilir (mermi), nesneyi silebilir, hızlandırabilir, döndürebilir, büyütüp küçültebilir, saydamlaştırabilir, ona bir davranış verip geri alabilir bir nesneyi ötekinin peşine takabilir, bir nesneyi ötekine bağlayabilir ve hızlanıp yavaşlayan bir harekete çıkarabilir (tuş bırakılınca olayıyla birlikte: tekerleri dönen, yavaşlayarak duran bir araba). Puan gibi sayıları, içinde `{Puan}` geçen her yazı gösterir.
 - **Dil**: kurallar yazılabilir de. **Kurallar > Kuralları Yaz** oyunu Türkçe cümleler olarak açar (`Elma nesnesi Sepet nesnesine değince:`); yazılan satır anında okunur, okunamayan satır nedeniyle birlikte kırmızı görünür. Yazıda listelerden fazlası vardır: işlemler (`Puan * 2`, `Gemi.x + 20`, `rastgele(1, 6)`), `ve` ile birden çok koşul, `değilse`, `bekle`, döngüler (`3 kez yinele:`), iç içe `eğer` blokları ve adıyla çağrılan komutlar (`Patlat komutu:`). Yazarken imlecin altında cümle ve ad önerileri çıkar; Tab alır. Program İngilizce kullanılırken aynı kurallar İngilizce cümlelerle okunur.
-- Kılavuz programın içindedir: **Yardım > Kullanım Kılavuzu** (F1) onu tarayıcıda açar; internet gerekmez. PisiSahne'de doğrudan animasyon ve oyun derslerinin başladığı yerde açılır.
+- Kılavuz programın içindedir: **Yardım > Kullanım Kılavuzu** (F1) onu tarayıcıda açar; internet gerekmez. PisiAnimasyon'da doğrudan animasyon ve oyun derslerinin başladığı yerde açılır.
 - **Pisi: Demir Pençe**, vitrin oyunu: silahlı bir robot pars, karşılık veren robot fareler, dronlar, üç bölüm ve sonda dev bir fare. Yirmi sekiz kural, tek satır kod yok; Örnekler menüsünden açıp hepsini okuyabilirsiniz.
 
 <p align="center"><img src="docs/images/pisi-demir-pence.png" alt="Pisi: Demir Pençe" width="720"></p>
 
 - Örnekler menüsünde on beş hazır film daha: zıplayan top, değişen şekiller, yol boyunca, spot ışığı, dönen dişliler, sırayla, çöp adam dövüşü, davranışlar, çizilmiş karakterleri, hareket eden manzarası, parlamaları ve programda üretilmiş sesleriyle beş oyun (elma yakala, hedef vurma, platform, uzay atışı, bilgi yarışması), araba sürmek, düğmeli iki sahne. Kılavuzda her oyun bir ders olarak anlatılır. Kılavuzda dövüş adım adım ders olarak anlatılır.
-- PisiWorks ile alışveriş: PisiWorks'teki **Dosya > PisiSahne'de Aç** belgeyi animasyon programında, PisiSahne'deki **Dosya > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
-- `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiSahne `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
+- PisiWorks ile alışveriş: PisiWorks'teki **Dosya > PisiAnimasyon'da Aç** belgeyi animasyon programında, PisiAnimasyon'daki **Dosya > Kareyi PisiWorks'te Aç** o anki kareyi tasarım programında bir kopya olarak açar. **Dosya > İçe Aktar** iki programda da öbürünün belgesini, nesneleri ve sembolleriyle birlikte içeri alır.
+- `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiAnimasyon `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 
-**PisiSahne Kitabı.** Öğrenci ve öğretmen için, resimli ve ders ders ilerleyen bir kitap PisiSahne ile birlikte gelir: 31 bölüm, altı kısım (başlarken, hareket, oyun kuralları, altı oyun dersi, kuralları yazmak, çizim ve karakter) ve ekler (bütün cümleler, kısayollar ve sık sorulanlar, öğretmen için dönemlik plan). Her bölüm programın ekran görüntüleriyle adım adım anlatır, "Takıldıysan" ve "Sıra sende" bölümleri ve bir öğretmen notu taşır. Kitabın iki sürümü vardır: **resimli sürümde** örnekler ekran görüntüsüdür ve yazdırmaya uygundur; **canlı örnekli sürümde** aynı örnekler sayfanın içinde gerçekten oynayan filmlerdir (yirmi film: üstüne tıklayıp oynanır). Her sayfanın üstündeki bağlantı öbür sürüme geçirir. PisiSahne'de **Yardım > Kullanım Kılavuzu** (F1) canlı sürümü tarayıcıda açar. Kaynağı `docs/kitap/` klasöründedir; `packaging/kitap.py` sayfaları üretir.
+**PisiAnimasyon Kitabı.** Öğrenci ve öğretmen için, resimli ve ders ders ilerleyen bir kitap PisiAnimasyon ile birlikte gelir: 31 bölüm, altı kısım (başlarken, hareket, oyun kuralları, altı oyun dersi, kuralları yazmak, çizim ve karakter) ve ekler (bütün cümleler, kısayollar ve sık sorulanlar, öğretmen için dönemlik plan). Her bölüm programın ekran görüntüleriyle adım adım anlatır, "Takıldıysan" ve "Sıra sende" bölümleri ve bir öğretmen notu taşır. Kitabın iki sürümü vardır: **resimli sürümde** örnekler ekran görüntüsüdür ve yazdırmaya uygundur; **canlı örnekli sürümde** aynı örnekler sayfanın içinde gerçekten oynayan filmlerdir (yirmi film: üstüne tıklayıp oynanır). Her sayfanın üstündeki bağlantı öbür sürüme geçirir. PisiAnimasyon'da **Yardım > Kullanım Kılavuzu** (F1) canlı sürümü tarayıcıda açar. Kaynağı `docs/kitap/` klasöründedir; `packaging/kitap.py` sayfaları üretir.
 
 Pencere, Flash'ın klasik çalışma alanı gibi düzenlenir: zaman çizelgesi sahnenin üstünde, araçlar solda, Özellikler altta; katmanlar zaman çizelgesindedir. Enter oynatır. `.deb` paketi iki programı birlikte kurar.
 
@@ -214,7 +214,7 @@ Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı;
 
 ## Kimlik, lisans ve teşekkür
 
-**PisiWorks**'ü **Murat SAPMAZ** geliştirir ve sürdürür: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Hata bildirimleri, öneriler ve katkılar oradan beklenir. Bağımsız bir projedir; Pardus'u geliştiren TÜBİTAK ULAKBİM ile ya da Adobe ile kurumsal bir bağı yoktur.
+**PisiWorks**'ü **Murat SAPMAZ** geliştirir ve sürdürür: [muratsapmaz.web.app](https://muratsapmaz.web.app/) · [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Hata bildirimleri, öneriler ve katkılar oradan beklenir. Bağımsız bir projedir; Pardus'u geliştiren TÜBİTAK ULAKBİM ile ya da Adobe ile kurumsal bir bağı yoktur.
 
 **Teşekkür.** PisiWorks, **Med Amine Belbachir**'in yazıp MIT lisansıyla herkese açtığı Emberframe'in üzerinde yükselir. Emeği ve cömertliği için kendisine teşekkür ederiz:
 
@@ -224,4 +224,4 @@ Program gerçek Adobe Fireworks ile yan yana karşılaştırılarak sınanmadı;
 
 **Lisans.** PisiWorks, Emberframe ile aynı [MIT lisansı](LICENSE) altında yayımlanır. Kodun kökeni, içine derlenen kitaplıkların lisansları ve Adobe ile ilişkisi [lisans ve telif bildirimi](docs/lisans-ve-telif.md) belgesinde ayrıntısıyla yazılıdır. Lisans dosyası Emberframe'in yazarının telif satırını korur ve PisiWorks için yazılanların telif satırını onun yanına ekler.
 
-Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markalarıdır. PisiWorks ve PisiSahne Adobe'ye ait hiçbir kod, görsel ya da belge içermez; Adobe ile hiçbir bağlantıları yoktur ve Adobe tarafından onaylanmamıştır. Bu adlar yalnızca programların neyin benzeri olduğunu ve hangi dosyaları açabildiğini anlatmak için kullanılır.
+Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markalarıdır. PisiWorks ve PisiAnimasyon Adobe'ye ait hiçbir kod, görsel ya da belge içermez; Adobe ile hiçbir bağlantıları yoktur ve Adobe tarafından onaylanmamıştır. Bu adlar yalnızca programların neyin benzeri olduğunu ve hangi dosyaları açabildiğini anlatmak için kullanılır.

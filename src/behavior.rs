@@ -1,6 +1,6 @@
 //! Behaviors: ready-made motions an object is given with a click, with no keyframes.
 //!
-//! This is PisiSahne's own, made for students who are not ready for a timeline full of
+//! This is PisiAnimasyon's own, made for students who are not ready for a timeline full of
 //! keyframes, let alone a script. An object keeps a list of behaviors; each is a kind
 //! and two numbers. Those that depend only on time (turning, bouncing, going back and
 //! forth) are worked out here, for playing inside the program, and again by the script

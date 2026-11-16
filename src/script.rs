@@ -1,4 +1,4 @@
-//! The written language of PisiSahne: rules as text.
+//! The written language of PisiAnimasyon: rules as text.
 //!
 //! It is not a second thing beside the lists of Rules and Numbers: it is the sentences
 //! those lists write, typed by hand. A rule is its event on a line ending in a colon and

@@ -20,7 +20,7 @@ fn explain_missing_graphics() {
             return default(info);
         }
         let message = i18n::t(
-            "PisiSahne needs a Vulkan graphics driver, and none was found. Install the mesa-vulkan-drivers package, then start PisiSahne again.",
+            "PisiAnimasyon needs a Vulkan graphics driver, and none was found. Install the mesa-vulkan-drivers package, then start PisiAnimasyon again.",
         );
         eprintln!("{}: {message}", theme::app_name());
         // No window of our own can open without the driver, so the desktop's tools show the message.

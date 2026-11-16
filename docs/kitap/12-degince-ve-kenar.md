@@ -42,7 +42,7 @@ Olay satırında iki nesne var: **Elma** ve **Sepet**. Eylemler sırayla:
 5. **çın** sesini çal.
 
 !why Hangi elma?
-Sahnede üç elma var ve üçünün adı da "Elma". Kural "Elma" der; ama eylemler yalnızca **sepete değen** elmaya uygulanır, öbür ikisine değil. PisiSahne olaya karışan nesneyi aklında tutar. Bu yüzden bir kural, aynı adı taşıyan bütün nesneler için yeter.
+Sahnede üç elma var ve üçünün adı da "Elma". Kural "Elma" der; ama eylemler yalnızca **sepete değen** elmaya uygulanır, öbür ikisine değil. PisiAnimasyon olaya karışan nesneyi aklında tutar. Bu yüzden bir kural, aynı adı taşıyan bütün nesneler için yeter.
 
 ## Kenar olayı
 

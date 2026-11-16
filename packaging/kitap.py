@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the PisiSahne book from its chapters.
+"""Builds the PisiAnimasyon book from its chapters.
 
     packaging/kitap.py [out-dir] [--tek]
 
@@ -7,7 +7,7 @@ The chapters are the files docs/kitap/NN-name.md, in the order of their names, a
 their pictures are in docs/kitap/img/. Each chapter becomes a page, and index.html
 lists them by part. The book is built twice over: once with pictures only, and once
 (the pages named -canli) with the films themselves, playing, where a picture has one:
-the films are in docs/kitap/film/, published from PisiSahne. With --tek the pictures are written into the pages themselves,
+the films are in docs/kitap/film/, published from PisiAnimasyon. With --tek the pictures are written into the pages themselves,
 so that a page is one file that can be sent or opened anywhere.
 
 A chapter is written in a small Markdown of its own:
@@ -15,7 +15,7 @@ A chapter is written in a small Markdown of its own:
     @kisim 1. Başlarken       the part the chapter belongs to
     # Title
     > The sentence under the title
-    :: 10 dakika | ilk kez açanlar | yalnızca PisiSahne
+    :: 10 dakika | ilk kez açanlar | yalnızca PisiAnimasyon
     ## Heading            ### Smaller heading
     1. A step             (numbered steps, with round numbers)
     - A point             - [ ] A thing to try
@@ -250,14 +250,14 @@ def edition(out, embed, live):
         before = chapters[number - 2] if number > 1 else None
         after = chapters[number] if number < len(chapters) else None
         link = lambda to, text: f'<a href="{to.path.stem}{mark}.html">{text}</a>' if to else "<span></span>"
-        top = f'<nav class="top"><a href="index{mark}.html">PisiSahne Kitabı</a><span>{html.escape(chapter.part)}</span>{switch(chapter.path.stem)}</nav>'
+        top = f'<nav class="top"><a href="index{mark}.html">PisiAnimasyon Kitabı</a><span>{html.escape(chapter.part)}</span>{switch(chapter.path.stem)}</nav>'
         bottom = '<nav class="bottom">' + link(before, f"← {html.escape(before.title)}" if before else "") + link(after, f"Sıradaki: {html.escape(after.title)} →" if after else "") + "</nav>"
         head = f'<p class="chapter">Bölüm {number}</p><h1>{inline(chapter.title)}</h1>' + (f'<p class="lead">{inline(chapter.lead)}</p>' if chapter.lead else "")
-        (out / f"{chapter.path.stem}{mark}.html").write_text(page(f"{chapter.title} – PisiSahne Kitabı", top + head + chapter.body + bottom), encoding="utf-8")
+        (out / f"{chapter.path.stem}{mark}.html").write_text(page(f"{chapter.title} – PisiAnimasyon Kitabı", top + head + chapter.body + bottom), encoding="utf-8")
     # The contents: the chapters under their parts.
     about = "Animasyon ve oyun yapmayı adım adım, resimlerle anlatan kitap. Her bölüm bir ders saatine sığar ve bir önceki bölümün bıraktığı yerden devam eder."
     note = "Bu sürümde örnekler resim değil, filmin kendisidir: üstüne tıklayıp oynayabilirsin. Yazdırmak için resimli sürümü kullan." if live else "Bu sürümde örnekler resimdir; yazdırmaya uygundur. Canlı örnekli sürümde aynı örnekler oynanabilir."
-    listing, part = [f'<nav class="top"><span>PisiSahne</span>{switch("index")}</nav><h1>PisiSahne Kitabı</h1><p class="lead">{about}</p><div class="box note"><b>{"Canlı örnekli sürüm" if live else "Resimli sürüm"}</b><p>{note}</p></div>', '<div class="parts">'], None
+    listing, part = [f'<nav class="top"><span>PisiAnimasyon</span>{switch("index")}</nav><h1>PisiAnimasyon Kitabı</h1><p class="lead">{about}</p><div class="box note"><b>{"Canlı örnekli sürüm" if live else "Resimli sürüm"}</b><p>{note}</p></div>', '<div class="parts">'], None
     for number, chapter in enumerate(chapters, 1):
         if chapter.part != part:
             if part is not None:
@@ -266,7 +266,7 @@ def edition(out, embed, live):
             listing.append(f"<h2>{html.escape(part)}</h2><ol>")
         listing.append(f'<li><a href="{chapter.path.stem}{mark}.html"><b>{number}. {html.escape(chapter.title)}</b></a><span>{inline(chapter.lead)}</span></li>')
     listing.append("</ol></div>")
-    (out / f"index{mark}.html").write_text(page("PisiSahne Kitabı", "\n".join(listing)), encoding="utf-8")
+    (out / f"index{mark}.html").write_text(page("PisiAnimasyon Kitabı", "\n".join(listing)), encoding="utf-8")
     return len(chapters)
 
 

@@ -81,8 +81,8 @@ Bölümlerin hiçbiri ön bilgi olarak kod yazmayı istemez. Kurallar 3. ve 4. k
 
 ## Programla ilgili bilinmesi gerekenler
 
-- PisiSahne, Adobe Flash'ın çalışma biçimini örnek alır: zaman çizelgesi, anahtar kare, ara doldurma, semboller, kılavuz ve maske aynı adlarla ve aynı mantıkla çalışır. ActionScript yoktur; onun yerine davranışlar, kurallar ve Türkçe yazı dili vardır.
-- Davranışlar, kurallar ve kamera Flash'ta bulunmayan, PisiSahne'ye özgü özelliklerdir.
+- PisiAnimasyon, Adobe Flash'ın çalışma biçimini örnek alır: zaman çizelgesi, anahtar kare, ara doldurma, semboller, kılavuz ve maske aynı adlarla ve aynı mantıkla çalışır. ActionScript yoktur; onun yerine davranışlar, kurallar ve Türkçe yazı dili vardır.
+- Davranışlar, kurallar ve kamera Flash'ta bulunmayan, PisiAnimasyon'a özgü özelliklerdir.
 - Oyuncuyla ilgili her şey yalnızca yayımlanan filmde (tarayıcıda) çalışır; program içinde [[Enter]] yalnızca zaman çizelgesini ve kendi kendine olan davranışları oynatır.
 - Yayımlanan film tek bir `.html` dosyasıdır; internet gerektirmez.
-- PisiSahne ücretsizdir ve ticari bir amaç taşımaz.
+- PisiAnimasyon ücretsizdir ve ticari bir amaç taşımaz.

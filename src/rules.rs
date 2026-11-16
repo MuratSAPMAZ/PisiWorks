@@ -1,6 +1,6 @@
 //! Rules: what makes a film a game. "When this happens, do that", picked from lists.
 //!
-//! PisiSahne's own, the step after behaviors. A rule is an event and the steps to take
+//! PisiAnimasyon's own, the step after behaviors. A rule is an event and the steps to take
 //! when it happens; both name the objects they are about by the names the objects have
 //! in the document, so one rule about "Apple" holds for every apple. Numbers (a score,
 //! lives, a clock) are kept by name as well, and a text that has `{Score}` in it shows

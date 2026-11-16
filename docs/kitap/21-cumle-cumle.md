@@ -1,7 +1,7 @@
 @kisim 5. Kuralları yazmak
 # Kuralları cümle cümle yazmak
 > Şimdiye kadar kuralları listelerden seçtin. Aynı kuralları klavyeden, Türkçe cümleler olarak da yazabilirsin. Daha hızlıdır, ve listelerde olmayan şeyleri de yapar.
-:: ⏱ 25 dakika | 🎯 3. kısmı bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 25 dakika | 🎯 3. kısmı bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Elma yakala oyununun bütün kuralları, yazı olarak. Kurallar penceresinde gördüğün cümlelerin aynısı.](21-elma-metni.png "Kuralları Yaz penceresi; elma yakala oyununun metni")
 
@@ -43,7 +43,7 @@ Kurallar arasına boş satır koymak okumayı kolaylaştırır; zorunlu değildi
 
 ### 2. Yaz, ama hepsini değil
 
-1. **Kutu** yaz. Hemen altında öneriler belirir: PisiSahne, bir nesne adıyla başlayabilecek cümleleri gösterir.
+1. **Kutu** yaz. Hemen altında öneriler belirir: PisiAnimasyon, bir nesne adıyla başlayabilecek cümleleri gösterir.
 
 ![Yazdıkça öneriler gelir. Mavi satır seçili olandır.](21-oneriler.png "Kutu yazılmış; altında üç cümle önerisi")
 
@@ -63,7 +63,7 @@ Cümlen doğru; ama kutunun **Düş ve Zıpla** davranışı yok, yani zıplayam
 
 1. Yeni bir satıra **Kutu nesnesini uçur** yaz.
 
-![Kırmızı satır bir hatadır: PisiSahne bu cümleyi tanımıyor. Altta hangi satır olduğu ve neden olduğu yazar.](21-hata.png "Üçüncü satır kırmızı; altta Satır 3: bu, bildiğim bir eylem değil")
+![Kırmızı satır bir hatadır: PisiAnimasyon bu cümleyi tanımıyor. Altta hangi satır olduğu ve neden olduğu yazar.](21-hata.png "Üçüncü satır kırmızı; altta Satır 3: bu, bildiğim bir eylem değil")
 
 "Uçur" diye bir eylem yok. Satır kırmızıya döner ve altta nedeni yazar. Satırı sil ([[Ctrl]]+[[Z]] de olur).
 

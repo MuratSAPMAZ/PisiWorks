@@ -847,10 +847,10 @@ pub struct Object {
     /// None is the middle of the object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pivot: Option<Vec2>,
-    /// The ready-made motions the object has been given in PisiSahne: see [`crate::behavior`].
+    /// The ready-made motions the object has been given in PisiAnimasyon: see [`crate::behavior`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub behaviors: Vec<crate::behavior::Behavior>,
-    /// The name of the object this one is attached to in PisiSahne: in the published film it goes wherever that one goes.
+    /// The name of the object this one is attached to in PisiAnimasyon: in the published film it goes wherever that one goes.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub attached: String,
     /// How the object's colors mix with the artwork under it.

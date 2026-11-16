@@ -29,19 +29,19 @@ rm -rf "$stage"
 install -Dm755 target/release/pisiworks "$stage/usr/bin/pisiworks"
 strip --strip-unneeded "$stage/usr/bin/pisiworks"
 install -Dm644 packaging/pisiworks.desktop "$stage/usr/share/applications/pisiworks.desktop"
-# PisiSahne, the animation program built from the same code, comes in the same package.
-install -Dm755 target/release/pisisahne "$stage/usr/bin/pisisahne"
-strip --strip-unneeded "$stage/usr/bin/pisisahne"
-install -Dm644 packaging/pisisahne.desktop "$stage/usr/share/applications/pisisahne.desktop"
+# PisiAnimasyon, the animation program built from the same code, comes in the same package.
+install -Dm755 target/release/pisianimasyon "$stage/usr/bin/pisianimasyon"
+strip --strip-unneeded "$stage/usr/bin/pisianimasyon"
+install -Dm644 packaging/pisianimasyon.desktop "$stage/usr/share/applications/pisianimasyon.desktop"
 install -Dm644 packaging/pisiworks.xml "$stage/usr/share/mime/packages/pisiworks.xml"
 install -Dm644 packaging/pisiworks.svg "$stage/usr/share/icons/hicolor/scalable/apps/pisiworks.svg"
 for size in 16 32 48 64 128 256; do
     install -Dm644 "packaging/icons/pisiworks-$size.png" "$stage/usr/share/icons/hicolor/${size}x${size}/apps/pisiworks.png"
-    install -Dm644 "packaging/icons/pisisahne-$size.png" "$stage/usr/share/icons/hicolor/${size}x${size}/apps/pisisahne.png"
+    install -Dm644 "packaging/icons/pisianimasyon-$size.png" "$stage/usr/share/icons/hicolor/${size}x${size}/apps/pisianimasyon.png"
 done
 install -Dm644 docs/guide.tr.md "$stage/usr/share/doc/pisiworks/kilavuz.md"
 install -Dm644 docs/guide.md "$stage/usr/share/doc/pisiworks/guide.md"
-# The PisiSahne book: its chapters as pages, with their pictures. Help opens it in PisiSahne.
+# The PisiAnimasyon book: its chapters as pages, with their pictures. Help opens it in PisiAnimasyon.
 python3 packaging/kitap.py target/kitap
 for page in target/kitap/*.html; do
     install -Dm644 "$page" "$stage/usr/share/doc/pisiworks/kitap/$(basename "$page")"
@@ -99,7 +99,7 @@ Description: Fireworks-like screen design editor with a Turkish interface
  the web, in the manner of Adobe Fireworks. Its menus and commands are in
  Turkish or English.
  .
- The package also holds PisiSahne, an animation program built on the same
+ The package also holds PisiAnimasyon, an animation program built on the same
  code: a timeline with keyframes, motion and shape tweens, guide and mask
  layers, published as an HTML5 page.
  .

@@ -1,7 +1,7 @@
 @kisim 5. Kuralları yazmak
 # Eğer ve yinele
 > Bir kuralın içinde karar vermek ("eğer puan 10'u geçtiyse şunu, değilse bunu yap") ve bir şeyi birkaç kez yapmak ("üç kez yinele"). Programlamanın iki temel taşı.
-:: ⏱ 30 dakika | 🎯 22. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 30 dakika | 🎯 22. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Bir kuralın içinde hem karar hem tekrar.](23-eger.png "Kuralları Yaz penceresi: eğer, değilse ve 3 kez yinele blokları olan bir kural")
 
@@ -60,7 +60,7 @@ Puan sayısı 0 değerinden büyükse yinele:
 Koşul tuttuğu sürece içindekiler yeniden yapılır. Burada puan, sıfıra inene kadar birer birer azalır: geri sayan bir sayaç.
 
 !stuck Sonsuz döngü
-Koşul hiç değişmezse yineleme hiç bitmez. `Puan sayısı 0 değerinden büyükse yinele:` bloğunun içinde puanı azaltan bir satır olmalı. PisiSahne filmin donmasını önlemek için çok uzun süren yinelemeleri kendiliğinden keser; ama doğrusu, koşulu bir gün yanlış yapacak bir satırın içeride bulunmasıdır.
+Koşul hiç değişmezse yineleme hiç bitmez. `Puan sayısı 0 değerinden büyükse yinele:` bloğunun içinde puanı azaltan bir satır olmalı. PisiAnimasyon filmin donmasını önlemek için çok uzun süren yinelemeleri kendiliğinden keser; ama doğrusu, koşulu bir gün yanlış yapacak bir satırın içeride bulunmasıdır.
 
 ## İç içe
 

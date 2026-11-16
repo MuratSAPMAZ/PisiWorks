@@ -27,7 +27,7 @@
 
 ## Purpose
 
-**This project has no commercial purpose.** PisiWorks and PisiSahne are free of charge and will stay so: they are not sold, show no advertising, ask for no donations and collect no data. Their one purpose is that teachers and students on Pardus, in schools whose curriculum still teaches Fireworks and Flash, can do the lesson on their own computers. They do not aim to take the place of a product of Adobe's, but to let the lesson go on where those tools do not run.
+**This project has no commercial purpose.** PisiWorks and PisiAnimasyon are free of charge and will stay so: they are not sold, show no advertising, ask for no donations and collect no data. Their one purpose is that teachers and students on Pardus, in schools whose curriculum still teaches Fireworks and Flash, can do the lesson on their own computers. They do not aim to take the place of a product of Adobe's, but to let the lesson go on where those tools do not run.
 
 ## Why PisiWorks
 
@@ -156,12 +156,12 @@ Written for PisiWorks:
 
 The figures are from November 2026 and will drift as work goes on.
 
-## PisiSahne: the animation program (first stage)
+## PisiAnimasyon: the animation program (first stage)
 
-A second program is built from the same repository: **PisiSahne**, an animation program in the manner of Adobe Flash, which the same schools still teach. It uses all of PisiWorks' drawing tools, filters and symbols, and adds a timeline under the stage.
+A second program is built from the same repository: **PisiAnimasyon**, an animation program in the manner of Adobe Flash, which the same schools still teach. It uses all of PisiWorks' drawing tools, filters and symbols, and adds a timeline under the stage.
 
 ```bash
-cargo run --release --bin pisisahne
+cargo run --release --bin pisianimasyon
 ```
 
 Working at this stage:
@@ -181,20 +181,20 @@ Working at this stage:
 - Playing, stepping frame by frame, the frame rate and onion skinning.
 - Playing once to the end as Flash does, with Loop Playback as an option; boxes to go straight to a frame or a second, second marks on the ruler, and a timeline that follows the playhead through long films.
 - A transformation point, as in Flash: moved with the Scale tool, it stays with the object, and a motion tween turns the object around it, so an arm turns at the shoulder.
-- **Behaviors**, PisiSahne's own: nineteen ready behaviors given to an object with one click, with no keyframes. Spin, bounce, go back and forth, keep going, shake, grow and shrink, blink, fade, disappear after a while; and nine for the published film: follow the mouse, walk with the arrow keys, fall and jump, drag, bounce off the edges, roll like a wheel, camera follows me, slide like scenery (a side-scrolling camera with parallax), and solid (ground, platforms and walls).
-- **Rules**, PisiSahne's own: games with no code. A rule is an event and steps, both picked from lists and shown as a sentence: "When Apple touches Basket: increase Score by 1". Events: start, a key, a click, two objects touching, the edge of the stage, every so many seconds, a number reaching a value. Rules can have a condition ("if Score is more than 2"), make copies of an object (bullets), remove objects, make them faster, turn them, resize them, make them see-through, give them a behavior or take one away, send one object after another, attach one object to another, and set an object going so that it gathers speed and slows down (with the key-released event: a car that coasts to a stop, its wheels turning as far as it goes). Numbers such as a score are shown by any text with `{Score}` in it.
+- **Behaviors**, PisiAnimasyon's own: nineteen ready behaviors given to an object with one click, with no keyframes. Spin, bounce, go back and forth, keep going, shake, grow and shrink, blink, fade, disappear after a while; and nine for the published film: follow the mouse, walk with the arrow keys, fall and jump, drag, bounce off the edges, roll like a wheel, camera follows me, slide like scenery (a side-scrolling camera with parallax), and solid (ground, platforms and walls).
+- **Rules**, PisiAnimasyon's own: games with no code. A rule is an event and steps, both picked from lists and shown as a sentence: "When Apple touches Basket: increase Score by 1". Events: start, a key, a click, two objects touching, the edge of the stage, every so many seconds, a number reaching a value. Rules can have a condition ("if Score is more than 2"), make copies of an object (bullets), remove objects, make them faster, turn them, resize them, make them see-through, give them a behavior or take one away, send one object after another, attach one object to another, and set an object going so that it gathers speed and slows down (with the key-released event: a car that coasts to a stop, its wheels turning as far as it goes). Numbers such as a score are shown by any text with `{Score}` in it.
 - **The language**: rules can be written too. **Rules > Rules as Text** opens the game as sentences (`When Apple touches Basket:`); a line is read as it is typed, and one that cannot be read turns red with the reason. The writing has more than the lists: sums (`Score * 2`, `Ship.x + 20`, `random(1, 6)`), several conditions joined by `and`, `otherwise`, `wait`, loops (`repeat 3 times:`), nested `if` blocks and commands done by name (`The command Burst:`). Sentences and names are offered under the caret as you write; Tab takes one. With the program in Turkish the same rules read in Turkish sentences.
-- The guide is inside the program: **Help > User Guide** (F1) opens it in the browser, with no network needed. In PisiSahne it opens where the lessons on animation and games begin.
+- The guide is inside the program: **Help > User Guide** (F1) opens it in the browser, with no network needed. In PisiAnimasyon it opens where the lessons on animation and games begin.
 - **Pisi: Iron Claw**, the showcase: a run-and-gun of some length with a robot leopard, robot rats that shoot back, drones, three stages and a giant rat at the end. Twenty-eight rules and not a line of code; open it from the Examples menu and read every one.
 
 <p align="center"><img src="docs/images/pisi-demir-pence.png" alt="Pisi: Iron Claw" width="720"></p>
 
 - Fifteen more ready films in the Examples menu: a bouncing ball, changing shapes, along a path, a spotlight, turning gears, one after another, a stick-figure fight, behaviors, five games (catch the apples, hit the targets, a platform game, a space shooter, a quiz) with drawn characters, moving scenery, bursts and sounds made in the program, driving a car, and two scenes with buttons. The guide has each game as a lesson. The guide has the fight as a lesson, step by step.
-- Exchange with PisiWorks: **File > Open in PisiSahne** in PisiWorks opens the document in the animation program, and **File > Open Frame in PisiWorks** in PisiSahne opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
-- `.sahne` documents. PisiWorks opens `.sahne` files and PisiSahne opens `.pisi` files; artwork passes between the two as it is.
+- Exchange with PisiWorks: **File > Open in PisiAnimasyon** in PisiWorks opens the document in the animation program, and **File > Open Frame in PisiWorks** in PisiAnimasyon opens the frame on show in the design program, each as a copy. **File > Import** in either program brings in a document of the other, with its objects and symbols.
+- `.sahne` documents. PisiWorks opens `.sahne` files and PisiAnimasyon opens `.pisi` files; artwork passes between the two as it is.
 - **Control > Publish as HTML5** writes the animation as a single HTML file that plays in a browser. Each frame is in the page as a picture, drawn as the program draws it.
 
-**The PisiSahne book.** A book for students and teachers comes with PisiSahne, in Turkish, with pictures and in lessons: 31 chapters in six parts (getting started, motion, the rules of a game, six games as lessons, writing the rules, drawing and characters) and appendices (every sentence, shortcuts and common questions, a term's plan for the teacher). Each chapter goes step by step with pictures of the program, has a part for when one is stuck and things to try, and a note for the teacher. It comes two ways: with pictures only, fit for printing, and with the same examples as films that really play in the page (twenty of them; a click gives one the keyboard). A link at the top of every page leads to the other. In PisiSahne, **Help > User Guide** (F1) opens the live one in the browser when the interface is in Turkish. Its sources are in `docs/kitap/`; `packaging/kitap.py` builds the pages.
+**The PisiAnimasyon book.** A book for students and teachers comes with PisiAnimasyon, in Turkish, with pictures and in lessons: 31 chapters in six parts (getting started, motion, the rules of a game, six games as lessons, writing the rules, drawing and characters) and appendices (every sentence, shortcuts and common questions, a term's plan for the teacher). Each chapter goes step by step with pictures of the program, has a part for when one is stuck and things to try, and a note for the teacher. It comes two ways: with pictures only, fit for printing, and with the same examples as films that really play in the page (twenty of them; a click gives one the keyboard). A link at the top of every page leads to the other. In PisiAnimasyon, **Help > User Guide** (F1) opens the live one in the browser when the interface is in Turkish. Its sources are in `docs/kitap/`; `packaging/kitap.py` builds the pages.
 
 The window is laid out as Flash's classic workspace is: the timeline over the stage, the tools on the left, Properties at the bottom; layers are in the timeline. Enter plays. The `.deb` package installs both programs.
 
@@ -213,7 +213,7 @@ The program has not been tested side by side with Adobe Fireworks itself; the pi
 
 ## Who we are, license and thanks
 
-**PisiWorks** is developed and maintained by **Murat SAPMAZ**: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Bug reports, suggestions and contributions are welcome there. It is an independent project, not affiliated with TÜBİTAK ULAKBİM, which develops Pardus, nor with Adobe.
+**PisiWorks** is developed and maintained by **Murat SAPMAZ**: [muratsapmaz.web.app](https://muratsapmaz.web.app/) · [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks). Bug reports, suggestions and contributions are welcome there. It is an independent project, not affiliated with TÜBİTAK ULAKBİM, which develops Pardus, nor with Adobe.
 
 **Thanks.** PisiWorks stands on Emberframe, which **Med Amine Belbachir** wrote and opened to everyone under the MIT license. We thank him for his work and his generosity:
 
@@ -223,4 +223,4 @@ The program has not been tested side by side with Adobe Fireworks itself; the pi
 
 **License.** PisiWorks is released under the same [MIT license](LICENSE) as Emberframe. Where the code comes from, the licenses of the libraries compiled into it ([list](docs/THIRD-PARTY.md)) and how it stands toward Adobe are set out in the [license and copyright statement](docs/lisans-ve-telif.md) (in Turkish). The license file keeps the copyright notice of Emberframe's author and adds, beside it, the notice for what was written for PisiWorks.
 
-Adobe, Fireworks, Flash, Photoshop and ActionScript are trademarks of Adobe Inc. PisiWorks and PisiSahne contain no code, artwork or documents of Adobe's; they are not affiliated with Adobe and are not endorsed by it. These names are used only to say what the programs resemble and which files they can open.
+Adobe, Fireworks, Flash, Photoshop and ActionScript are trademarks of Adobe Inc. PisiWorks and PisiAnimasyon contain no code, artwork or documents of Adobe's; they are not affiliated with Adobe and are not endorsed by it. These names are used only to say what the programs resemble and which files they can open.

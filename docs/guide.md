@@ -211,9 +211,9 @@ The **Examples** menu at the right end of the menu bar is for what PisiWorks has
 - **Frames in between.** Select two or more copies of one symbol and choose **Modify > Symbol > Tween Instances** (Ctrl+Alt+Shift+T). As many copies as there are steps are made in between, going from one to the other in place, size, turn and opacity. With **Distribute to states** each copy goes to a state of its own, and the animation is ready.
 - **Make a GIF.** **GIF > Make a GIF** at the right end of the menu bar makes an animation from picture files: add the files (they are put in order of name), pick the frame delay and the looping. **Save GIF** writes the file straight away; **Open as Document** lays the pictures out as states to go on working with. Pictures of different sizes are put in the middle of a canvas the size of the largest.
 
-## Animating with PisiSahne
+## Animating with PisiAnimasyon
 
-PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline over the stage.
+PisiAnimasyon uses all of PisiWorks' drawing tools; what it adds is the timeline over the stage.
 
 **The timeline.** Each layer has a row of frames. A click on a frame shows it; dragging along the numbers scrubs through the frames. The eye beside a layer's name hides it, the lock locks it.
 
@@ -240,7 +240,7 @@ PisiSahne uses all of PisiWorks' drawing tools; what it adds is the timeline ove
 
 The **One after another** example shows all of this in eight seconds: a car drives for four seconds and stops, then the sun rises, then the words fade in.
 
-**Behaviors: motion with no keyframes.** This is PisiSahne's own; Flash has nothing like it. Select an object and pick a motion from the **Behaviors** menu at the right end of the menu bar (or from the right-click menu): the object has it from then on, on every frame, with no keyframes and no tween. Picking it again takes it away. An object can have several at once.
+**Behaviors: motion with no keyframes.** This is PisiAnimasyon's own; Flash has nothing like it. Select an object and pick a motion from the **Behaviors** menu at the right end of the menu bar (or from the right-click menu): the object has it from then on, on every frame, with no keyframes and no tween. Picking it again takes it away. An object can have several at once.
 
 | Behavior | What the object does | Its numbers |
 |---|---|---|
@@ -270,7 +270,7 @@ The first ten show when you play inside the program (Enter): the film then plays
 
 *A first game in two minutes:* draw a box, give it **Walk with the Arrow Keys** and **Fall and Jump**; draw a star and give it **Spin**; press Ctrl+Enter. The **Behaviors** example has every kind on a single frame.
 
-**Rules: from a film to a game.** Also PisiSahne's own. A rule says *when this happens, do that*, and both halves are picked from lists: nothing is typed but numbers. **Rules > Rules and Numbers** shows every rule as a sentence; click one to take it apart.
+**Rules: from a film to a game.** Also PisiAnimasyon's own. A rule says *when this happens, do that*, and both halves are picked from lists: nothing is typed but numbers. **Rules > Rules and Numbers** shows every rule as a sentence; click one to take it apart.
 
 - *Names first.* A rule knows an object by its name. The name is typed into the **Name** box at the left of the **Properties** panel while the object is selected (Enter takes it); it is the same for anything drawn: an Auto Shape, a shape drawn by hand, a group. With a copy of a symbol selected, the **Symbol Properties** panel that opens has the same **Name** box; the name there is the copy's, while the one in the **Symbol** box is that of the symbol in the library, which rules do not go by. A shape just drawn has the name of its kind ("Ellipse", "Gear"); give it a name of its own before writing a rule. Name the apple "Apple" and the basket "Basket". Objects with the same name share their rules: one rule about "Apple" holds for every apple.
 - *New Rule* lists the events:
@@ -347,14 +347,14 @@ The first ten show when you play inside the program (Enter): the film then plays
 - *A symbol.* Every character of Pisi: Iron Claw is a symbol: the rat, the drone, the shot, the bomb, the heart, the bullet, the explosion, the turret, the giant rat. A double-click opens the symbol where it lies, and the name of the symbol being edited shows above the stage. To finish, do one of three things: double-click an empty place, press Esc, or click the **◀** button above the stage. If a skew or a scale is still being made, the first Esc gives it up and the second leaves the symbol; the double-click and the button apply it and leave. A change made in the symbol shows **in every scene** and in every copy of the character: change the rat once, and every rat of every stage is changed. The symbols are listed in the **Document Library** panel.
 - *A movie clip.* A character that moves its legs is a movie clip: Pisi is one. A double-click opens the clip; its timeline has the four steps of the run, each a drawing of its own. The **◀** button above the stage goes back.
 
-*Around the stage.* The grey area around the stage is the pasteboard, and PisiSahne shows what lies on it, as Flash does. What copies are made from is kept there: in Pisi: Iron Claw they stand in a column off the left edge, and the gates, small pink stars, off the right and the top. Zoom out, or scroll, if they are out of sight.
+*Around the stage.* The grey area around the stage is the pasteboard, and PisiAnimasyon shows what lies on it, as Flash does. What copies are made from is kept there: in Pisi: Iron Claw they stand in a column off the left edge, and the gates, small pink stars, off the right and the top. Zoom out, or scroll, if they are out of sight.
 
 *To keep in mind.* A character reshaped with the Scale, Skew or Distort tool is changed when you press Enter or double-click, and only that copy in that scene is. To change the character itself everywhere, change the drawing in its symbol. Not every character comes into play in every scene: the drone first comes in the Factory, so a change to it does not show in the first stage. Do not change the names: the rules go by them.
 
 **The showcase: Pisi: Iron Claw.** The first entry of the Examples menu is a game of some length: Pisi, a robot leopard with a blaster, goes through a city, a factory and a rooftop, and meets a giant rat at the end. Robot rats roll in and shoot, drones drop bombs, a turret guards the roof, hearts fall now and then. It is made of nothing the lessons do not teach, only more of it, and it is worth taking apart:
 
 - *Pisi runs.* Pisi is a movie clip of four steps, three frames each. A copy of the clip on the stage has the behaviors **Walk with the Arrow Keys** and **Fall and Jump**: a clip can have behaviors and a name like anything else.
-- *The world comes to Pisi.* PisiSahne has no camera. Each layer of scenery is a strip as wide as the stage with **Keep Going** to the left, and a second strip after it; the far ones go slowly and the near ones fast, so the town seems to pass by.
+- *The world comes to Pisi.* PisiAnimasyon has no camera. Each layer of scenery is a strip as wide as the stage with **Keep Going** to the left, and a second strip after it; the far ones go slowly and the near ones fast, so the town seems to pass by.
 - *Enemies come from a gate.* One rat is drawn off the left edge and hidden when the scene starts. *Every 2.6 seconds: make a copy of Rat at Gate*. *Every 2.3 seconds: make a copy of Shot at Rat*. *When Bullet touches Rat: increase Score by 1; make a copy of Explosion at Rat; remove Bullet; remove Rat*.
 - *Stages.* *When Score becomes 10: go to scene 2*. Every scene has objects of the same names, so the same rules hold in all of them; a scene with no Sky gate has no drones.
 - *The giant rat.* A number, Armor, starts at 30. *When Bullet touches Giant Rat: decrease Armor by 1; … make Giant Rat blink for a moment*. *When Armor goes below 1: go to scene 5*.
@@ -511,4 +511,4 @@ In the lists (Rules and Numbers) blocks and commands are shown but not made; the
 
 **Publishing.** **Control > Publish as HTML5** writes the film as a single HTML file; **Test Movie** makes the same file in a temporary place and opens it in the browser. Movie clips, buttons, actions and sound work only in the published film; while playing inside the program clips show their first frame.
 
-**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has sixteen ready films (first the showcase, Pisi: Iron Claw; the five small games drawn with characters, scenery, bursts and sounds), each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). **File > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **File > Open in PisiSahne** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.
+**Examples and exchange with PisiWorks.** The **Examples** menu at the right end of the menu bar has sixteen ready films (first the showcase, Pisi: Iron Claw; the five small games drawn with characters, scenery, bursts and sounds), each showing one thing (eased motion, shape change, a guide, a mask, a movie clip, layers with times of their own, a stick-figure fight made pose to pose, behaviors, five games made with rules, scenes and buttons). **File > Open Frame in PisiWorks** opens the frame on show in PisiWorks as a copy; **File > Open in PisiAnimasyon** in PisiWorks does the reverse. The copies are written to the cache folder, and your own document is left as it is. To bring artwork from one program into the other, choose a `.pisi` or `.sahne` file with **File > Import**: its objects come onto the active layer and its symbols into the library.

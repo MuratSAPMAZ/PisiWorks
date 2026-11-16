@@ -72,7 +72,7 @@ Kanat çırpma klibin içinde, uçma sahnede. İki ayrı hareket üst üste bini
 
 ## Belge Kitaplığı
 
-Sağdaki **Belge Kitaplığı** paneli filmdeki bütün sembolleri listeler. Bir sembolü sahneye yeniden koymak için panelden sahneye sürükle. Yanındaki **Ortak Kitaplık** ise PisiSahne ile gelen hazır sembolleri (düğmeler, formlar) içerir.
+Sağdaki **Belge Kitaplığı** paneli filmdeki bütün sembolleri listeler. Bir sembolü sahneye yeniden koymak için panelden sahneye sürükle. Yanındaki **Ortak Kitaplık** ise PisiAnimasyon ile gelen hazır sembolleri (düğmeler, formlar) içerir.
 
 ## Sembolün kopyası da bir nesnedir
 
@@ -99,4 +99,4 @@ Sahnedeki her kopyanın kendi adı, kendi yeri, kendi boyutu ve kendi davranış
 | Belge Kitaplığı | Filmin sembollerini listeleyen panel. |
 
 !teacher Öğretmene not
-Semboller Flash müfredatının temel konularındandır ve PisiSahne'de aynı üç türle (Grafik, Film Klibi, Düğme) bulunur. Öğrencilerin kavraması gereken tek fikir "bir kalıp, çok kopya"dır; 13. bölümdeki kopyalarla karıştırılabilir: oradaki kopyalar oyun sırasında kuralla çıkar, buradakiler sahneye elle konur. Kanat çırpan kuş alıştırması iki zaman çizelgesinin (sahne ve klip) üst üste binmesini somutlaştırır. Yürüme döngüsü (iki konum) animasyonun klasik ilk ödevidir.
+Semboller Flash müfredatının temel konularındandır ve PisiAnimasyon'da aynı üç türle (Grafik, Film Klibi, Düğme) bulunur. Öğrencilerin kavraması gereken tek fikir "bir kalıp, çok kopya"dır; 13. bölümdeki kopyalarla karıştırılabilir: oradaki kopyalar oyun sırasında kuralla çıkar, buradakiler sahneye elle konur. Kanat çırpan kuş alıştırması iki zaman çizelgesinin (sahne ve klip) üst üste binmesini somutlaştırır. Yürüme döngüsü (iki konum) animasyonun klasik ilk ödevidir.

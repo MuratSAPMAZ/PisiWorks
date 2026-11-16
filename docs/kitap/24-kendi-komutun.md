@@ -1,12 +1,12 @@
 @kisim 5. Kuralları yazmak
 # Kendi komutun
-> Aynı beş satırı on kuralda yeniden yazmak yerine onlara bir ad verirsin ve adıyla çağırırsın. PisiSahne'ye yeni bir sözcük öğretmiş olursun.
-:: ⏱ 30 dakika | 🎯 23. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+> Aynı beş satırı on kuralda yeniden yazmak yerine onlara bir ad verirsin ve adıyla çağırırsın. PisiAnimasyon'a yeni bir sözcük öğretmiş olursun.
+:: ⏱ 30 dakika | 🎯 23. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![İki komut tanımı ve onları kullanan bir kural.](24-komut.png "Kuralları Yaz penceresi: Kutla komutu, Döndür komutu ve Kutu nesnesine tıklanınca kuralı")
 
 !goal Bu bölümde öğreneceklerin
-Bir **komut** tanımlamayı, onu kurallardan çağırmayı ve komuta **değer** vermeyi öğreneceksin. Bununla birlikte PisiSahne'nin yazı dilinin tamamını görmüş olacaksın.
+Bir **komut** tanımlamayı, onu kurallardan çağırmayı ve komuta **değer** vermeyi öğreneceksin. Bununla birlikte PisiAnimasyon'un yazı dilinin tamamını görmüş olacaksın.
 
 ## Sorun: aynı satırlar her yerde
 
@@ -20,7 +20,7 @@ Kutla komutu:
     Puan sayısını 1 artır
 ```
 
-Bu, PisiSahne'ye **Kutla** adında yeni bir sözcük öğretir. Artık herhangi bir kuralda şunu yazabilirsin:
+Bu, PisiAnimasyon'a **Kutla** adında yeni bir sözcük öğretir. Artık herhangi bir kuralda şunu yazabilirsin:
 
 ```
 Kutu nesnesine tıklanınca:
@@ -99,7 +99,7 @@ Sayılar:
 !stuck Takıldıysan
 - **"… adında bir komut yok" diyor.** Çağırdığın ad ile tanımdaki ad aynı mı? Büyük-küçük harf dahil.
 - **"Komut … değer alır, … verilmiş" diyor.** Tanımda kaç değer varsa çağrıda da o kadar olmalı.
-- **Komut kendini çağırıyor.** Bir komut kendi içinde kendini çağırabilir; ama bir yerde durması gerekir. PisiSahne çok derine inen çağrıları keser.
+- **Komut kendini çağırıyor.** Bir komut kendi içinde kendini çağırabilir; ama bir yerde durması gerekir. PisiAnimasyon çok derine inen çağrıları keser.
 
 ## Dilin tamamı
 

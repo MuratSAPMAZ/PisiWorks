@@ -1,6 +1,6 @@
 @kisim 3. Oyun kuralları
 # Sahneler: başla, oyna, bitti
-> Gerçek bir oyunun birden çok ekranı vardır: bir giriş ekranı, oyunun kendisi, bir "oyun bitti" ekranı. PisiSahne'de her ekran bir sahnedir.
+> Gerçek bir oyunun birden çok ekranı vardır: bir giriş ekranı, oyunun kendisi, bir "oyun bitti" ekranı. PisiAnimasyon'da her ekran bir sahnedir.
 :: ⏱ 25 dakika | 🎯 12. bölümü bitirenler için | 🧰 Örnekler > Oyun: bilgi yarışması
 
 ![Bilgi yarışmasının ilk sahnesi. Her soru ayrı bir sahne; son sahne sonucu gösterir.](14-soru.png "Bilgi yarışması: Örümceğin kaç bacağı vardır sorusu ve üç yanıt düğmesi" 670){19-yarisma.html 640x400}

@@ -987,6 +987,7 @@ pub fn about_text() -> String {
         if is_sahne() { t("built on PisiWorks.").to_string() } else { t("for Pardus, in Turkish.").to_string() },
         String::new(),
         t("Developed by Murat SAPMAZ").to_string(),
+        "muratsapmaz.web.app".to_string(),
         "github.com/MuratSAPMAZ/PisiWorks".to_string(),
         String::new(),
         t("Thanks to Med Amine Belbachir:").to_string(),
@@ -1021,7 +1022,7 @@ pub fn animation_from_files(files: &[PathBuf], delay_ms: u32, loops: u16) -> Res
 /// How wide a frame is in the timeline, in pixels.
 pub const TIMELINE_CELL: f32 = 11.0;
 
-/// Where the PisiSahne book is, if it is there: beside the program as the package installs it, or, when the
+/// Where the PisiAnimasyon book is, if it is there: beside the program as the package installs it, or, when the
 /// program is run from its sources, where `packaging/kitap.py` builds it.
 fn book_index() -> Option<std::path::PathBuf> {
     let beside = std::env::current_exe().ok().and_then(|exe| Some(exe.parent()?.parent()?.join("share/doc/pisiworks/kitap")));
@@ -1939,7 +1940,7 @@ impl Workspace {
     /// Makes a previewed transform permanent, as Enter and a double-click do.
     pub fn apply_transform(&mut self) {
         let Some(session) = self.transform.take() else { return };
-        // In PisiSahne the point the box turns around stays with the object, as Flash's transformation point
+        // In PisiAnimasyon the point the box turns around stays with the object, as Flash's transformation point
         // does: a motion tween turns the object around it.
         let kept = self.kept_pivot(&session);
         if session.warp == Warp::identity() && kept.is_none() {
@@ -1963,7 +1964,7 @@ impl Workspace {
         }
     }
 
-    /// Where the one selected object's transformation point is, in PisiSahne, if it has one of its own.
+    /// Where the one selected object's transformation point is, in PisiAnimasyon, if it has one of its own.
     fn own_pivot(&self) -> Option<Vec2> {
         match &self.ed.selected()[..] {
             [only] if crate::theme::is_sahne() => only.pivot_point(),
@@ -2661,10 +2662,10 @@ impl Workspace {
     }
 
     /// Control > Test Movie: publishes the animation to a file of the program's own and opens it in the browser, as Flash's Test Movie opens the finished film.
-    /// Help > User Guide: writes the guide out as a page and opens it in the browser. PisiSahne opens it at the
+    /// Help > User Guide: writes the guide out as a page and opens it in the browser. PisiAnimasyon opens it at the
     /// part about animation, where the lessons are.
     fn open_guide(&mut self) {
-        // PisiSahne has a book of its own, with pictures, that comes with the package: lessons from the first click on.
+        // PisiAnimasyon has a book of its own, with pictures, that comes with the package: lessons from the first click on.
         // It is in Turkish; where it is not installed, or in another language, the guide built into the program is shown.
         if crate::theme::is_sahne() && crate::i18n::language() == crate::i18n::Language::Turkish {
             if let Some(book) = book_index() {
@@ -2690,7 +2691,7 @@ impl Workspace {
         // What is being transformed is taken as it looks: the film is of what is on the stage.
         self.apply_transform();
         let movie = self.movie();
-        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisianimasyon");
         let path = folder.join("test.html");
         let written = std::fs::create_dir_all(&folder).map_err(anyhow::Error::from).and_then(|()| crate::publish::html(&movie, &self.document_name())).and_then(|html| std::fs::write(&path, html).map_err(anyhow::Error::from));
         self.status = match written.and_then(|()| std::process::Command::new("xdg-open").arg(&path).spawn().map(|_| ()).map_err(anyhow::Error::from)) {
@@ -2775,7 +2776,7 @@ impl Workspace {
             "audio/ogg" => "ogg",
             _ => "wav",
         };
-        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisisahne");
+        let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisianimasyon");
         let file = folder.join(format!("ses-{id}.{extension}"));
         if std::fs::create_dir_all(&folder).is_err() || (!file.exists() && std::fs::write(&file, bytes).is_err()) {
             return;
@@ -2798,7 +2799,7 @@ impl Workspace {
     /// program's own and the other program is started on it. Nothing here changes.
     fn open_in_other(&mut self) {
         self.ed.sync_clip();
-        let (other, extension) = if is_sahne() { ("pisiworks", FILE_EXTENSION) } else { ("pisisahne", SAHNE_EXTENSION) };
+        let (other, extension) = if is_sahne() { ("pisiworks", FILE_EXTENSION) } else { ("pisianimasyon", SAHNE_EXTENSION) };
         let document = self.ed.for_other_program(is_sahne());
         let folder = dirs::cache_dir().unwrap_or_else(std::env::temp_dir).join("pisiworks").join("aktarim");
         let stem = self.path.as_ref().or(self.source_image.as_ref()).map_or_else(|| t("Untitled").to_string(), |p| file_stem(p));
@@ -2812,7 +2813,7 @@ impl Workspace {
             .and_then(|json| std::fs::write(&path, json).map_err(anyhow::Error::from))
             .and_then(|()| std::process::Command::new(&program).arg(&path).spawn().map(|_| ()).map_err(anyhow::Error::from));
         self.status = match started {
-            Ok(()) => tf("Opened in {} as a copy: {}", &[&if is_sahne() { "PisiWorks" } else { "PisiSahne" }, &path.display()]),
+            Ok(()) => tf("Opened in {} as a copy: {}", &[&if is_sahne() { "PisiWorks" } else { "PisiAnimasyon" }, &path.display()]),
             Err(error) => tf("Could not open the other program: {}", &[&format!("{error:#}")]),
         };
     }
@@ -5510,7 +5511,7 @@ impl Workspace {
                 self.ed.selection = vec![id];
                 self.toggle_symbol_edit();
             }
-            // In PisiSahne a double-click on a group goes inside it, as in Flash: its parts can then be picked and
+            // In PisiAnimasyon a double-click on a group goes inside it, as in Flash: its parts can then be picked and
             // changed one by one, and a click beside them puts the group together again.
             Some(id) if ev.click_count >= 2 && crate::theme::is_sahne() && self.ed.object(id).is_some_and(|o| matches!(o.shape, Shape::Group { .. })) => {
                 self.ed.selection = vec![id];

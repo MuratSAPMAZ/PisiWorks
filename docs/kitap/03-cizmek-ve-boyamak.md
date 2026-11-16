@@ -1,7 +1,7 @@
 @kisim 1. Başlarken
 # Çizmek, boyamak, adlandırmak
 > Kutulardan sıkıldın. Bu bölümde daire, çizgi ve yazı çizecek, birkaç şekli tek bir karakterde birleştirecek ve ona bir ad vereceksin.
-:: ⏱ 20 dakika | 🎯 1. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 20 dakika | 🎯 1. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Bölümün sonunda: üç şekilden yapılmış, tek parça gibi taşınan ve adı olan bir surat.](03-surat.png "Turuncu daire, iki siyah göz ve çizgi ağızdan oluşan surat" 390)
 

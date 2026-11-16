@@ -361,7 +361,7 @@ const PAGE: &str = r#"<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="generator" content="PisiSahne">
+<meta name="generator" content="PisiAnimasyon">
 <title>{title}</title>
 <style>
   html, body { margin: 0; height: 100%; background: #222; }
@@ -372,7 +372,7 @@ const PAGE: &str = r#"<!doctype html>
 <body>
 <canvas id="stage" width="{width}" height="{height}"></canvas>
 <script>
-// Made with PisiSahne.
+// Made with PisiAnimasyon.
 // pictures: every picture of the animation, each stored once.
 // sets: the pictures of each movie clip (one for each of its frames) and of each button (up, over, down).
 // scenes: for each scene its frames; a frame has what to draw (o), an action (a) and a sound (s).
@@ -543,7 +543,7 @@ function middleOf(name) {
 }
 // What its behaviors have done to an object by now: moved it (dx, dy), turned it (angle) and
 // resized it (scale) around its point, and let it through by a part (alpha). The first nine
-// kinds follow the same rules as playing inside PisiSahne does.
+// kinds follow the same rules as playing inside PisiAnimasyon does.
 function moved(key, b) {
   var a = actor(key), t = a.n / movie.fps, box = b.box, TAU = Math.PI * 2;
   // What rules have done to it comes first: turned it, resized it, let it through by a part.
@@ -1262,7 +1262,7 @@ mod tests {
         let scenes = &html[html.find("scenes: [").unwrap()..];
         assert_eq!(scenes.matches("\"a\":").count(), 6, "five frames and one");
         // The page is left among the build's own files, to be looked at in a browser.
-        let _ = std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/pisisahne-test.html"), &html);
+        let _ = std::fs::write(concat!(env!("CARGO_MANIFEST_DIR"), "/target/pisianimasyon-test.html"), &html);
 
         // A clip within a clip keeps playing: the outer clip, of three frames, holds a copy of an inner one of two,
         // so the outer comes round after six frames, and its pictures show the inner one at both of its frames.

@@ -8,10 +8,10 @@ pub const FILE_EXTENSION: &str = "pisi";
 /// The extension of the animation program's documents. Either program opens the other's.
 pub const SAHNE_EXTENSION: &str = "sahne";
 
-/// Whether this is PisiSahne, the animation program, and not PisiWorks. Set once, as the program starts.
+/// Whether this is PisiAnimasyon, the animation program, and not PisiWorks. Set once, as the program starts.
 static SAHNE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
-/// Makes the program PisiSahne: the same workspace with a timeline under the stage.
+/// Makes the program PisiAnimasyon: the same workspace with a timeline under the stage.
 pub fn set_sahne() {
     SAHNE.store(true, std::sync::atomic::Ordering::Relaxed);
 }
@@ -22,13 +22,13 @@ pub fn is_sahne() -> bool {
 
 /// The name of the program that is running.
 pub fn app_name() -> &'static str {
-    if is_sahne() { "PisiSahne" } else { APP_NAME }
+    if is_sahne() { "PisiAnimasyon" } else { APP_NAME }
 }
 
 /// The two letters at the start of the menu bar.
 pub fn app_mark() -> &'static str {
     // Not "Ps": those two letters are the mark of another company's program.
-    if is_sahne() { "Sh" } else { APP_MARK }
+    if is_sahne() { "Pa" } else { APP_MARK }
 }
 
 /// The extension new documents are saved with.

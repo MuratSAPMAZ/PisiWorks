@@ -1,4 +1,4 @@
-//! The examples that come with PisiSahne: short animations to open, play and take apart.
+//! The examples that come with PisiAnimasyon: short animations to open, play and take apart.
 //!
 //! Like PisiWorks' own, they are built here from the commands a user has, so their
 //! texts follow the language of the interface and there are no files to install.
@@ -149,10 +149,10 @@ fn spotlight() -> Document {
     let mut e = start(520, 200, t("Background"), 24.0);
     boxed(&mut e, t("Background"), rect(0.0, 0.0, 520.0, 200.0), 0.0, INK);
     // The same words twice: dim underneath, bright on the layer that the mask lets through.
-    centered(&mut e, "PisiSahne", 260.0, 60.0, 64.0, Color::rgb(0x34, 0x40, 0x5c), bold());
+    centered(&mut e, "PisiAnimasyon", 260.0, 68.0, 50.0, Color::rgb(0x34, 0x40, 0x5c), bold());
     layer(&mut e, t("Bright"));
     boxed(&mut e, t("Light"), rect(0.0, 0.0, 520.0, 200.0), 0.0, Color::rgb(0x2c, 0x3a, 0x58));
-    centered(&mut e, "PisiSahne", 260.0, 60.0, 64.0, YELLOW, bold());
+    centered(&mut e, "PisiAnimasyon", 260.0, 68.0, 50.0, YELLOW, bold());
     layer(&mut e, t("Mask"));
     let light = add(&mut e, t("Spot"), Shape::Ellipse, rect(-20.0, 30.0, 140.0, 140.0), Some(WHITE), None);
     keyframe(&mut e, 30, &[light], |o| o.translate(420.0, 0.0));
@@ -295,7 +295,7 @@ fn behaviors() -> Document {
     give(&mut e, cloud, &[(Kind::Drift, 40.0, 0.0)]);
     let cloud = boxed(&mut e, t("Cloud"), rect(380.0, 92.0, 80.0, 28.0), 14.0, WHITE);
     give(&mut e, cloud, &[(Kind::Drift, 22.0, 0.0)]);
-    let title = centered(&mut e, "PisiSahne", 280.0, 8.0, 26.0, BLUE, bold());
+    let title = centered(&mut e, "PisiAnimasyon", 280.0, 8.0, 26.0, BLUE, bold());
     give(&mut e, title, &[(Kind::Fade, 3.0, 0.0)]);
     // A greeting that is gone after three seconds.
     let hello = centered(&mut e, t("Hello!"), 500.0, 120.0, 18.0, TEAL, bold());

@@ -40,7 +40,7 @@ Sayı şu an var ama görünmüyor. Onu bir yazıyla gösterirsin.
 2. {{Metin}} aracını (**T**) al, sahnenin sol üstüne tıkla ve şunu yaz: `Puan: {Puan}`
 3. [[Esc]]'e bas.
 
-Süslü parantezler önemlidir: PisiSahne film oynarken `{Puan}` yazan yeri sayının o anki değeriyle değiştirir.
+Süslü parantezler önemlidir: PisiAnimasyon film oynarken `{Puan}` yazan yeri sayının o anki değeriyle değiştirir.
 
 ![Sen `{Puan}` yazarsın; film sayıyı gösterir.](11-yazi.png "Üstte programdaki Puan: {Puan} yazısı, altta filmdeki Puan: 0 yazısı" 660)
 

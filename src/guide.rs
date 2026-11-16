@@ -83,7 +83,7 @@ pub fn page(language: Language, title: &str, contents: &str) -> (String, String)
             close(&mut body, &mut open);
             count += 1;
             let id = format!("b{count}");
-            if animation.is_empty() && heading.contains("PisiSahne") {
+            if animation.is_empty() && heading.contains("PisiAnimasyon") {
                 animation = id.clone();
             }
             body.push_str(&format!("<h2 id=\"{id}\">{}</h2>\n", inline(heading)));

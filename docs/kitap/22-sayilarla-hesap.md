@@ -1,7 +1,7 @@
 @kisim 5. Kuralları yazmak
 # Sayılarla hesap
 > Listelerde bir sayıyı 1 artırabiliyordun. Yazarak, sayının yerine bir işlem koyabilirsin: puanı ikiye katla, zar at, nesneyi öbürünün yanına koy.
-:: ⏱ 25 dakika | 🎯 21. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 25 dakika | 🎯 21. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Üç eylem, üçünde de sayı yerine bir işlem var.](22-hesap.png "Kuralları Yaz penceresi: rastgele(1, 6), Puan + Zar ve Kutu.x + 20 içeren üç eylem")
 

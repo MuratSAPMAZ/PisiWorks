@@ -50,7 +50,7 @@ Kılavuz katmanındaki çizgi bir raydır. Altındaki katmanın ara doldurulan n
 
 1. {{Örnekler > Spot ışığı}}'nı aç ve {{Filmi Test Et}}'e tıkla.
 
-![Yayımlanan film: parlak sarı yazı yalnızca dairenin olduğu yerde görünür. Daire soldan sağa kaydıkça yazı "aydınlanır".](09-maske-film.png "Koyu zeminde soluk PisiSahne yazısı; sol baştaki harf parlak sarı" 520){09-maske.html 520x200}
+![Yayımlanan film: parlak sarı yazı yalnızca dairenin olduğu yerde görünür. Daire soldan sağa kaydıkça yazı "aydınlanır".](09-maske-film.png "Koyu zeminde soluk PisiAnimasyon yazısı; sol baştaki harf parlak sarı" 520){09-maske.html 520x200}
 
 Sahnede ise şunu görürsün:
 
@@ -95,4 +95,4 @@ Kılavuz ya da maske, hemen altındaki katmanı etkiler. Başka bir katmanın da
 | Yola yönlendir | Nesnenin gittiği yöne dönmesi. |
 
 !teacher Öğretmene not
-Kılavuz ve maske katmanları Flash müfredatının son iki klasik konusudur ve PisiSahne'de aynı adlarla bulunur. Bölümü iki derse bölmek rahat olur. Her iki konuda da önce hazır örneği açtırıp çözdürmek, sonra sıfırdan yaptırmak iyi sonuç verir: öğrenci neye ulaşacağını görmüş olur. Maskede en sık yaşanan şaşkınlık, sahnede maskenin şekil olarak görünmesidir; Önizleme sekmesini erkenden gösterin. "Dürbün" alıştırması sınıfça yapılabilecek güzel bir kapanıştır.
+Kılavuz ve maske katmanları Flash müfredatının son iki klasik konusudur ve PisiAnimasyon'da aynı adlarla bulunur. Bölümü iki derse bölmek rahat olur. Her iki konuda da önce hazır örneği açtırıp çözdürmek, sonra sıfırdan yaptırmak iyi sonuç verir: öğrenci neye ulaşacağını görmüş olur. Maskede en sık yaşanan şaşkınlık, sahnede maskenin şekil olarak görünmesidir; Önizleme sekmesini erkenden gösterin. "Dürbün" alıştırması sınıfça yapılabilecek güzel bir kapanıştır.

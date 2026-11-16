@@ -1,4 +1,4 @@
-//! The games that come with PisiSahne: what rules and behaviors can make, dressed to be worth playing.
+//! The games that come with PisiAnimasyon: what rules and behaviors can make, dressed to be worth playing.
 //!
 //! Each is drawn here from the shapes a student has, grouped into characters, and its sounds are
 //! made here as well, so that there is nothing to install. The rules are the few sentences the

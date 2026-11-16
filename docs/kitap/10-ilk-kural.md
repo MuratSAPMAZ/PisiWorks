@@ -1,7 +1,7 @@
 @kisim 3. Oyun kuralları
 # İlk kural: tıklanınca
 > Davranış "hep şunu yap" der. Kural ise "şu olunca şunu yap" der. Oyunu oyun yapan budur. İlk kuralın: kutuya tıklanınca kutu dönsün.
-:: ⏱ 15 dakika | 🎯 3. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 15 dakika | 🎯 3. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Kutuya her tıkladığında kutu 45 derece döner.](10-film.png "Tarayıcıda 45 derece dönmüş mavi kutu" 400){10-ilk-kural.html 660x500}
 
@@ -61,7 +61,7 @@ Pencere değişir: üstte kuralın cümlesi belirir, altında kuralın parçalar
 ![Kural tamam. Üstteki mavi satır kuralın cümlesidir.](10-bitti.png "Kurallar penceresi; kural cümlesi, Derece kutusu ve Filmi Test Et işaretli")
 
 !why Ne oldu?
-PisiSahne'ye bir kural verdin. Film oynarken sürekli bekler: kutuya tıklandı mı? Tıklanınca eylemi bir kez yapar ve beklemeye devam eder. Sen hiçbir kod yazmadın; iki listeden iki şey seçtin ve bir sayı girdin.
+PisiAnimasyon'a bir kural verdin. Film oynarken sürekli bekler: kutuya tıklandı mı? Tıklanınca eylemi bir kez yapar ve beklemeye devam eder. Sen hiçbir kod yazmadın; iki listeden iki şey seçtin ve bir sayı girdin.
 
 ## Bir kurala birkaç eylem
 

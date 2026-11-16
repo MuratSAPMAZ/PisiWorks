@@ -1,14 +1,14 @@
-# PisiWorks ve PisiSahne: lisans ve telif bildirimi
+# PisiWorks ve PisiAnimasyon: lisans ve telif bildirimi
 
-Bu belge, PisiWorks'ü ve onunla aynı pakette gelen animasyon programı PisiSahne'yi Pardus depolarına ya da okullara dağıtmadan önce inceleyecek kişiler için yazıldı. Programın hangi lisansla yayımlandığını, kodunun nereden geldiğini, içine hangi kitaplıkların derlendiğini ve Adobe ile ilişkisini tek yerde toplar. Sonunda, bizim karar veremediğimiz ve inceleyenin görüşüne bıraktığımız noktalar listelenir.
+Bu belge, PisiWorks'ü ve onunla aynı pakette gelen animasyon programı PisiAnimasyon'u Pardus depolarına ya da okullara dağıtmadan önce inceleyecek kişiler için yazıldı. Programın hangi lisansla yayımlandığını, kodunun nereden geldiğini, içine hangi kitaplıkların derlendiğini ve Adobe ile ilişkisini tek yerde toplar. Sonunda, bizim karar veremediğimiz ve inceleyenin görüşüne bıraktığımız noktalar listelenir.
 
 Bu bir hukuki görüş değildir; bir hukukçu tarafından gözden geçirilmedi. Buradaki her bilgi depodaki dosyalardan doğrulanabilir; nasıl doğrulanacağı ilgili bölümde yazıyor.
 
-Sürüm: PisiWorks ve PisiSahne 0.1.0, Kasım 2026. İki program aynı kaynak koddan derlenir, aynı lisansı taşır ve tek bir `.deb` paketiyle kurulur; aşağıda "PisiWorks" için söylenen her şey, ayrıca belirtilmedikçe PisiSahne için de geçerlidir. Depo: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks)
+Sürüm: PisiWorks ve PisiAnimasyon 0.1.0, Kasım 2026. İki program aynı kaynak koddan derlenir, aynı lisansı taşır ve tek bir `.deb` paketiyle kurulur; aşağıda "PisiWorks" için söylenen her şey, ayrıca belirtilmedikçe PisiAnimasyon için de geçerlidir. Depo: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks)
 
 ## Amaç
 
-PisiWorks ve PisiSahne **ticari bir amaç taşımaz.** Tek amaçları, müfredatında hâlâ Fireworks ve Flash anlatılan okullarda, Pardus kullanan öğretmen ve öğrencilerin dersi kendi bilgisayarlarında işleyebilmesidir.
+PisiWorks ve PisiAnimasyon **ticari bir amaç taşımaz.** Tek amaçları, müfredatında hâlâ Fireworks ve Flash anlatılan okullarda, Pardus kullanan öğretmen ve öğrencilerin dersi kendi bilgisayarlarında işleyebilmesidir.
 
 - Programlar ücretsizdir ve ücretsiz kalacaktır. Satılmaz; ücretli sürümü, aboneliği, lisans anahtarı, uygulama içi satın alması yoktur.
 - Reklam göstermez, bağış istemez, kullanıcıdan ya da bilgisayarından veri toplamaz, kendiliğinden internete bağlanmaz.
@@ -51,8 +51,8 @@ Copyright (c) 2026 Murat SAPMAZ (https://github.com/MuratSAPMAZ/PisiWorks)
 PisiWorks, Med Amine Belbachir'in yazdığı ve MIT lisansıyla yayımladığı Emberframe 0.1'in çatalıdır. Çatallama GitHub üzerinde açıkça yapıldı; depo sayfasında "forked from gregstein/emberframe" yazar ve Emberframe'in bütün işleme geçmişi korunur.
 
 - Emberframe'den gelen: çatal anında 12.286 satır Rust kodu. Bunun yaklaşık %88'i hâlâ yerindedir.
-- PisiWorks ve PisiSahne için yazılan: yaklaşık 26.400 satır. Bugünkü 37.312 satırın yüzde yetmişinden fazlası.
-- PisiSahne'nin tamamı bu proje için yazıldı; Emberframe'de bir animasyon programı ya da zaman çizelgesi yoktur. PisiSahne, PisiWorks'ün çizim kodunu bir kitaplık olarak kullanır.
+- PisiWorks ve PisiAnimasyon için yazılan: yaklaşık 26.400 satır. Bugünkü 37.312 satırın yüzde yetmişinden fazlası.
+- PisiAnimasyon'un tamamı bu proje için yazıldı; Emberframe'de bir animasyon programı ya da zaman çizelgesi yoktur. PisiAnimasyon, PisiWorks'ün çizim kodunu bir kitaplık olarak kullanır.
 - MIT lisansının gereği olan telif bildirimi `LICENSE` dosyasında, README'lerde, Yardım > Hakkında penceresinde ve `.deb` paketinin `copyright` dosyasında korunur.
 
 Doğrulamak için: `git log` çatal noktasını (`64dcd71`) ve sonrasındaki işlemeleri gösterir; `git diff 64dcd71 HEAD --stat -- src` eklenen ve silinen satırları verir.
@@ -109,7 +109,7 @@ Bunlar PisiWorks'ün içine derlenmez; Pardus'un kendi paketlerinden gelir.
 
 ## 5. Adobe ile ilişki
 
-PisiWorks, Adobe Fireworks'ün; PisiSahne de Adobe Flash'ın çalışma biçimini bilerek örnek alan bağımsız programlardır. İnceleyenin en çok soracağı konu bu olduğu için ne yapıldığını ve ne yapılmadığını ayrı ayrı yazıyoruz.
+PisiWorks, Adobe Fireworks'ün; PisiAnimasyon de Adobe Flash'ın çalışma biçimini bilerek örnek alan bağımsız programlardır. İnceleyenin en çok soracağı konu bu olduğu için ne yapıldığını ve ne yapılmadığını ayrı ayrı yazıyoruz.
 
 **Yapılmayanlar:**
 
@@ -130,10 +130,10 @@ PisiWorks, Adobe Fireworks'ün; PisiSahne de Adobe Flash'ın çalışma biçimin
   | İki ya da üç sözcük ("Sembole Dönüştür", "Seçim Çerçevesini Genişlet") | 287 |
   | Dört ve daha çok sözcük | 0 |
 
-  Geri kalan 907 metin (yüzde 61) bu proje için yazıldı: iletiler, açıklamalar, ipuçları ve PisiSahne'nin, Davranışlar'ın, Kurallar'ın ve yazılı dilin bütün metinleri. İlk ölçümde dört ile altı sözcüklü 16 metin de aynı çıkmıştı ("Seçimi JPEG Maskesi Olarak Kaydet" gibi komut adları ve bir soru cümlesi); bunlar kendi sözlerimizle yeniden yazıldı, böylece aynı kalanların hepsi üç sözcüğü geçmeyen komut adlarıdır. Ölçüm harf büyüklüğüne, kısayol işaretine ve sondaki üç noktaya bakmaz; betik Adobe'ye ait hiçbir metin içermez, ölçen kişinin kendi elindeki dosyayla çalışır.
+  Geri kalan 907 metin (yüzde 61) bu proje için yazıldı: iletiler, açıklamalar, ipuçları ve PisiAnimasyon'un, Davranışlar'ın, Kurallar'ın ve yazılı dilin bütün metinleri. İlk ölçümde dört ile altı sözcüklü 16 metin de aynı çıkmıştı ("Seçimi JPEG Maskesi Olarak Kaydet" gibi komut adları ve bir soru cümlesi); bunlar kendi sözlerimizle yeniden yazıldı, böylece aynı kalanların hepsi üç sözcüğü geçmeyen komut adlarıdır. Ölçüm harf büyüklüğüne, kısayol işaretine ve sondaki üç noktaya bakmaz; betik Adobe'ye ait hiçbir metin içermez, ölçen kişinin kendi elindeki dosyayla çalışır.
 - **Fireworks PNG dosyalarını okuma.** Fireworks'ün kendi PNG dosyalarındaki katmanlar okunabilir. Biçim Adobe tarafından yayımlanmadığı için okuyucu, Fireworks 8 ile yazılmış sekiz dosyanın yapısı incelenerek, yalnızca birlikte çalışabilirlik amacıyla yazıldı. O dosyalar depoya ya da pakete alınmadı; testlerde kullanılan örnek dosya program tarafından sıfırdan üretilir. Okuyucunun tamamı `src/fwpng.rs` dosyasındadır ve biçim hakkında öğrenilenler dosyanın başında yazılıdır. PisiWorks Fireworks PNG yazmaz.
-- **PisiSahne ve Flash.** PisiSahne'nin zaman çizelgesi, anahtar kareleri, hareket ve şekil ara doldurması, kılavuz ve maske katmanları, film klibi ve düğme sembolleri Flash'taki karşılıklarının davranışını örnek alır; kısayolları (F5, F6, F7, Enter, Ctrl+Enter) aynıdır. Bunların tamamı bu proje için yazıldı. Geliştirme sırasında elimizde bir Flash kurulumu yoktu: Flash'ın hiçbir dosyasına, arayüz metnine ya da örnek dosyasına bakılmadı. Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") bizim çevirimizdir. PisiSahne `.fla` ve `.swf` dosyalarını açmaz ve yazmaz; ActionScript çalıştırmaz. Animasyonları kendi `.sahne` biçiminde saklar ve yalnızca HTML5 sayfası olarak yayımlar.
-- **Yayımlanan HTML5 sayfaları.** PisiSahne'nin ürettiği sayfanın içindeki oynatıcı betik bu proje için yazıldı ve sayfayla birlikte gider. Kullanıcının yayımladığı animasyon kullanıcının kendi eseridir; betik için ayrı bir bildirim ya da lisans koşulu istenmez.
+- **PisiAnimasyon ve Flash.** PisiAnimasyon'un zaman çizelgesi, anahtar kareleri, hareket ve şekil ara doldurması, kılavuz ve maske katmanları, film klibi ve düğme sembolleri Flash'taki karşılıklarının davranışını örnek alır; kısayolları (F5, F6, F7, Enter, Ctrl+Enter) aynıdır. Bunların tamamı bu proje için yazıldı. Geliştirme sırasında elimizde bir Flash kurulumu yoktu: Flash'ın hiçbir dosyasına, arayüz metnine ya da örnek dosyasına bakılmadı. Türkçe terimler ("Zaman Çizelgesi", "Anahtar Kare", "Hareket Ara Doldurması") bizim çevirimizdir. PisiAnimasyon `.fla` ve `.swf` dosyalarını açmaz ve yazmaz; ActionScript çalıştırmaz. Animasyonları kendi `.sahne` biçiminde saklar ve yalnızca HTML5 sayfası olarak yayımlar.
+- **Yayımlanan HTML5 sayfaları.** PisiAnimasyon'un ürettiği sayfanın içindeki oynatıcı betik bu proje için yazıldı ve sayfayla birlikte gider. Kullanıcının yayımladığı animasyon kullanıcının kendi eseridir; betik için ayrı bir bildirim ya da lisans koşulu istenmez.
 - **Photoshop Canlı Efektleri.** Fireworks'teki bu özelliğin karşılığı vardır; efektlerin adları ve ayarları aynıdır, hesaplamaları PisiWorks için yazılmıştır.
 
 Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markalarıdır.
@@ -149,7 +149,7 @@ Adobe, Fireworks, Flash, Photoshop ve ActionScript, Adobe Inc.'in ticari markala
 | `third-party-licenses.txt.gz` | Her kitaplığın kendi `LICENSE`, `COPYING` ve `NOTICE` dosyaları, yazarlarının yayımladığı haliyle |
 | `lisans-ve-telif.md` | Bu belge |
 
-Paket iki programı da kurar: `/usr/bin/pisiworks` ve `/usr/bin/pisisahne`, her birinin kendi menü girdisi, simgesi ve dosya türü (`.pisi`, `.sahne`) ile.
+Paket iki programı da kurar: `/usr/bin/pisiworks` ve `/usr/bin/pisianimasyon`, her birinin kendi menü girdisi, simgesi ve dosya türü (`.pisi`, `.sahne`) ile.
 
 Program içinde Yardım > Hakkında penceresi geliştireni, depo adresini, Emberframe'e teşekkürü ve lisansı gösterir.
 
@@ -176,11 +176,11 @@ Kaynak koddan derleme ve testler README'de anlatılır; 349 otomatik test her de
 
 Bunlar bizim tek başımıza karar veremediğimiz ya da bir hukukçunun bakmasını doğru bulduğumuz konulardır. Gizlemek yerine buraya yazıyoruz.
 
-1. **Görünüm benzerliği.** PisiWorks'ün çalışma alanı Fireworks'e, PisiSahne'ninki Flash'ın klasik çalışma alanına (zaman çizelgesi üstte, araçlar solda, Özellikler altta) bilerek benzer. PisiSahne, PisiWorks'ün renklerini ve simgelerini kullanır; Flash'ın görsellerinden hiçbiri alınmadı. Kod ve görseller Adobe'ye ait değildir, ancak bir programın genel görünümünün ne ölçüde korunduğu ülkeden ülkeye değişen bir hukuk konusudur. Fireworks 2013'ten beri geliştirilmiyor ve satılmıyor; bu durumu değiştirmez ama riski değerlendirirken bilinmelidir.
-2. **Sol üstteki "Pw" ve "Sh" işaretleri.** Uygulama çubuğunun başındaki iki harfli işaretler Emberframe'in "Ef" işaretinden uyarlandı ve Adobe ürünlerinin iki harfli işaretlerini andırır. PisiSahne'nin işareti, Adobe Photoshop'un kullandığı "Ps" ile karışmasın diye "Sh" seçildi. Uygulama simgesi bu yüzden daha önce değiştirildi (kedi başı); pencere içindeki işaret duruyor. Değiştirilmesi istenirse küçük bir iştir.
+1. **Görünüm benzerliği.** PisiWorks'ün çalışma alanı Fireworks'e, PisiAnimasyon'unki Flash'ın klasik çalışma alanına (zaman çizelgesi üstte, araçlar solda, Özellikler altta) bilerek benzer. PisiAnimasyon, PisiWorks'ün renklerini ve simgelerini kullanır; Flash'ın görsellerinden hiçbiri alınmadı. Kod ve görseller Adobe'ye ait değildir, ancak bir programın genel görünümünün ne ölçüde korunduğu ülkeden ülkeye değişen bir hukuk konusudur. Fireworks 2013'ten beri geliştirilmiyor ve satılmıyor; bu durumu değiştirmez ama riski değerlendirirken bilinmelidir.
+2. **Sol üstteki "Pw" ve "Sh" işaretleri.** Uygulama çubuğunun başındaki iki harfli işaretler Emberframe'in "Ef" işaretinden uyarlandı ve Adobe ürünlerinin iki harfli işaretlerini andırır. PisiAnimasyon'un işareti, Adobe Photoshop'un kullandığı "Ps" ile karışmasın diye "Sh" seçildi. Uygulama simgesi bu yüzden daha önce değiştirildi (kedi başı); pencere içindeki işaret duruyor. Değiştirilmesi istenirse küçük bir iştir.
 3. **Türkçe terimlerin kaynağı.** Kısa komut adlarının 581'i Türkçe Fireworks'tekilerle aynıdır; hepsi bir ile üç sözcük arasındadır (ölçüm 5. bölümde). Tek tek komut adlarının telifle korunmadığını düşünüyoruz. Değerlendirilmesini istediğimiz soru şudur: bu adların tek tek değil, toplu olarak aynı olması bir derleme hakkı doğurur mu? Doğurduğu sonucuna varılırsa adlar değiştirilebilir; bunun bedeli, öğretmenlerin ders notlarıyla programın uyuşmamasıdır.
 4. **Fireworks PNG biçiminin incelenmesi.** Okuyucu, yasal olarak edinilmiş bir Fireworks kurulumunun örnek dosyaları incelenerek, birlikte çalışabilirlik için yazıldı. 5846 sayılı Kanun'un bilgisayar programlarına ilişkin hükümlerinin bu tür incelemeye ne ölçüde izin verdiği teyit edilmelidir. Gerekirse okuyucu tek dosya olduğu için kolayca çıkarılabilir.
-5. **"Pisi" ve "PisiSahne" adları.** PisiSahne adı bu projede konuldu; başka bir ürünle çakışıp çakışmadığı araştırılmadı.  Ad, Pardus geleneğine bir göndermedir. "PiSi" Pardus'un eski paket yöneticisinin adıdır ve "Pisi Linux" adında ayrı bir dağıtım vardır. Karışıklık ya da bir marka hakkı doğurup doğurmadığına Pardus ekibi karar vermelidir.
+5. **"Pisi" ve "PisiAnimasyon" adları.** PisiAnimasyon adı bu projede konuldu; başka bir ürünle çakışıp çakışmadığı araştırılmadı.  Ad, Pardus geleneğine bir göndermedir. "PiSi" Pardus'un eski paket yöneticisinin adıdır ve "Pisi Linux" adında ayrı bir dağıtım vardır. Karışıklık ya da bir marka hakkı doğurup doğurmadığına Pardus ekibi karar vermelidir.
 6. **Emberframe yazarının ad ricası.** Yazar, çatalın "Emberframe" adını korumasını rica etti. Lisans buna zorlamaz; PisiWorks her yerde kaynağını ve yazarını belirtir. Kendisine henüz cevap verilmedi.
 7. **Telif satırındaki kişi.** PisiWorks için yazılanların telifi şimdilik Murat SAPMAZ adınadır. Proje bir kurum çatısı altına alınacaksa telif sahipliği ve katkı kuralları buna göre düzenlenmelidir.
 8. **Kitaplık sayısı.** 517 kitaplığın lisansları Cargo'nun bildirdiği bilgilere dayanır; her birinin kaynak kodu tek tek gözle denetlenmedi. Pardus depoları için gerekiyorsa bağımlılıkların ayrıca denetlenmesi ya da Debian'da paketlenmiş sürümlerine geçilmesi ayrı bir çalışmadır.

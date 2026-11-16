@@ -394,7 +394,7 @@ impl Scene {
             let page_rect = Rect { x: 0.0, y: 0.0, w: self.page.width as f32, h: self.page.height as f32 };
             let page_bounds = screen_rect(map, page_rect);
             self.paint_canvas(page_bounds, bounds, window);
-            // In PisiSahne what lies off the stage shows on the pasteboard around it, as in Flash: that is where
+            // In PisiAnimasyon what lies off the stage shows on the pasteboard around it, as in Flash: that is where
             // things wait to come on, and where what copies are made from is kept. PisiWorks, like Fireworks,
             // shows the canvas only.
             if theme::is_sahne() {

@@ -1,7 +1,7 @@
 @kisim 1. Başlarken
 # Zemin, platformlar ve seken top
 > Kutunun üstüne çıkabileceği platformlar ve sahnede durmadan seken bir top ekleyeceksin. Bunun için tek bir yeni davranış yeter: Katı.
-:: ⏱ 15 dakika | 🎯 1. bölümü bitirenler için | 🧰 Yalnızca PisiSahne
+:: ⏱ 15 dakika | 🎯 1. bölümü bitirenler için | 🧰 Yalnızca PisiAnimasyon
 
 ![Bölümün sonunda: kutu platformun üstünde duruyor, kırmızı top duvarlardan ve platformlardan sekiyor.](02-sonuc.png "Tarayıcıda oynayan film: mavi kutu turuncu platformun üstünde, kırmızı kare havada" 634){02-platformlar.html 660x500}
 

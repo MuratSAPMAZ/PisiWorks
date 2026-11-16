@@ -91,4 +91,4 @@ Bunun için kural yazmak gerekmez: eylem düğmenin kendisindedir.
 | Düğme eylemi | Düğmeye Özellikler'den verilen, tıklanınca yapılan iş. |
 
 !teacher Öğretmene not
-Düğmeler Flash derslerinin klasik konusudur ve PisiSahne'de aynı durum adlarıyla bulunur. Sınıfta genellikle "sahneler arası gezinen bir tanıtım" projesi olarak işlenir: okulun tanıtımı, bir konunun sunumu, etkileşimli bir hikâye. Oyun yapmak istemeyen öğrenciler için iyi bir alternatif projedir. "Düğme eylemi mi, kural mı?" kutusu iki yolu karşılaştırır; öğrenciler ikisini karıştırıp aynı düğmeye hem eylem hem kural verirse ikisi de çalışır ve film beklenmedik yere gidebilir.
+Düğmeler Flash derslerinin klasik konusudur ve PisiAnimasyon'da aynı durum adlarıyla bulunur. Sınıfta genellikle "sahneler arası gezinen bir tanıtım" projesi olarak işlenir: okulun tanıtımı, bir konunun sunumu, etkileşimli bir hikâye. Oyun yapmak istemeyen öğrenciler için iyi bir alternatif projedir. "Düğme eylemi mi, kural mı?" kutusu iki yolu karşılaştırır; öğrenciler ikisini karıştırıp aynı düğmeye hem eylem hem kural verirse ikisi de çalışır ve film beklenmedik yere gidebilir.

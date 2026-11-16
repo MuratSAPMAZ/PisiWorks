@@ -86,10 +86,10 @@ Taşımadan önce o karede [[F6]] ile anahtar kare açmalıydın.
 Hayır. `.html` dosyası yalnızca izlenir. Düzenlemek için `.sahne` dosyanı aç; bu yüzden her zaman önce kaydet.
 
 **Filmimi başka bilgisayarda açabilir miyim?**
-Yayımlanan `.html` dosyası tek başına yeter; internet ve PisiSahne gerekmez, herhangi bir tarayıcıda açılır.
+Yayımlanan `.html` dosyası tek başına yeter; internet ve PisiAnimasyon gerekmez, herhangi bir tarayıcıda açılır.
 
 **Flash dosyalarını (`.fla`, `.swf`) açabilir miyim?**
-Hayır. PisiSahne Flash'ın çalışma biçimini örnek alır ama onun dosyalarını açmaz ve yazmaz.
+Hayır. PisiAnimasyon Flash'ın çalışma biçimini örnek alır ama onun dosyalarını açmaz ve yazmaz.
 
 **Resim ekleyebilir miyim?**
 Evet: {{Dosya > İçe Aktar…}} ile PNG ve JPEG resimleri sahneye eklenir ve her nesne gibi davranış ve ad alır.

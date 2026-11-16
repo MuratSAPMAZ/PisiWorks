@@ -1,11 +1,11 @@
-//! Pisi: Iron Claw. The game PisiSahne shows what it can do with.
+//! Pisi: Iron Claw. The game PisiAnimasyon shows what it can do with.
 //!
 //! A run-and-gun of our own: Pisi, a robot leopard with a blaster, runs through a city, a
 //! factory and a rooftop while robot rats roll in and shoot back, drones drop bombs, and a giant
 //! rat waits at the end. It is longer than the other examples, and still nothing but behaviors
 //! and rules: every sentence of it can be read in Rules and Numbers.
 //!
-//! There is no camera in PisiSahne, so the world comes to Pisi: the scenery is strips twice the
+//! There is no camera in PisiAnimasyon, so the world comes to Pisi: the scenery is strips twice the
 //! width of the stage that keep going left, the far ones slowly and the near ones fast, and the
 //! enemies are copies made at a gate that stands just off the right edge.
 
