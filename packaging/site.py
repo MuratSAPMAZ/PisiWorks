@@ -42,6 +42,9 @@ def build(folder):
         shutil.copy(ROOT / "docs" / "site" / name, folder / name)
     for name in ("COPYING", "NOTICE"):
         shutil.copy(ROOT / name, folder / name)
+    # The front page's own pictures.
+    (folder / "img").mkdir(exist_ok=True)
+    shutil.copy(ROOT / "docs" / "screenshots" / "pisiworks-calisma-alani.png", folder / "img" / "pisiworks.png")
     # GitHub is told to serve the files as they are, and not to run them through its own site builder.
     (folder / ".nojekyll").write_text("", encoding="utf-8")
     print(f"site in {folder}")

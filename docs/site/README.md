@@ -1,13 +1,22 @@
 # PisiAnimasyon
 
-**Okullar için animasyon ve oyun yapma programı.** Pardus'ta çalışır, Türkçedir, ücretsizdir ve özgür yazılımdır.
+**Okullar için animasyon ve oyun yapma programı.** Çizim programı **PisiWorks** ile birlikte, tek pakette gelir. İkisi de Pardus'ta çalışır, Türkçedir, ücretsizdir ve özgür yazılımdır.
 
 - **Site ve kitap:** <https://muratsapmaz.github.io/PisiAnimasyon/>
 - **Kaynak kodu:** <https://github.com/MuratSAPMAZ/PisiWorks>
 
 Bu depo PisiAnimasyon'un **tanıtım sitesini ve kitabını** barındırır. Programın kaynak kodu burada değildir: PisiAnimasyon, çizim programı PisiWorks ile aynı kaynaktan derlenir ve kodun tamamı [PisiWorks deposundadır](https://github.com/MuratSAPMAZ/PisiWorks). Bu depodaki sayfalar o depodaki `docs/kitap/` ve `docs/site/` klasörlerinden `packaging/site.py` ile üretilir; düzeltmeler orada yapılır.
 
-## Ne yapar?
+## Tek paket, iki program
+
+| Program | Ne için | Hangi dersin karşılığı |
+|---|---|---|
+| **PisiAnimasyon** | Animasyon ve oyun | Flash |
+| **PisiWorks** | Çizim ve web tasarımı | Fireworks |
+
+Paketi kurunca ikisi birden gelir. PisiWorks'ün ayrıntılı tanıtımı [kaynak deposundadır](https://github.com/MuratSAPMAZ/PisiWorks).
+
+## PisiAnimasyon ne yapar?
 
 - **Zaman çizelgesi:** kare, anahtar kare, hareket ve şekil ara doldurma, yavaşlama, kılavuz yolu, maske. Flash dersindeki adlarla.
 - **Davranışlar:** bir şekle tek tıkla verilen on dokuz hazır hareket.
@@ -25,7 +34,7 @@ Bu depo PisiAnimasyon'un **tanıtım sitesini ve kitabını** barındırır. Pro
 
 ## Kurulum
 
-[Paketi indirin](https://github.com/MuratSAPMAZ/PisiWorks/releases/download/pisiworks-0.1.0/pisiworks_0.1.0_amd64.deb) (0.1.0, amd64; Pardus 25'te denenmiştir) ve indirdiğiniz klasörde:
+Tek paket iki programı kurar. [Paketi indirin](https://github.com/MuratSAPMAZ/PisiWorks/releases/download/pisiworks-0.1.0/pisiworks_0.1.0_amd64.deb) (0.1.0, amd64; Pardus 25'te denenmiştir) ve indirdiğiniz klasörde:
 
 ```bash
 sudo apt install ./pisiworks_0.1.0_amd64.deb
