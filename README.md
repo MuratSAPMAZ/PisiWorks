@@ -195,6 +195,8 @@ Bu aşamada çalışanlar:
 - `.sahne` belgeleri. PisiWorks `.sahne` dosyalarını, PisiAnimasyon `.pisi` dosyalarını açar; çizimler iki program arasında olduğu gibi geçer.
 - **Kontrol > HTML5 Olarak Yayımla**: animasyonu tarayıcıda oynayan tek bir HTML dosyasına yazar. Her kare programın çizdiği haliyle bir resim olarak sayfanın içindedir.
 
+**Site ve kitap:** [muratsapmaz.github.io/PisiAnimasyon](https://muratsapmaz.github.io/PisiAnimasyon/) (deposu: [MuratSAPMAZ/PisiAnimasyon](https://github.com/MuratSAPMAZ/PisiAnimasyon); sayfaları buradaki `docs/site/` ve `docs/kitap/` klasörlerinden `packaging/site.py` üretir).
+
 **PisiAnimasyon Kitabı.** Öğrenci ve öğretmen için, resimli ve ders ders ilerleyen bir kitap PisiAnimasyon ile birlikte gelir: 31 bölüm, altı kısım (başlarken, hareket, oyun kuralları, altı oyun dersi, kuralları yazmak, çizim ve karakter) ve ekler (bütün cümleler, kısayollar ve sık sorulanlar, öğretmen için dönemlik plan). Her bölüm programın ekran görüntüleriyle adım adım anlatır, "Takıldıysan" ve "Sıra sende" bölümleri ve bir öğretmen notu taşır. Kitabın iki sürümü vardır: **resimli sürümde** örnekler ekran görüntüsüdür ve yazdırmaya uygundur; **canlı örnekli sürümde** aynı örnekler sayfanın içinde gerçekten oynayan filmlerdir (yirmi film: üstüne tıklayıp oynanır). Her sayfanın üstündeki bağlantı öbür sürüme geçirir. PisiAnimasyon'da **Yardım > Kullanım Kılavuzu** (F1) canlı sürümü tarayıcıda açar. Kaynağı `docs/kitap/` klasöründedir; `packaging/kitap.py` sayfaları üretir.
 
 Pencere, Flash'ın klasik çalışma alanı gibi düzenlenir: zaman çizelgesi sahnenin üstünde, araçlar solda, Özellikler altta; katmanlar zaman çizelgesindedir. Enter oynatır. `.deb` paketi iki programı birlikte kurar.
