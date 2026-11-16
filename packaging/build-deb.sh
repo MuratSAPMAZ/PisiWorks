@@ -80,7 +80,9 @@ install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/ex
     echo "Source: https://github.com/MuratSAPMAZ/PisiWorks"
     echo "Comment: PisiWorks is built on Emberframe, https://github.com/gregstein/emberframe,"
     echo " whose code stays under the MIT license of its author. A film or a page that the"
-    echo " programs write may be conveyed under any terms: see NOTICE."
+    echo " programs write may be conveyed under any terms. Additional terms under section 7"
+    echo " of the GPL keep the author's attribution and the origin, and reserve the names"
+    echo " PisiWorks and PisiAnimasyon to unmodified copies: see NOTICE."
     echo
     echo "Files: *"
     echo "Copyright: 2026 Murat SAPMAZ"

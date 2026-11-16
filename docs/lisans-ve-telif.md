@@ -53,6 +53,16 @@ GPL, Özgür Yazılım Vakfı'nın özgür yazılım, Açık Kaynak Girişimi'ni
 
 **Yapılan filmler ve sayfalar: ek izin.** PisiAnimasyon bir filmi yayımlarken, PisiWorks bir sayfayı dışa aktarırken HTML dosyasının içine kendi yazdığı bir betiği koyar. Bu betik programın parçasıdır; ek bir izin olmasaydı bir öğrencinin yaptığı oyunun da GPL'ye bağlanıp bağlanmadığı tartışılabilirdi. Bunu açıkça ortadan kaldırmak için GPL'nin 7. maddesinin tanıdığı yolla bir ek izin verilmiştir: böyle bir dosya, içindeki betik programın yazdığı hâliyle kaldıkça, istenen koşulla dağıtılabilir. Film ya da sayfa yapanındır. Ek izin programın kendisini ve değiştirilmiş betiği kapsamaz. Tam metni `NOTICE` dosyasındadır; yayımlanan her filmin başında da kısa bir not vardır.
 
+**Ad, köken ve emeğin görünürlüğü: ek koşullar.** GPL, programı alanın kendi sürümünü kapatmasını önler; ama tek başına, birinin programı başka bir adla sunup yazarını gözden kaçırmasını ya da değiştirdiği bir sürümü özgün adıyla dağıtmasını engellemez. GPL'nin 7. maddesi telif sahibine bu konularda ek koşul koyma hakkı tanır. Üç koşul konmuştur:
+
+- *(7b) Atıf.* Hakkında penceresindeki geliştirici satırı, sitesinin ve kaynağın adresi ile Emberframe yazarına teşekkür, programı içeren her işte okunur biçimde korunur. Kaynak dosyalarının başındaki bildirimler ve `NOTICE` dosyası da korunur.
+- *(7c) Köken.* Kimse özgün programları kendisinin yazdığını ileri süremez. Değiştirilmiş bir sürüm, değiştirilmiş olduğunu, kimin ve ne zaman değiştirdiğini açıkça söyler ve özgünüyle karıştırılmayacak, kendi adını taşır.
+- *(7e) Adlar ve işaretler.* "PisiWorks" ve "PisiAnimasyon" adları ile programların simgeleri ve işaretleri, değiştirilmiş bir sürüm ya da başka bir ürün için kullanılamaz. Bir işin nereden geldiğini doğru biçimde söylemek ("PisiAnimasyon'a dayanır") serbesttir.
+
+Değiştirilmemiş kopyalar programların kendi adlarıyla dağıtılabilir. Kaynağı bir sistem için derlemek, bir dağıtım için paketlemek ve yalnızca bunun gerektirdiği değişiklikler "değiştirilmiş sürüm" sayılmaz; yani Pardus'un paketlemesi bu koşullara takılmaz.
+
+Bu koşullar GPL'nin özgürlüklerinden bir şey eksiltmez: programı herkes kullanabilir, inceleyebilir, değiştirebilir ve dağıtabilir. İstenen, değiştirilenin başka bir adla anılması ve özgününü kimin yazdığının söylenmesidir. Aynı düzeni Firefox gibi tanınmış özgür yazılımlar da kullanır: kod özgürdür, ad korunur.
+
 Telif satırları:
 
 ```
@@ -206,6 +216,9 @@ Bunlar bizim tek başımıza karar veremediğimiz ya da bir hukukçunun bakması
 13. **İşveren ya da okul feragatnamesi.** Pardus'un gönüllüler için yayımladığı yönerge, yazarın işvereninden ya da okulundan telif feragatnamesi almasını önerir. Yazarın çalıştığı kurumun bu çalışma üzerinde bir hak ileri sürüp süremeyeceği burada değerlendirilmedi.
 14. **Ek iznin sözleri.** Yapılan filmlere ilişkin ek izin bir hukukçu tarafından yazılmadı; GCC'nin çalışma zamanı kitaplığı istisnası gibi bilinen örneklerin amacını izler. Sözlerinin bir hukukçuya gösterilmesi yerinde olur.
 15. **Kitabın lisansı.** `docs/kitap/` altındaki kitap için ayrı bir lisans belirlenmedi; deponun parçası olarak aynı lisansın altındadır. Ders kitabı gibi çoğaltılıp dağıtılacaksa Creative Commons türü bir belge lisansı daha uygun olabilir.
+16. **Adların tescili.** "PisiWorks" ve "PisiAnimasyon" adları için marka başvurusu yapılmadı. Lisanstaki ek koşul (7e) yalnızca "bu lisans ad üzerinde hak vermez" der; adı üçüncü kişilere karşı gerçekten koruyan şey marka tescilidir. Ayrıca "Pisi" sözcüğünün Pardus geleneğindeki yeri (bkz. 5. madde) başvuruda göz önüne alınmalıdır.
+17. **Ek koşulların sözleri.** Atıf, köken ve adlara ilişkin ek koşullar bir hukukçu tarafından yazılmadı; GPL'nin 7. maddesinin (b), (c) ve (e) bentlerinin izin verdiği sınırlar içinde, bilinen örnekler izlenerek yazıldı. "Değiştirilmiş sürüm kendi adını taşır" koşulunun (7c) kapsamında sayılıp sayılmayacağı bir hukukçuya sorulmalıdır.
+18. **Bugüne kadarki sürümler.** 16 Kasım 2026'dan önceki sürümler MIT ile, ek koşulsuz yayımlandı. O sürümleri almış olan biri için bu koşullar geçerli değildir.
 
 ## 9. İletişim
 
