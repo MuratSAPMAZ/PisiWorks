@@ -997,7 +997,9 @@ fn selection_mode(modifiers: gpui::Modifiers) -> MaskMode {
 
 /// The developer's site, and where the code of PisiWorks and PisiAnimasyon is: About shows them, and its buttons open them.
 pub const SITE: &str = "https://muratsapmaz.web.app/";
-pub const SOURCE: &str = "https://github.com/MuratSAPMAZ/PisiWorks";
+pub const SOURCE: &str = "https://github.com/MuratSAPMAZ/Pisiworks";
+/// The site the two programs share, with the book.
+pub const HOME: &str = "https://muratsapmaz.github.io/PisiAnimasyon/";
 
 /// What Help > About says: what the program is and who makes it, then whose work it stands on.
 pub fn about_text() -> String {
@@ -1017,6 +1019,8 @@ fn about_text_in(language: crate::i18n::Language, sahne: bool) -> String {
         String::new(),
         t("Developed by Murat SAPMAZ").to_string(),
         SITE.to_string(),
+        String::new(),
+        HOME.trim_start_matches("https://").trim_end_matches('/').to_string(),
         SOURCE.trim_start_matches("https://").to_string(),
         String::new(),
         t("Thanks to Med Amine Belbachir:").to_string(),
@@ -4501,14 +4505,14 @@ impl Workspace {
             Cmd::Close => self.confirm_discard(Cmd::New, window, cx),
             Cmd::About => {
                 // The addresses cannot be clicked in the box, and are easily mistyped: its buttons open them.
-                let answer = window.prompt(PromptLevel::Info, app_name(), Some(&about_text()), &[t("OK"), t("Website"), t("Source code (GitHub)")], cx);
+                let answer = window.prompt(PromptLevel::Info, app_name(), Some(&about_text()), &[t("OK"), t("Site and book"), t("Developer's site"), t("Source code (GitHub)")], cx);
                 self.awaiting_answer = true;
                 cx.spawn_in(window, async move |this, cx| {
                     let answer = answer.await;
                     this.update_in(cx, |this, _, cx| {
                         this.awaiting_answer = false;
-                        if let Ok(choice @ (1 | 2)) = answer {
-                            let place = if choice == 1 { SITE } else { SOURCE };
+                        if let Ok(choice @ 1..=3) = answer {
+                            let place = [HOME, SITE, SOURCE][choice - 1];
                             if let Err(error) = std::process::Command::new("xdg-open").arg(place).spawn() {
                                 this.status = tf("Could not open the browser: {}", &[&error]);
                             }
@@ -8568,14 +8572,14 @@ mod tests {
         for language in [Language::English, Language::Turkish] {
             for sahne in [false, true] {
                 let about = about_text_in(language, sahne);
-                assert!(about.contains("https://muratsapmaz.web.app/") && about.contains("github.com/MuratSAPMAZ/PisiWorks"), "{about}");
+                assert!(about.contains("https://muratsapmaz.web.app/") && about.contains("github.com/MuratSAPMAZ/Pisiworks") && about.contains("muratsapmaz.github.io/PisiAnimasyon") && about.contains("Med Amine Belbachir") && about.contains("github.com/gregstein/emberframe"), "{about}");
                 // The box cuts off what is wider than it: every line is short enough to be read whole.
                 assert!(about.lines().all(|line| line.chars().count() <= 36), "{about}");
             }
         }
         assert_eq!(about_text_in(Language::Turkish, true).lines().nth(2), Some("Pardus için animasyon programı;"));
         // Its buttons open the site and the code, where they really are.
-        assert_eq!((SITE, SOURCE), ("https://muratsapmaz.web.app/", "https://github.com/MuratSAPMAZ/PisiWorks"));
+        assert_eq!((SITE, SOURCE, HOME), ("https://muratsapmaz.web.app/", "https://github.com/MuratSAPMAZ/Pisiworks", "https://muratsapmaz.github.io/PisiAnimasyon/"));
     }
 
     #[test]
@@ -8585,7 +8589,7 @@ mod tests {
         assert!(matches!(parse_file(&png), Ok(Opened::Image(b)) if b == bitmap));
         // About names the program's own maker and thanks the author of what it is built on.
         let about = about_text();
-        assert!(about.contains("Murat SAPMAZ") && about.contains("github.com/MuratSAPMAZ/PisiWorks"));
+        assert!(about.contains("Murat SAPMAZ") && about.contains("github.com/MuratSAPMAZ/Pisiworks"));
         assert!(about.contains("Med Amine Belbachir") && about.contains("github.com/gregstein/emberframe"));
         // Make a GIF: two pictures of different sizes become two states on a canvas that holds the larger, played three times.
         let dir = std::env::temp_dir().join(format!("pisiworks-gif-{}", std::process::id()));
