@@ -995,26 +995,38 @@ fn selection_mode(modifiers: gpui::Modifiers) -> MaskMode {
     }
 }
 
+/// The developer's site, and where the code of PisiWorks and PisiAnimasyon is: About shows them, and its buttons open them.
+pub const SITE: &str = "https://muratsapmaz.web.app/";
+pub const SOURCE: &str = "https://github.com/MuratSAPMAZ/PisiWorks";
+
 /// What Help > About says: what the program is and who makes it, then whose work it stands on.
 pub fn about_text() -> String {
+    about_text_in(crate::i18n::language(), is_sahne())
+}
+
+/// What About says in a language, in PisiAnimasyon or in PisiWorks: the same but for what the program is.
+fn about_text_in(language: crate::i18n::Language, sahne: bool) -> String {
+    let t = |text: &'static str| language.translate(text);
     [
-        tf("Version {}", &[&env!("CARGO_PKG_VERSION")]),
+        t("Version {}").replace("{}", env!("CARGO_PKG_VERSION")),
         String::new(),
-        // The box does not wrap, so every line is short enough to fit it.
-        if is_sahne() { t("An animation program for Pardus,").to_string() } else { t("A Fireworks-like design program").to_string() },
-        if is_sahne() { t("built on PisiWorks.").to_string() } else { t("for Pardus, in Turkish.").to_string() },
+        // The box is narrow and cuts off at both ends what does not fit, an address above all, which it cannot break:
+        // every line is short enough to be read whole.
+        if sahne { t("An animation program for Pardus,") } else { t("A Fireworks-like design program") }.to_string(),
+        if sahne { t("built on PisiWorks.") } else { t("for Pardus, in Turkish.") }.to_string(),
         String::new(),
         t("Developed by Murat SAPMAZ").to_string(),
-        "muratsapmaz.web.app".to_string(),
-        "github.com/MuratSAPMAZ/PisiWorks".to_string(),
+        SITE.to_string(),
+        SOURCE.trim_start_matches("https://").to_string(),
         String::new(),
         t("Thanks to Med Amine Belbachir:").to_string(),
-        t("PisiWorks is built on his Emberframe (MIT).").to_string(),
+        t("Built on his Emberframe (MIT).").to_string(),
         "github.com/gregstein/emberframe".to_string(),
         String::new(),
-        t("Free software: GNU GPL, version 3 or later.").to_string(),
+        t("Free software: GNU GPL 3 or later.").to_string(),
         t("It comes with no warranty.").to_string(),
-        t("For schools; free, with no commercial aim.").to_string(),
+        t("For schools, free of charge;").to_string(),
+        t("it has no commercial aim.").to_string(),
         t("Not affiliated with Adobe.").to_string(),
     ]
     .join("\n")
@@ -4488,13 +4500,24 @@ impl Workspace {
             Cmd::PlayStates => self.toggle_play(cx),
             Cmd::Close => self.confirm_discard(Cmd::New, window, cx),
             Cmd::About => {
-                let _ = window.prompt(
-                    PromptLevel::Info,
-                    app_name(),
-                    Some(&about_text()),
-                    &[t("OK")],
-                    cx,
-                );
+                // The addresses cannot be clicked in the box, and are easily mistyped: its buttons open them.
+                let answer = window.prompt(PromptLevel::Info, app_name(), Some(&about_text()), &[t("OK"), t("Website"), t("Source code (GitHub)")], cx);
+                self.awaiting_answer = true;
+                cx.spawn_in(window, async move |this, cx| {
+                    let answer = answer.await;
+                    this.update_in(cx, |this, _, cx| {
+                        this.awaiting_answer = false;
+                        if let Ok(choice @ (1 | 2)) = answer {
+                            let place = if choice == 1 { SITE } else { SOURCE };
+                            if let Err(error) = std::process::Command::new("xdg-open").arg(place).spawn() {
+                                this.status = tf("Could not open the browser: {}", &[&error]);
+                            }
+                        }
+                        cx.notify();
+                    })
+                    .ok();
+                })
+                .detach();
             }
         }
         cx.notify();
@@ -8537,6 +8560,22 @@ mod tests {
         let r = resized(origin, 3, v2(0.0, 0.0));
         assert_eq!((r.x, r.w), (0.0, 10.0));
         assert_eq!(resized(origin, 3, v2(10.0, 0.0)).w, 1.0);
+    }
+
+    #[test]
+    fn about_fits_its_box_in_both_languages_and_says_where_the_site_and_the_code_are() {
+        use crate::i18n::Language;
+        for language in [Language::English, Language::Turkish] {
+            for sahne in [false, true] {
+                let about = about_text_in(language, sahne);
+                assert!(about.contains("https://muratsapmaz.web.app/") && about.contains("github.com/MuratSAPMAZ/PisiWorks"), "{about}");
+                // The box cuts off what is wider than it: every line is short enough to be read whole.
+                assert!(about.lines().all(|line| line.chars().count() <= 36), "{about}");
+            }
+        }
+        assert_eq!(about_text_in(Language::Turkish, true).lines().nth(2), Some("Pardus için animasyon programı;"));
+        // Its buttons open the site and the code, where they really are.
+        assert_eq!((SITE, SOURCE), ("https://muratsapmaz.web.app/", "https://github.com/MuratSAPMAZ/PisiWorks"));
     }
 
     #[test]
