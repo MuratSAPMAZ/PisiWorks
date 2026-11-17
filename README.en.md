@@ -63,7 +63,7 @@ Building and packaging are done on Linux Mint 22.3. The `.deb` package **has bee
 
 ### Installing a package
 
-A ready-made package is on the [releases page](https://github.com/MuratSAPMAZ/PisiWorks/releases) and is installed with `sudo apt install ./pisiworks_0.1.0_amd64.deb`; the release notes (in Turkish) are in [`docs/surum-notlari/`](docs/surum-notlari/).
+A ready-made package is on the [releases page](https://github.com/MuratSAPMAZ/PisiWorks/releases) and is installed with `sudo apt install ./pisiworks_0.2.0_amd64.deb`; the release notes (in Turkish) are in [`docs/surum-notlari/`](docs/surum-notlari/).
 
 One command also builds the package from source (the build requirements below must be installed):
 
@@ -74,7 +74,7 @@ packaging/build-deb.sh
 The package is written to `target/deb/` and installed with:
 
 ```bash
-sudo apt install ./target/deb/pisiworks_0.1.0_amd64.deb
+sudo apt install ./target/deb/pisiworks_0.2.0_amd64.deb
 ```
 
 After that PisiWorks is in the Graphics section of the application menu, and `.pisi` files open in it on a double-click. The maintainer written into the package is taken from the `DEB_MAINTAINER` environment variable, or failing that from git's `user.name` and `user.email`.

@@ -1,6 +1,6 @@
 [package]
 name = "pisiworks"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.91"
 description = "A Fireworks-like screen-design editor for Pardus, with a Turkish interface, built on Emberframe and GPUI."

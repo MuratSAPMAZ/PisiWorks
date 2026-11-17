@@ -64,7 +64,7 @@ Derleme ve paketleme Linux Mint 22.3 üzerinde yapılır. `.deb` paketi hedef si
 
 ### Paketle kurma
 
-Hazır paket [sürümler sayfasından](https://github.com/MuratSAPMAZ/PisiWorks/releases) indirilir ve `sudo apt install ./pisiworks_0.1.0_amd64.deb` ile kurulur; sürüm notları [`docs/surum-notlari/`](docs/surum-notlari/) klasöründedir.
+Hazır paket [sürümler sayfasından](https://github.com/MuratSAPMAZ/PisiWorks/releases) indirilir ve `sudo apt install ./pisiworks_0.2.0_amd64.deb` ile kurulur; sürüm notları [`docs/surum-notlari/`](docs/surum-notlari/) klasöründedir.
 
 Paket kaynaktan da tek komutla üretilir (aşağıdaki derleme gereksinimleri kurulu olmalıdır):
 
@@ -75,7 +75,7 @@ packaging/build-deb.sh
 Paket `target/deb/` klasörüne yazılır ve şöyle kurulur:
 
 ```bash
-sudo apt install ./target/deb/pisiworks_0.1.0_amd64.deb
+sudo apt install ./target/deb/pisiworks_0.2.0_amd64.deb
 ```
 
 Kurulumdan sonra PisiWorks uygulama menüsünün Grafik bölümünde görünür ve `.pisi` dosyaları çift tıklayınca PisiWorks ile açılır. Pakete yazılan bakımcı adı `DEB_MAINTAINER` ortam değişkeninden, o yoksa git'in `user.name` ve `user.email` ayarlarından alınır.

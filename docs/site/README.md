@@ -34,10 +34,10 @@ Paketi kurunca ikisi birden gelir. PisiWorks'ün ayrıntılı tanıtımı [kayna
 
 ## Kurulum
 
-Tek paket iki programı kurar. [Paketi indirin](https://github.com/MuratSAPMAZ/PisiWorks/releases/download/pisiworks-0.1.0/pisiworks_0.1.0_amd64.deb) (0.1.0, amd64; Pardus 25'te denenmiştir) ve indirdiğiniz klasörde:
+Tek paket iki programı kurar. [Paketi indirin](https://github.com/MuratSAPMAZ/PisiWorks/releases/download/pisiworks-0.2.0/pisiworks_0.2.0_amd64.deb) (0.2.0, amd64; Pardus 25'te denenmiştir) ve indirdiğiniz klasörde:
 
 ```bash
-sudo apt install ./pisiworks_0.1.0_amd64.deb
+sudo apt install ./pisiworks_0.2.0_amd64.deb
 ```
 
 Sürüm notları: <https://github.com/MuratSAPMAZ/PisiWorks/releases>

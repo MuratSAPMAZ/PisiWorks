@@ -4,7 +4,7 @@ Bu belge, PisiWorks'ü ve onunla aynı pakette gelen animasyon programı PisiAni
 
 Bu bir hukuki görüş değildir; bir hukukçu tarafından gözden geçirilmedi. Buradaki her bilgi depodaki dosyalardan doğrulanabilir; nasıl doğrulanacağı ilgili bölümde yazıyor.
 
-Sürüm: PisiWorks ve PisiAnimasyon 0.1.0, Kasım 2026. İki program aynı kaynak koddan derlenir, aynı lisansı taşır ve tek bir `.deb` paketiyle kurulur; aşağıda "PisiWorks" için söylenen her şey, ayrıca belirtilmedikçe PisiAnimasyon için de geçerlidir. Depo: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks)
+Sürüm: PisiWorks ve PisiAnimasyon 0.2.0, Kasım 2026. İki program aynı kaynak koddan derlenir, aynı lisansı taşır ve tek bir `.deb` paketiyle kurulur; aşağıda "PisiWorks" için söylenen her şey, ayrıca belirtilmedikçe PisiAnimasyon için de geçerlidir. Depo: [github.com/MuratSAPMAZ/PisiWorks](https://github.com/MuratSAPMAZ/PisiWorks)
 
 ## Amaç
 
