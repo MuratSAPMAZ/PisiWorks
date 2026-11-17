@@ -42,34 +42,8 @@ cargo build --release
 
 stage="target/deb/pisiworks_${version}_${arch}"
 rm -rf "$stage"
-install -Dm755 target/release/pisiworks "$stage/usr/bin/pisiworks"
-strip --strip-unneeded "$stage/usr/bin/pisiworks"
-install -Dm644 packaging/pisiworks.desktop "$stage/usr/share/applications/pisiworks.desktop"
-# PisiAnimasyon, the animation program built from the same code, comes in the same package.
-install -Dm755 target/release/pisianimasyon "$stage/usr/bin/pisianimasyon"
-strip --strip-unneeded "$stage/usr/bin/pisianimasyon"
-install -Dm644 packaging/pisianimasyon.desktop "$stage/usr/share/applications/pisianimasyon.desktop"
-install -Dm644 packaging/pisiworks.xml "$stage/usr/share/mime/packages/pisiworks.xml"
-install -Dm644 packaging/pisiworks.svg "$stage/usr/share/icons/hicolor/scalable/apps/pisiworks.svg"
-for size in 16 32 48 64 128 256; do
-    install -Dm644 "packaging/icons/pisiworks-$size.png" "$stage/usr/share/icons/hicolor/${size}x${size}/apps/pisiworks.png"
-    install -Dm644 "packaging/icons/pisianimasyon-$size.png" "$stage/usr/share/icons/hicolor/${size}x${size}/apps/pisianimasyon.png"
-done
-install -Dm644 docs/guide.tr.md "$stage/usr/share/doc/pisiworks/kilavuz.md"
-install -Dm644 docs/guide.md "$stage/usr/share/doc/pisiworks/guide.md"
-# The PisiAnimasyon book: its chapters as pages, with their pictures. Help opens it in PisiAnimasyon.
-python3 packaging/kitap.py target/kitap
-for page in target/kitap/*.html; do
-    install -Dm644 "$page" "$stage/usr/share/doc/pisiworks/kitap/$(basename "$page")"
-done
-for picture in target/kitap/img/*.png; do
-    install -Dm644 "$picture" "$stage/usr/share/doc/pisiworks/kitap/img/$(basename "$picture")"
-done
-# The films the live book plays in its pages.
-for film in target/kitap/film/*.html; do
-    install -Dm644 "$film" "$stage/usr/share/doc/pisiworks/kitap/film/$(basename "$film")"
-done
-install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/examples/solstice-landing.pisi"
+packaging/install-files.sh "$stage"
+strip --strip-unneeded "$stage/usr/bin/pisiworks" "$stage/usr/bin/pisianimasyon"
 
 # The license, in the form Debian keeps it in: the work as a whole under the GNU GPL, whose text Debian
 # and Pardus keep in one place for every package, and what came from Emberframe under the MIT license.
@@ -104,16 +78,7 @@ install -Dm644 examples/solstice-landing.pisi "$stage/usr/share/doc/pisiworks/ex
     echo "License: Expat"
     sed -e '1,/^$/d' -e '/^Copyright/,/^$/d' -e 's/^$/./' -e 's/^/ /' LICENSES/MIT.txt
 } > "$stage/usr/share/doc/pisiworks/copyright"
-install -Dm644 NOTICE "$stage/usr/share/doc/pisiworks/NOTICE"
 chmod 644 "$stage/usr/share/doc/pisiworks/copyright"
-
-# The notices of the libraries compiled into the program: the list, and every
-# library's own license files as its authors ship them.
-python3 packaging/third-party.py --texts "$stage/usr/share/doc/pisiworks/third-party-licenses.txt"
-gzip -9n "$stage/usr/share/doc/pisiworks/third-party-licenses.txt"
-chmod 644 "$stage/usr/share/doc/pisiworks/third-party-licenses.txt.gz"
-install -Dm644 docs/THIRD-PARTY.md "$stage/usr/share/doc/pisiworks/THIRD-PARTY.md"
-install -Dm644 docs/lisans-ve-telif.md "$stage/usr/share/doc/pisiworks/lisans-ve-telif.md"
 
 # The oldest C library the program runs with is the newest one it asks for a symbol from.
 glibc=$(objdump -T "$stage/usr/bin/pisiworks" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -V | tail -n 1)
